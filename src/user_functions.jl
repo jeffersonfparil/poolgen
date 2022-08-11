@@ -81,7 +81,7 @@ function filter(pileup::String; alpha1::Float64=0.05, maf::Float64=0.01, alpha2:
         digits = length(string(length(positions_init)))
         id = lpad(i, (digits-length(string(i))), "0")
         tmp = string(pileup, "-FILTERED-", id, ".tmp")
-        filename = FILTER(pileup, init, term, alpha1, maf, alpha2, cov, outype, tmp)
+        filename = FILTER(pileup, outype, init, term, alpha1, maf, alpha2, cov, tmp)
         [filename]
     end
     ### Sort the output files from parallel processing and merge

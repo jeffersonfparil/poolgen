@@ -8,7 +8,6 @@ module functions
 
 using Distributed
 using Random
-using Missings
 using GLMNet
 using MultivariateStats
 using ProgressMeter
@@ -383,8 +382,8 @@ function SYNCX2WINDOW(syncx::String, init::Int, term::Int)::Window
     seek(file, init)
     ### Parse syncx lines into a Window struct
     line = split(readline(file), "\t")
-    vco = Missings.passmissing(parse).(Int, vcat(split.(line[3:end], ":")...))
-    cou = zeros(Int, 1, Int(length(vco)/7))
+    vco = map(x -> x=="missing" ? missing : parse(Int, x), vcat(split.(line[3:end], ":")...))
+    cou = reshape(repeat([missing], Int(length(vco)/7)), 1, Int(length(vco)/7))
     chr = []
     pos = []
     seek(file, init)
@@ -392,7 +391,7 @@ function SYNCX2WINDOW(syncx::String, init::Int, term::Int)::Window
         line = split(readline(file), "\t")
         push!(chr, line[1])
         push!(pos, parse(Int, line[2]))
-        vco = parse.(Int, vcat(split.(line[3:end], ":")...))
+        vco = map(x -> x=="missing" ? missing : parse(Int, x), vcat(split.(line[3:end], ":")...))
         cou = vcat(cou, reshape(vco, 7, Int(length(vco)/7)))
     end
     close(file)
@@ -430,8 +429,8 @@ function SYNCX2WINDOW(syncx::String)::Window
     file = open(syncx, "r")
     line = split(readline(file), "\t")
     close(file)
-    vco = Missings.passmissing(parse).(Int, vcat(split.(line[3:end], ":")...))
-    cou = zeros(Any, 1, Int(length(vco)/7))
+    vco = map(x -> x=="missing" ? missing : parse(Int, x), vcat(split.(line[3:end], ":")...))
+    cou = reshape(repeat([missing], Int(length(vco)/7)), 1, Int(length(vco)/7))
     imp = zeros(Int, 1, Int(length(vco)/7))
     for w in windows
         append!(chr, w.chr)
@@ -446,8 +445,9 @@ function SYNCX2WINDOW(syncx::String)::Window
 end
 
 ### FILTER
-function FILTER(pileup::String, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, outype::String=["pileup", "syncx"][1], out::String="")::String
+function FILTER(pileup::String, outype::String, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, out::String="")::String
     # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
+    # outype = ["pileup", "syncx"][1]
     # file = open(pileup, "r")
     # seekend(file)
     # final_position = position(file)
@@ -460,7 +460,6 @@ function FILTER(pileup::String, init::Int, term::Int, alpha1::Float64=0.05, maf:
     # maf = 0.01
     # alpha2 = 0.50
     # cov = 2
-    # outype = ["pileup", "syncx"][1]
     # out = ""
     ### Output file
     if out == ""
@@ -510,7 +509,7 @@ function FILTER(pileup::String, init::Int, term::Int, alpha1::Float64=0.05, maf:
     return(out)
 end
 
-function FILTER(syncx::String, input_syncx::Bool, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, out::String="")::String
+function FILTER(syncx::String, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
     # file = open(syncx, "r")
     # seekend(file)
@@ -532,10 +531,28 @@ function FILTER(syncx::String, input_syncx::Bool, init::Int, term::Int, alpha1::
     ### Parse syncx into a Window
     window = SYNCX2WINDOW(syncx, init, term)
     ### Filter
-    while position(file) < term
-        readline(file)
+    window.cou[ismissing.(window.cou)] .= 0
+    a, p = size(window.cou)
+    for i in 1:7:a
+        coverages = sum(window.cou[i:(i+6), :], dims=1)
+        frequencies = window.cou[i:(i+6), :] ./ coverages
+        frequencies[isnan.(frequencies)] .= 0.0
+        ### allele frequencies (alpha1)
+        idx = collect(1:7)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
+        frq = sort(frequencies[idx,:])
+        emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
+        eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
+        ### coverage (alpha2)
+        minimum_coverage = sort(coverages[1,:])[Int(ceil(alpha2*p))]
+        if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (minimum_coverage >= cov)
+            j = Int(ceil(i/7))
+            SAVE(Window([window.chr[j]],
+                        [window.pos[j]],
+                        [window.ref[j]],
+                        window.cou[i:(i+6), :],
+                        window.imp[i:(i+6), :]), out)
+        end
     end
-    close(file)
     return(out)
 end
 
