@@ -1,8 +1,8 @@
 authors = ["Jefferson F. Paril <jeffersonparil@gmail.com>"]
-name = "poolquantgen"
+name = "poolgen"
 uuid = "f1f486f6-9d9b-4bef-8b7d-74212131ca96"
 version = "0.1.0"
-repository = "https://github.com/jeffersonfparil/poolquantgen"
+repository = "https://github.com/jeffersonfparil/poolgen"
 description = "Quantitative and population genetics analyses using pool sequencing data."
 keywords = "genetics, quantitative genetics, population genetics, pool sequencing, allele frequency, genotype data, imputation"
 

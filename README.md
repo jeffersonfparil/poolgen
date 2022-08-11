@@ -13,9 +13,9 @@ Quantitative and population genetics analyses using pool sequencing data
 - [X] Types: (1/3) pileup line
 - [X] Types: (2/3) locus
 - [X] Types: (3/3) window
-- [ ] pileup I/O
+- [X] pileup I/O
 - [ ] syncx I/O
-- [ ] pileup filtering
+- [X] pileup filtering: pileup to pileup and pileup to syncx
 - [ ] syncx filtering
 - [ ] imputation pileup-to-syncx
 - [ ] iterative genome-wide association analysis (per locus)
