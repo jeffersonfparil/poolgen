@@ -12,14 +12,22 @@ else
 end
 
 println("##########################################")
+println("Pileup to syncx conversion")
+println("##########################################")
+@time poolgen.pileup2syncx("test/test_1.pileup",
+               out="")
+
+@time poolgen.pileup2syncx("test/test_2.pileup",
+               out="")
+
+println("##########################################")
 println("Filtering")
 println("##########################################")
-pileup = "test/test_1.pileup"
 alpha1 = 0.05
 maf = 0.001
 alpha2 = 0.50
 cov = 10
-@time poolgen.filter(pileup,
+@time poolgen.filter("test/test_1.pileup",
                alpha1=alpha1,
                maf=maf,
                alpha2=alpha2,
@@ -38,12 +46,11 @@ cov = 10
 println("##########################################")
 println("Imputation")
 println("##########################################")
-pileup = "test/test_1.pileup"
 window_size=20
 model=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
 distance=true
 syncx_imputed=""
-@time poolgen.impute(pileup,
+@time poolgen.impute("test/test_1.pileup",
                     window_size=window_size,
                     model=model,
                     distance=distance,

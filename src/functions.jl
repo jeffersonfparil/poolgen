@@ -8,6 +8,7 @@ module functions
 
 using Distributed
 using Random
+using Missings
 using GLMNet
 using MultivariateStats
 using ProgressMeter
@@ -161,7 +162,7 @@ end
 ### I/O
 function SPLIT(threads::Int, pileup::String)::Tuple{Vector{Int64}, Vector{Int64}}
     # threads = 4
-    # pileup = "/home/jeffersonfparil/Documents/poolquantgen/test/test_1.pileup"
+    # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"
     ####
     file = open(pileup, "r")
     seekend(file)
@@ -180,9 +181,8 @@ function SPLIT(threads::Int, pileup::String)::Tuple{Vector{Int64}, Vector{Int64}
         if line == ""
             seek(file, temp_positions[i])
         end
-        push!(positions_term, position(file))
-        line = readline(file)
         push!(positions_init, position(file))
+        push!(positions_term, position(file))
     end
     push!(positions_term, temp_positions[end])
     close(file)
@@ -191,7 +191,7 @@ end
 
 function SPLIT(threads::Int, pileup::String, window_size::Int)::Tuple{Vector{Int64}, Vector{Int64}}
     # threads = 4
-    # pileup = "/home/jeffersonfparil/Documents/poolquantgen/test/test_1.pileup"
+    # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"
     # window_size = 20
     ####
     file = open(pileup, "r")
@@ -249,6 +249,62 @@ function SPLIT(threads::Int, pileup::String, window_size::Int)::Tuple{Vector{Int
     # end
 end
 
+function MERGE(filenames_out::Vector{String}, out::String)::String
+    ### Sort the output files from parallel processing
+    sort!(filenames_out)
+    ### Merge
+    file_out = open(out, "w")
+    for i in 1:length(filenames_out)
+        if isfile(filenames_out[i])
+            file_in = open(filenames_out[i], "r")
+            while !eof(file_in)
+                write(file_out, string(readline(file_in), "\n"))
+            end
+            close(file_in)
+            ### clean up
+            rm(filenames_out[i])
+        end
+    end
+    close(file_out)
+    return(out)
+end
+
+function MERGE(filenames_out::Vector{String}, window_size::Int64, out::String)::String
+    ### Sort the chunks so we maintain the one-to-one correspondence between input and output loci arrangement
+    sort!(filenames_out)
+    ### Trim-off overhanging windows and merge
+    file_out = open(out, "w")
+    for i in 1:length(filenames_out)
+        if isfile(filenames_out[i])
+            if i < length(filenames_out)
+                ### trim trailing window from the first and intervening chunks
+                lines = 0
+                file_in = open(filenames_out[i], "r")
+                while !eof(file_in)
+                    lines += 1
+                    readline(file_in);
+                end
+                close(file_in)
+                max_line = lines - window_size
+            else
+                ### do not trim the last chunk
+                max_line = Inf
+            end
+            file_in = open(filenames_out[i], "r")
+            j = 0
+            while (!eof(file_in)) & (j < max_line)
+                j += 1
+                write(file_out, string(readline(file_in), "\n"))
+            end
+            close(file_in)
+            ### clean up
+            rm(filenames_out[i])    ### syncx chunks
+        end
+    end
+    close(file_out)
+    return(out)
+end
+
 function SAVE(line::PileupLine, filename::String)
     file = open(filename, "a")
     write(file, string(line.line, '\n'))
@@ -269,16 +325,359 @@ function SAVE(window::Window, filename::String)
     close(file)
 end
 
-function PILEUP2SYNCX(filename::String)::String
-    file = open(filename, "r")
-    filename_output = string(join(split(filename, '.')[1:(end-1)], '.'), ".syncx")
-    while !eof(file)
-        SAVE(PARSE([PARSE(PileupLine(1, readline(file)))]), filename_output)
+function PILEUP2SYNCX(pileup::String, init::Int, term::Int, out::String="")::String
+    # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"
+    # # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
+    # file = open(pileup, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
+    # init = vec_positions[2]
+    # term = vec_positions[3]
+    # out = ""
+    ### Output file
+    if out == ""
+        out = string(join(split(pileup, ".")[1:(end-1)], "."), ".syncx")
     end
-    return(filename_output)
+    ### Open pileup file
+    file = open(pileup, "r")
+    ### Set position to the next line if the current position is a truncated line
+    if (init>0)
+        seek(file, init-1)
+        line = readline(file)
+        if line != ""
+            init = position(file)
+        end
+    end
+    seek(file, init)
+    while position(file) < term
+        SAVE(PARSE([PARSE(PileupLine(1, readline(file)))]), out)
+    end
+    close(file)
+    return(out)
 end
 
-### SPARSITY SIMULATION AND CROSS-VALIDATION
+function SYNCX2WINDOW(syncx::String, init::Int, term::Int)::Window
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_1.syncx"
+    # # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
+    # init = vec_positions[2]
+    # term = vec_positions[3]
+    ### Open syncx file
+    file = open(syncx, "r")
+    ### Set position to the next line if the current position is a truncated line
+    if (init>0)
+        seek(file, init-1)
+        line = readline(file)
+        if line != ""
+            init = position(file)
+        end
+    end
+    seek(file, init)
+    ### Parse syncx lines into a Window struct
+    line = split(readline(file), "\t")
+    vco = Missings.passmissing(parse).(Int, vcat(split.(line[3:end], ":")...))
+    cou = zeros(Int, 1, Int(length(vco)/7))
+    chr = []
+    pos = []
+    seek(file, init)
+    while position(file) < term
+        line = split(readline(file), "\t")
+        push!(chr, line[1])
+        push!(pos, parse(Int, line[2]))
+        vco = parse.(Int, vcat(split.(line[3:end], ":")...))
+        cou = vcat(cou, reshape(vco, 7, Int(length(vco)/7)))
+    end
+    close(file)
+    cou = cou[2:end, :]
+    m, p = size(cou)
+    ref = repeat(['N'], Int(m/7))
+    imp = zeros(Int, m, p)
+    return(Window(chr, pos, ref, cou, imp))
+end
+
+function SYNCX2WINDOW(syncx::String)::Window
+    # using Distributed
+    # Distributed.addprocs(length(Sys.cpu_info())-1)
+    # @everywhere using ProgressMeter
+    # @everywhere include("structs.jl")
+    # @everywhere include("functions.jl")
+    # @everywhere using .structs: PileupLine, LocusAlleleCounts, Window
+    # @everywhere using .functions: SPLIT, SYNCX2WINDOW
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_1.syncx"    
+    # # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"    
+    ### Find file positions for parallel processing
+    threads = length(Distributed.workers())
+    positions_init, positions_term = SPLIT(threads, syncx)
+    ### Parse syncx into a Window
+    @time windows = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
+         init = positions_init[i]
+         term = positions_term[i]
+         window = SYNCX2WINDOW(syncx, init, term)
+         [window]
+    end
+    ### Merge
+    chr = []
+    pos = []
+    ref = []
+    file = open(syncx, "r")
+    line = split(readline(file), "\t")
+    close(file)
+    vco = Missings.passmissing(parse).(Int, vcat(split.(line[3:end], ":")...))
+    cou = zeros(Any, 1, Int(length(vco)/7))
+    imp = zeros(Int, 1, Int(length(vco)/7))
+    for w in windows
+        append!(chr, w.chr)
+        append!(pos, w.pos)
+        append!(ref, w.ref)
+        cou = vcat(cou, w.cou)
+        imp = vcat(imp, w.imp)
+    end
+    cou = cou[2:end, :]
+    imp = imp[2:end, :]
+    return(Window(chr, pos, ref, cou, imp))
+end
+
+### FILTER
+function FILTER(pileup::String, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, outype::String=["pileup", "syncx"][1], out::String="")::String
+    # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
+    # file = open(pileup, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
+    # init = vec_positions[2]
+    # term = vec_positions[3]
+    # alpha1 = 0.05
+    # maf = 0.01
+    # alpha2 = 0.50
+    # cov = 2
+    # outype = ["pileup", "syncx"][1]
+    # out = ""
+    ### Output file
+    if out == ""
+        if outype == "pileup"
+            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".pileup")
+        elseif outype == "syncx"
+            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx")
+        end
+    end
+    ### Open pileup file
+    file = open(pileup, "r")
+    ### Set position to the next line if the current position is a truncated line
+    if (init>0)
+        seek(file, init-1)
+        line = readline(file)
+        if line != ""
+            init = position(file)
+        end
+    end
+    seek(file, init)
+    ### Filter
+    while position(file) < term
+        line = PileupLine(1, readline(file));
+        counts = PARSE([PARSE(line)])
+        counts.cou[ismissing.(counts.cou)] .= 0
+        coverages = sum(counts.cou, dims=1)
+        frequencies = counts.cou ./ coverages
+        frequencies[isnan.(frequencies)] .= 0.0
+        a, p = size(frequencies)
+        ### allele frequencies (alpha1)
+        idx = collect(1:a)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
+        frq = sort(frequencies[idx,:])
+        emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
+        eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
+        ### coverage (alpha2)
+        minimum_coverage = sort(coverages[1,:])[Int(ceil(alpha2*p))]
+        ### write
+        if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (minimum_coverage >= cov)
+            if outype=="pileup"
+                SAVE(line, out)
+            elseif outype=="syncx"
+                SAVE(counts, out)
+            end
+        end
+    end
+    close(file)
+    return(out)
+end
+
+function FILTER(syncx::String, input_syncx::Bool, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, out::String="")::String
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
+    # init = vec_positions[2]
+    # term = vec_positions[3]
+    # alpha1 = 0.05
+    # maf = 0.01
+    # alpha2 = 0.50
+    # cov = 2
+    # out = ""
+    ### Output file
+    if out == ""
+       out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx")
+    end
+    ### Parse syncx into a Window
+    window = SYNCX2WINDOW(syncx, init, term)
+    ### Filter
+    while position(file) < term
+        readline(file)
+    end
+    close(file)
+    return(out)
+end
+
+### IMPUTE
+function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true)::Window
+    n, p = size(window.cou)
+    ### Find the indices of pools with missing data.
+    ### These will be used independently and iteratively as our response variables
+    idx_pools = sum(ismissing.(window.cou), dims=1)[1,:] .> 0
+    ### If we have at least one pool with no missing data, then we proceed with imputation
+    if sum(.!idx_pools) >= 1
+        ### Explanatory variables
+        X = Int.(window.cou[:, .!idx_pools])
+
+         ### Distance covariate (only add if the window is within a single chromosome)
+         if distance & (length(unique(window.chr))==1)
+            m = length(window.pos)
+            D = zeros(Int, m, m)
+            for i in 1:m
+                for j in 1:m
+                    D[i,j] = abs(window.pos[i] - window.pos[j])
+                end
+            end
+            Z = MultivariateStats.projection(MultivariateStats.fit(PCA, repeat(D, inner=(7,1)); maxoutdim=3)) ### using the first 3 PCs by default
+            X = hcat(X, Z)
+        end
+
+        for j in collect(1:p)[idx_pools]
+            # j = collect(1:p)[idx_pools][1]
+            y = window.cou[:, j]
+            idx_loci = ismissing.(y)
+            y_train = Int.(y[.!idx_loci])
+            X_train = X[.!idx_loci, :]
+            nf, pf = size(X_train)
+           
+            ### Train models
+            if model == "Mean"
+                β = append!([0.0], repeat([1/pf], pf))
+            elseif model == "OLS"
+                β = try
+                    hcat(ones(nf), X_train) \ y_train
+                catch
+                    try
+                        LinearAlgebra.pinv(hcat(ones(nf), X_train)'*hcat(ones(nf), X_train)) * (hcat(ones(nf), X_train)'*y_train)
+                    catch
+                        missing
+                    end
+                end
+            elseif (model == "RR") | (model == "LASSO") | (model == "GLMNET")
+                model=="RR" ? alpha1=0 : model=="LASSO" ? alpha1=1 : alpha1=0.5
+                β = try
+                    try
+                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-7)) # equivalend to mod.path.betas[:, argmin(mod)]
+                    catch
+                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-3)) # equivalend to mod.path.betas[:, argmin(mod)]
+                    end
+                catch
+                    β = missing
+                end
+            end
+
+            ### Impute
+            if !ismissing(β)
+                X_valid = X[idx_loci, :]
+                y_imputed = Int.(round.(hcat(ones(sum(idx_loci)), X_valid) * β))
+                y_imputed[y_imputed .< 0] .= 0 ### collapse negative counts to zero (negative imputations are only a problem on OLS)
+                # y_imputed .-= minimum(y_imputed)
+                ### use the average imputed value
+                window.imp[idx_loci, j] .+= 1
+                y_imputed_mean = append!([], ((window.cou[idx_loci, j] .* window.imp[idx_loci, j]) .+ y_imputed) ./ (window.imp[idx_loci, j] .+ 1))
+                y_imputed_mean[ismissing.(y_imputed_mean)] = y_imputed
+                window.cou[idx_loci, j] = Int.(round.(y_imputed_mean))
+            end
+        end
+    else
+        ### If don't have a single pool with no missing data, then we return the input window without imputing
+        nothing
+    end
+    return(window)
+end
+
+function IMPUTE(pileup_with_missing::String, init::Int, term::Int, window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, syncx_imputed::String="")::String
+    # pileup_with_missing = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"
+    # file = open(pileup_with_missing, "r")
+    # seekend(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
+    # close(file)
+    # init = vec_positions[2]
+    # term = vec_positions[3]
+    # window_size = 20
+    # model = "LASSO"
+    # distance = true
+    # syncx_imputed = "/home/jeffersonfparil/Documents/poolgen/test/test-IMPUTED.syncx"
+    ### Output filename
+    if syncx_imputed==""
+        syncx_imputed = string(join(split(pileup_with_missing, '.')[1:(end-1)], '.'), "-IMPUTED.syncx")
+    end
+    ### Open pileup file
+    file = open(pileup_with_missing, "r")
+    ### Set position to the next line if the current position is a truncated line
+    if (init>0)
+        seek(file, init-1)
+        line = readline(file)
+        if line != ""
+            init = position(file)
+        end
+    end
+    seek(file, init)
+    ### Impute
+    i = init
+    j = 0
+    window = []
+    while (i < term) & (!eof(file))
+        if window == []
+            while (j < window_size) & (i < term) & (!eof(file))
+                j += 1
+                line = PileupLine(j, readline(file)); i = position(file)
+                locus = PARSE(line)
+                push!(window, locus)
+            end
+            window = PARSE(Array{LocusAlleleCounts}(window))
+            IMPUTE!(window, model, distance)
+            SAVE(EXTRACT(window, 1), syncx_imputed)
+        end
+        j += 1
+        line = PileupLine(j, readline(file)); i = position(file)
+        locus = try
+                    PARSE(line)
+                catch
+                    break
+                end
+        SLIDE!(window, locus)
+        IMPUTE!(window, model, distance)
+        SAVE(EXTRACT(window, 1), syncx_imputed)
+    end
+    close(file)
+    SAVE(EXTRACT(window, 2:window_size), syncx_imputed)
+    return(syncx_imputed)
+end
+
+### MISC: ### SPARSITY SIMULATION AND CROSS-VALIDATION
 function SIMULATESPARSITY(filename, read_length::Int=100, missing_loci_fraction::Float64=0.50, missing_pools_fraction::Float64=0.25, pileup_simulated_missing::String="")
     ###########################################################
     ### TEST
@@ -430,214 +829,5 @@ function CROSSVALIDATE(syncx_without_missing, syncx_with_missing, syncx_imputed,
     return(csv_out)
 end
 
-function CLONE(window::Window)::Window
-    Window(copy(window.chr),
-           copy(window.pos),
-           copy(window.ref),
-           copy(window.cou),
-           copy(window.imp))
-end
-
-### FILTER
-function FILTER(pileup::String, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, outype::String=["pileup", "syncx"][1], out::String="")::String
-    # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_Lr.pileup"
-    # file = open(pileup, "r")
-    # seekend(file)
-    # final_position = position(file)
-    # close(file)
-    # threads = 4
-    # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
-    # init = vec_positions[2]
-    # term = vec_positions[3]
-    # alpha1 = 0.05
-    # maf = 0.01
-    # alpha2 = 0.50
-    # cov = 2
-    # outype = ["pileup", "syncx"][1]
-    # out = ""
-    ### Output file
-    if out == ""
-        if outype == "pileup"
-            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".pileup")
-        elseif outype == "syncx"
-            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx")
-        end
-    end
-    ### Open pileup file
-    file = open(pileup, "r")
-    ### Set position to the next line if the current position is a truncated line
-    if (init>0)
-        seek(file, init-1)
-        line = readline(file)
-        if line != ""
-            init = position(file)
-        end
-    end
-    ### Filter
-    while position(file) < term
-        line = PileupLine(1, readline(file));
-        counts = PARSE([PARSE(line)])
-        counts.cou[ismissing.(counts.cou)] .= 0
-        coverages = sum(counts.cou, dims=1)
-        frequencies = counts.cou ./ coverages
-        frequencies[isnan.(frequencies)] .= 0.0
-        a, p = size(frequencies)
-        ### allele frequencies (alpha1)
-        idx = collect(1:a)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
-        frq = sort(frequencies[idx,:])
-        emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
-        eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
-        ### coverage (alpha2)
-        minimum_coverage = sort(coverages[1,:])[Int(ceil(alpha2*p))]
-        ### write
-        if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (minimum_coverage >= cov)
-            if outype=="pileup"
-                SAVE(line, out)
-            elseif outype=="syncx"
-                SAVE(counts, out)
-            end
-        end
-    end
-    close(file)
-    return(out)
-end
-
-### IMPUTE
-function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true)::Window
-    n, p = size(window.cou)
-    ### Find the indices of pools with missing data.
-    ### These will be used independently and iteratively as our response variables
-    idx_pools = sum(ismissing.(window.cou), dims=1)[1,:] .> 0
-    ### If we have at least one pool with no missing data, then we proceed with imputation
-    if sum(.!idx_pools) >= 1
-        ### Explanatory variables
-        X = Int.(window.cou[:, .!idx_pools])
-
-         ### Distance covariate (only add if the window is within a single chromosome)
-         if distance & (length(unique(window.chr))==1)
-            m = length(window.pos)
-            D = zeros(Int, m, m)
-            for i in 1:m
-                for j in 1:m
-                    D[i,j] = abs(window.pos[i] - window.pos[j])
-                end
-            end
-            Z = MultivariateStats.projection(MultivariateStats.fit(PCA, repeat(D, inner=(7,1)); maxoutdim=3)) ### using the first 3 PCs by default
-            X = hcat(X, Z)
-        end
-
-        for j in collect(1:p)[idx_pools]
-            # j = collect(1:p)[idx_pools][1]
-            y = window.cou[:, j]
-            idx_loci = ismissing.(y)
-            y_train = Int.(y[.!idx_loci])
-            X_train = X[.!idx_loci, :]
-            nf, pf = size(X_train)
-           
-            ### Train models
-            if model == "Mean"
-                β = append!([0.0], repeat([1/pf], pf))
-            elseif model == "OLS"
-                β = try
-                    hcat(ones(nf), X_train) \ y_train
-                catch
-                    try
-                        LinearAlgebra.pinv(hcat(ones(nf), X_train)'*hcat(ones(nf), X_train)) * (hcat(ones(nf), X_train)'*y_train)
-                    catch
-                        missing
-                    end
-                end
-            elseif (model == "RR") | (model == "LASSO") | (model == "GLMNET")
-                model=="RR" ? alpha1=0 : model=="LASSO" ? alpha1=1 : alpha1=0.5
-                β = try
-                    try
-                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-7)) # equivalend to mod.path.betas[:, argmin(mod)]
-                    catch
-                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-3)) # equivalend to mod.path.betas[:, argmin(mod)]
-                    end
-                catch
-                    β = missing
-                end
-            end
-
-            ### Impute
-            if !ismissing(β)
-                X_valid = X[idx_loci, :]
-                y_imputed = Int.(round.(hcat(ones(sum(idx_loci)), X_valid) * β))
-                y_imputed[y_imputed .< 0] .= 0 ### collapse negative counts to zero (negative imputations are only a problem on OLS)
-                # y_imputed .-= minimum(y_imputed)
-                ### use the average imputed value
-                window.imp[idx_loci, j] .+= 1
-                y_imputed_mean = append!([], ((window.cou[idx_loci, j] .* window.imp[idx_loci, j]) .+ y_imputed) ./ (window.imp[idx_loci, j] .+ 1))
-                y_imputed_mean[ismissing.(y_imputed_mean)] = y_imputed
-                window.cou[idx_loci, j] = Int.(round.(y_imputed_mean))
-            end
-        end
-    else
-        ### If don't have a single pool with no missing data, then we return the input window without imputing
-        nothing
-    end
-    return(window)
-end
-
-function IMPUTE(pileup_with_missing::String, init::Int, term::Int, window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, syncx_imputed::String="")::String
-    # pileup_with_missing = "/home/jeffersonfparil/Documents/poolquantgen/test/test_1.pileup"
-    # file = open(pileup_with_missing, "r")
-    # seekend(file)
-    # threads = 4
-    # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
-    # close(file)
-    # init = vec_positions[2]
-    # term = vec_positions[3]
-    # window_size = 20
-    # model = "LASSO"
-    # distance = true
-    # syncx_imputed = "/home/jeffersonfparil/Documents/poolquantgen/test/test-IMPUTED.syncx"
-    ### Output filename
-    if syncx_imputed==""
-        syncx_imputed = string(join(split(pileup_with_missing, '.')[1:(end-1)], '.'), "-IMPUTED.syncx")
-    end
-    ### Open pileup file
-    file = open(pileup_with_missing, "r")
-    ### Set position to the next line if the current position is a truncated line
-    if (init>0)
-        seek(file, init-1)
-        line = readline(file)
-        if line != ""
-            init = position(file)
-        end
-    end
-    ### Impute
-    seek(file, init)
-    i = init
-    j = 0
-    window = []
-    while (i < term) & (!eof(file))
-        if window == []
-            while (j < window_size) & (i < term) & (!eof(file))
-                j += 1
-                line = PileupLine(j, readline(file)); i = position(file)
-                locus = PARSE(line)
-                push!(window, locus)
-            end
-            window = PARSE(Array{LocusAlleleCounts}(window))
-            IMPUTE!(window, model, distance)
-            SAVE(EXTRACT(window, 1), syncx_imputed)
-        end
-        j += 1
-        line = PileupLine(j, readline(file)); i = position(file)
-        locus = try
-                    PARSE(line)
-                catch
-                    break
-                end
-        SLIDE!(window, locus)
-        IMPUTE!(window, model, distance)
-        SAVE(EXTRACT(window, 1), syncx_imputed)
-    end
-    close(file)
-    SAVE(EXTRACT(window, 2:window_size), syncx_imputed)
-    return(syncx_imputed)
-end
 
 end
