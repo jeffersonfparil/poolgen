@@ -103,7 +103,7 @@ function PARSE(line::PileupLine, minimum_quality=20)::LocusAlleleCounts
     return(LocusAlleleCounts(chr, pos, ref, dep, A, T, C, G, I, D, N))
 end
 
-function PARSE(line::SyncxLine)::Window
+function PARSE(line::SyncxLine)::LocusAlleleCounts
     # file = open("/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx", "r")
     # line = SyncxLine(1, readline(file))
     lin = split(line.line, "\t")
@@ -111,24 +111,18 @@ function PARSE(line::SyncxLine)::Window
     pos = parse(Int, lin[2])
     vco = map(x -> x=="missing" ? missing : parse(Int, x), vcat(split.(lin[3:end], ":")...))
     cou = (convert(Matrix{Any}, reshape(vco, 7, Int(length(vco)/7))))
-    imp = zeros(Int, size(cou))
-    return(Window([chr], [pos], ['N'], cou, imp))
+    cou[ismissing.(cou)] .= 0
+    ref = 'N'
+    dep = sum(cou, dims=1)[1,:]
+    A = cou[1,:]
+    T = cou[2,:]
+    C = cou[3,:]
+    G = cou[4,:]
+    I = cou[5,:]
+    D = cou[6,:]
+    N = cou[7,:]
+    return(LocusAlleleCounts(chr, pos, ref, dep, A, T, C, G, I, D, N))
 end
-
-# function PARSE(line::SyncxLine)::LocusAlleleCounts
-#     # file = open("/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx", "r")
-#     # line = SyncxLine(1, readline(file))
-#     lin = split(line.line, "\t")
-#     chr = lin[1]
-#     pos = parse(Int, lin[2])
-#     vco = map(x -> x=="missing" ? missing : parse(Int, x), vcat(split.(lin[3:end], ":")...))
-#     cou = (convert(Matrix{Any}, reshape(vco, 7, Int(length(vco)/7))))
-#     tmp = copy(cou)
-#     tmp[ismissing.(tmp)] .= 0 ### PLUS NEEDS TO ALLOW FOR MISSING IN LocusAlleleCounts
-#     ref = 'N'
-#     dep = sum()
-#     return(LocusAlleleCounts(chr, pos, ref, dep, A, T, C, G, I, D, N))
-# end
 
 function PARSE(window::Vector{LocusAlleleCounts})::Window
     n = length(window)
@@ -483,7 +477,7 @@ function FILTER(syncx::String, init::Int, term::Int, alpha1::Float64=0.05, maf::
     seek(file, init)
     ### Filter
     while position(file) < term
-        window = PARSE(SyncxLine(1, readline(file)))
+        window = PARSE([PARSE(SyncxLine(1, readline(file)))])
         window.cou[ismissing.(window.cou)] .= 0
         _, p = size(window.cou)
         coverages = sum(window.cou, dims=1)
@@ -629,7 +623,8 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
             SAVE(EXTRACT(window, 1), out)
         end
         j += 1
-        line = PileupLine(j, readline(file)); i = position(file)
+        line = SyncxLine(j, readline(file))
+        i = position(file)
         locus = try
                     PARSE(line)
                 catch

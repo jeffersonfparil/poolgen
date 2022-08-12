@@ -11,8 +11,8 @@ using ProgressMeter
 
 include("structs.jl")
 include("functions.jl")
-using .structs: PileupLine, LocusAlleleCounts, Window
-using .functions: SPLIT, MERGE, PILEUP2SYNCX, FILTER, IMPUTE, SAVE
+using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window
+using .functions: PARSE, SPLIT, MERGE, PILEUP2SYNCX, FILTER, IMPUTE, SAVE
 
 function pileup2syncx(pileup::String; out::String="")::String
     # using Distributed
@@ -135,11 +135,13 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     # @everywhere include("structs.jl")
     # @everywhere include("functions.jl")
     # @everywhere include("user_functions.jl")
-    # @everywhere using .structs: PileupLine, LocusAlleleCounts, Window
-    # @everywhere using .functions: SPLIT, MERGE, SYNCX2WINDOW, PILEUP2SYNCX, IMPUTE
+    # @everywhere using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window
+    # @everywhere using .functions: PARSE, SPLIT, MERGE, PILEUP2SYNCX, IMPUTE
     # @everywhere using .user_functions: pileup2syncx
     # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"
     # # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
+    # # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_1.syncx"
+    # # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
     # window_size = 20
     # model = "LASSO"
     # distance = true
@@ -156,15 +158,10 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
         out = string(pwd(), "/", out)
     end
     ### Convert to syncx if the input file is in pileup format: output syncx - filename of syncx file
-    file = open(filename, "r")
-    for i in 1:10
-        _ = readline(file);
-    end
-    init = 0
-    term = position(file)
-    close(file)
     syncx = try
-        SYNCX2WINDOW(filename, init, term)
+        file = open(filename, "r")
+        PARSE(SyncxLine(1, readline(file)))
+        close(file)
         filename
     catch
         pileup2syncx(filename)
@@ -172,17 +169,14 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx, window_size)
-    
-    
-    
     ### Impute
     @time filenames_out = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
         init = positions_init[i]
         term = positions_term[i]
         digits = length(string(length(positions_init)))
         id = lpad(i, (digits-length(string(i))), "0")
-        tmp = string(pileup_with_missing, "-IMPUTED-", id, ".syncx.tmp")
-        filename = IMPUTE(pileup_with_missing, init, term, window_size, model, distance, tmp)
+        tmp = string(syncx, "-IMPUTED-", id, ".syncx.tmp")
+        filename = IMPUTE(syncx, init, term, window_size, model, distance, tmp)
         [filename]
     end
     ### Sort the chunks so we maintain the one-to-one correspondence between input and output loci arrangement

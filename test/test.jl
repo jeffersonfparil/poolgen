@@ -81,22 +81,20 @@ mv(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alph
                      cov=cov,
                      out="")
 
+println("##########################################")
+println("Imputation")
+println("##########################################")
+window_size=20
+model=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
+distance=true
+@time poolgen.impute("test/test_1.pileup",
+                    window_size=window_size,
+                    model=model,
+                    distance=distance,
+                    out="")
 
-# println("##########################################")
-# println("Imputation")
-# println("##########################################")
-# window_size=20
-# model=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
-# distance=true
-# syncx_imputed=""
-# @time poolgen.impute("test/test_1.pileup",
-#                     window_size=window_size,
-#                     model=model,
-#                     distance=distance,
-#                     syncx_imputed=syncx_imputed)
-
-# @time poolgen.impute("test/test_2.pileup",
-#                     window_size=window_size,
-#                     model=model,
-#                     distance=distance,
-#                     syncx_imputed=syncx_imputed)
+@time poolgen.impute("test/test_2.pileup",
+                    window_size=window_size,
+                    model=model,
+                    distance=distance,
+                    out="")
