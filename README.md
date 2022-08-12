@@ -14,18 +14,30 @@ Quantitative and population genetics analyses using pool sequencing data
 - [X] Types: (2/3) locus
 - [X] Types: (3/3) window
 - [X] pileup I/O
-- [ ] syncx I/O
+- [X] syncx I/O
 - [X] pileup filtering: pileup to pileup and pileup to syncx
-- [ ] syncx filtering
-- [ ] imputation pileup-to-syncx
+- [X] syncx filtering
+- [X] imputation pileup-to-syncx
 - [ ] iterative genome-wide association analysis (per locus)
 - [ ] genomic prediction modeling and cross-validation
 
 ## File formats
-**Syncx** format (after popoolation2's sync or synchronised pileup file format):
-- *Column 1*:   chromosome or scaffold name
-- *Column 2*:   locus position repeated 7 times corresponding to alleles "A", "T", "C", "G", "INS", "DEL", "N", where "INS" is insertion, "DEL" is deletion, and "N" is unclassified
-- *Column 3-n*: allele counts one column for each pool or population
+
+### Pileup
+Summarised or piled up base calls of aligned reads to a reference genome.
+- *Column 1*:       name of chromosome, scaffold or contig
+- *Column 2*:       locus position
+- *Column 3*:       reference allele
+- *Column 4*:       coverage, i.e. number of times the locus was included in a read
+- *Column 5*:       Read codes, i.e. "." ("," for reverse strand) reference allele; "A/T/C/G" ("a/t/c/g" for reverse strand) alternative alleles; "`\[+-][0-9]+[ACGTNacgtn]`" insertions and deletions; "^" start of read; "$" end of read; and "*" deleted or missing locus.
+- *Column 6*:       base qualities encoded as the `10 ^ -((ascii value of the character - 33) / 10)`
+- *Columns 7 - 3n*: coverages, reads, and base qualities of *n* pools (3 columns per pool).
+
+### Syncx
+Spiritual successor to [popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format:
+- *Column 1*:      chromosome or scaffold name
+- *Column 2*:      locus position 
+- *Column 3 to n*: colon-delimited allele counts: A:T:C:G:INS:DEL:N, where "INS" is insertion, "DEL" is deletion, and "N" is unclassified (one column per pool).
 
 ## Imputation details
 Performs simple linear regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.

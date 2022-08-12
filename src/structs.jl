@@ -11,6 +11,11 @@ struct PileupLine
     line::String    ### a line of the pileup file
 end
 
+struct SyncxLine
+    index::Int      ### line number
+    line::String    ### a line of the syncx file
+end
+
 struct LocusAlleleCounts
     chr::String         ### chromosome
     pos::Int            ### position
