@@ -98,3 +98,25 @@ distance=true
                     model=model,
                     distance=distance,
                     out="")
+
+# println("##########################################")
+# println("Test GP workflow")
+# println("##########################################")
+
+# using Distributed
+# Distributed.addprocs(length(Sys.cpu_info())-1)
+# @everywhere include("/home/jeffersonfparil/Documents/poolgen/src/poolgen.jl")
+
+# @time poolgen.pileup2syncx("test/test_2.pileup",
+#                            out="test/test_GP_workflow-01_RAW.syncx")
+# @time poolgen.impute("test/test_GP_workflow-01_RAW.syncx",
+#                     window_size=100,
+#                     model="OLS",
+#                     distance=true,
+#                     out="test/test_GP_workflow-02_IMPUTED.syncx")
+# @time poolgen.filter("test/test_GP_workflow-02_IMPUTED.syncx",
+#                      alpha1=0.01,
+#                      maf=0.0001,
+#                      alpha2=0.50,
+#                      cov=1,
+#                      out="test/test_GP_workflow-02_FILTERED.syncx")

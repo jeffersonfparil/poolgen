@@ -9,18 +9,16 @@ module user_functions
 using Distributed
 using ProgressMeter
 
-include("structs.jl")
 include("functions.jl")
-using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window
+using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
 using .functions: PARSE, SPLIT, MERGE, PILEUP2SYNCX, FILTER, IMPUTE, SAVE
 
 function pileup2syncx(pileup::String; out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
     # @everywhere using ProgressMeter
-    # @everywhere include("structs.jl")
     # @everywhere include("functions.jl")
-    # @everywhere using .structs: PileupLine, LocusAlleleCounts, Window
+    # @everywhere using .functions: PileupLine, LocusAlleleCounts, Window
     # @everywhere using .functions: SPLIT, MERGE, PILEUP2SYNCX
     # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"    
     # # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"    
@@ -51,9 +49,8 @@ function filter(pileup::String, outype::String; alpha1::Float64=0.05, maf::Float
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
     # @everywhere using ProgressMeter
-    # @everywhere include("structs.jl")
     # @everywhere include("functions.jl")
-    # @everywhere using .structs: PileupLine, LocusAlleleCounts, Window
+    # @everywhere using .functions: PileupLine, LocusAlleleCounts, Window
     # @everywhere using .functions: SPLIT, MERGE, FILTER
     # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"    
     # # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"    
@@ -132,10 +129,9 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
     # @everywhere using ProgressMeter
-    # @everywhere include("structs.jl")
     # @everywhere include("functions.jl")
     # @everywhere include("user_functions.jl")
-    # @everywhere using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window
+    # @everywhere using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
     # @everywhere using .functions: PARSE, SPLIT, MERGE, PILEUP2SYNCX, IMPUTE
     # @everywhere using .user_functions: pileup2syncx
     # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"
