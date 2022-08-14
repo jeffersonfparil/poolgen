@@ -23,45 +23,49 @@ println("##########################################")
 println("##########################################")
 println("Filtering")
 println("##########################################")
+maximum_missing_fraction = 0.50
 alpha1 = 0.05
 maf = 0.001
 alpha2 = 0.50
-cov = 10
+minimum_coverage = 10
 @time poolgen.filter("test/test_1.pileup",
                      "pileup",
+                     maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
-                     cov=cov,
+                     minimum_coverage=minimum_coverage,
                      out="")
 
 @time poolgen.filter("test/test_1.pileup",
                      "syncx",
+                     maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
-                     cov=cov,
+                     minimum_coverage=minimum_coverage,
                      out="")
 
-mv(string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx"),
-   string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, "-FROM_PILEUP.syncx"))
+mv(string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx"),
+   string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, "-FROM_PILEUP.syncx"))
 @time poolgen.filter("test/test_1.syncx",
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
-                     cov=cov,
+                     minimum_coverage=minimum_coverage,
                      out="")
 
+maximum_missing_fraction = 0.50
 alpha1 = 0.05
 maf = 0.0001
 alpha2 = 0.50
-cov = 1
+minimum_coverage = 1
 @time poolgen.filter("test/test_2.pileup",
                      "pileup",
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
-                     cov=cov,
+                     minimum_coverage=minimum_coverage,
                      out="")
 
 @time poolgen.filter("test/test_2.pileup",
@@ -69,16 +73,16 @@ cov = 1
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
-                     cov=cov,
+                     minimum_coverage=minimum_coverage,
                      out="")
 
-mv(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx"),
-   string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, "-FROM_PILEUP.syncx"))
+mv(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx"),
+   string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, "-FROM_PILEUP.syncx"))
 @time poolgen.filter("test/test_2.syncx",
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
-                     cov=cov,
+                     minimum_coverage=minimum_coverage,
                      out="")
 
 println("##########################################")
@@ -99,24 +103,21 @@ distance=true
                     distance=distance,
                     out="")
 
-# println("##########################################")
-# println("Test GP workflow")
-# println("##########################################")
-
-# using Distributed
-# Distributed.addprocs(length(Sys.cpu_info())-1)
-# @everywhere include("/home/jeffersonfparil/Documents/poolgen/src/poolgen.jl")
-
+println("##########################################")
+println("Test GP workflow")
+println("##########################################")
 # @time poolgen.pileup2syncx("test/test_2.pileup",
-#                            out="test/test_GP_workflow-01_RAW.syncx")
-# @time poolgen.impute("test/test_GP_workflow-01_RAW.syncx",
-#                     window_size=100,
-#                     model="OLS",
-#                     distance=true,
-#                     out="test/test_GP_workflow-02_IMPUTED.syncx")
-# @time poolgen.filter("test/test_GP_workflow-02_IMPUTED.syncx",
-#                      alpha1=0.01,
-#                      maf=0.0001,
-#                      alpha2=0.50,
-#                      cov=1,
-#                      out="test/test_GP_workflow-02_FILTERED.syncx")
+@time poolgen.pileup2syncx("test/test_1.pileup",
+                           out="test/test_GP_workflow-01_RAW.syncx")
+@time poolgen.filter("test/test_GP_workflow-01_RAW.syncx",
+                     maximum_missing_fraction=0.50,
+                     alpha1=0.01,
+                     maf=0.0,
+                     alpha2=0.50,
+                     minimum_coverage=1,
+                     out="test/test_GP_workflow-02_FILTERED.syncx")
+@time poolgen.impute("test/test_GP_workflow-02_FILTERED.syncx",
+                    window_size=100,
+                    model="OLS",
+                    distance=true,
+                    out="test/test_GP_workflow-03_IMPUTED.syncx")

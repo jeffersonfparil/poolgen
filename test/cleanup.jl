@@ -23,3 +23,7 @@ rm(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alph
 rm(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, "-FROM_PILEUP.syncx"))
 rm(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx"))
 rm(string("test/test_2-IMPUTED-window_", window_size, "-model_", model, "-distance_", distance, ".syncx"))
+
+rm("test/test_GP_workflow-01_RAW.syncx")
+rm("test/test_GP_workflow-02_FILTERED.syncx")
+rm("test/test_GP_workflow-03_IMPUTED.syncx")

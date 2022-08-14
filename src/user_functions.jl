@@ -45,7 +45,7 @@ function pileup2syncx(pileup::String; out::String="")::String
     return(out)
 end
 
-function filter(pileup::String, outype::String; alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, out::String="")::String
+function filter(pileup::String, outype::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
     # @everywhere using ProgressMeter
@@ -55,30 +55,31 @@ function filter(pileup::String, outype::String; alpha1::Float64=0.05, maf::Float
     # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"    
     # # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"    
     # outype = ["pileup", "syncx"][1]
+    # maximum_missing_fraction = 0.10
     # alpha1 = 0.05
     # maf = 0.001
     # alpha2 = 0.50
-    # cov = 1
+    # minimum_coverage = 1
     # out = ""
     ### Define output file if not specified
     if out == ""
         if outype == "pileup"
-            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".pileup")
+            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".pileup")
         elseif outype == "syncx"
-            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx")
+            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
         end
     end
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, pileup)
-    ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and cov)
+    ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and minimum_coverage)
     @time filenames_out = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
         init = positions_init[i]
         term = positions_term[i]
         digits = length(string(length(positions_init)))
         id = lpad(i, (digits-length(string(i))), "0")
         tmp = string(pileup, "-FILTERED-", id, ".tmp")
-        filename = FILTER(pileup, outype, init, term, alpha1, maf, alpha2, cov, tmp)
+        filename = FILTER(pileup, outype, init, term, maximum_missing_fraction, alpha1, maf, alpha2, minimum_coverage, tmp)
         [filename]
     end
     ### Sort the output files from parallel processing and merge
@@ -86,7 +87,7 @@ function filter(pileup::String, outype::String; alpha1::Float64=0.05, maf::Float
     return(out)
 end
 
-function filter(syncx::String; alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, out::String="")::String
+function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
     # @everywhere using ProgressMeter
@@ -98,26 +99,27 @@ function filter(syncx::String; alpha1::Float64=0.05, maf::Float64=0.01, alpha2::
     # @everywhere using .user_functions: pileup2syncx
     # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
     # # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup")
+    # maximum_missing_fraction = 0.10
     # alpha1 = 0.05
     # maf = 0.001
     # alpha2 = 0.50
-    # cov = 1
+    # minimum_coverage = 1
     # out = ""
     ### Define output file if not specified
     if out == ""
-        out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx")
+        out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
     end
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx)
-    ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and cov)
+    ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and minimum_coverage)
     @time filenames_out = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
         init = positions_init[i]
         term = positions_term[i]
         digits = length(string(length(positions_init)))
         id = lpad(i, (digits-length(string(i))), "0")
         tmp = string(syncx, "-FILTERED-", id, ".tmp")
-        filename = FILTER(syncx, init, term, alpha1, maf, alpha2, cov, tmp)
+        filename = FILTER(syncx, init, term, maximum_missing_fraction, alpha1, maf, alpha2, minimum_coverage, tmp)
         [filename]
     end
     ### Sort the output files from parallel processing and merge
@@ -139,6 +141,7 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     # # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_1.syncx"
     # # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
     # window_size = 20
+    # # window_size = 100
     # model = "LASSO"
     # distance = true
     # out = ""
@@ -165,6 +168,9 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx, window_size)
+    idx = collect(1:length(positions_term))[positions_term .== maximum(positions_term)][1]
+    positions_init = positions_init[1:idx]
+    positions_term = positions_term[1:idx]
     ### Impute
     @time filenames_out = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
         init = positions_init[i]
@@ -176,7 +182,11 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
         [filename]
     end
     ### Sort the chunks so we maintain the one-to-one correspondence between input and output loci arrangement
-    MERGE(filenames_out, window_size, out)
+    if length(filenames_out) > 1
+        MERGE(filenames_out, window_size, out)
+    else
+        MERGE(filenames_out, out)
+    end
     return(out)
 end
 

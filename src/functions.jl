@@ -380,7 +380,22 @@ function PILEUP2SYNCX(pileup::String, init::Int, term::Int, out::String="")::Str
 end
 
 ### FILTER
-function FILTER(pileup::String, outype::String, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, out::String="")::String
+function FILTER(line, maximum_missing_fraction::Float64)::Bool
+    # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
+    # # filaname = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
+    # file = open(filename, "r")
+    # line = PileupLine(1, readline(file)); close(file)
+    # # line = SyncxLine(1, readline(file)); close(file)
+    # maximum_missing_fraction = 0.25
+    ### Output file
+    window = PARSE([PARSE(line)])
+    window.cou[ismissing.(window.cou)] .= 0
+    coverages = sum(window.cou, dims=1)[1,:]
+    out = sum(coverages .== 0) <= Int(round(length(coverages)*maximum_missing_fraction))
+    return(out)
+end
+
+function FILTER(pileup::String, outype::String, init::Int, term::Int, maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
     # outype = ["pileup", "syncx"][1]
     # file = open(pileup, "r")
@@ -391,17 +406,18 @@ function FILTER(pileup::String, outype::String, init::Int, term::Int, alpha1::Fl
     # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
     # init = vec_positions[2]
     # term = vec_positions[3]
+    # maximum_missing_fraction = 0.50
     # alpha1 = 0.05
     # maf = 0.01
     # alpha2 = 0.50
-    # cov = 2
+    # minimum_coverage = 2
     # out = ""
     ### Output file
     if out == ""
         if outype == "pileup"
-            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".pileup")
+            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".pileup")
         elseif outype == "syncx"
-            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx")
+            out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
         end
     end
     ### Open pileup file
@@ -418,25 +434,31 @@ function FILTER(pileup::String, outype::String, init::Int, term::Int, alpha1::Fl
     ### Filter
     while position(file) < term
         line = PileupLine(1, readline(file));
-        window = PARSE([PARSE(line)])
-        window.cou[ismissing.(window.cou)] .= 0
-        coverages = sum(window.cou, dims=1)
-        frequencies = window.cou ./ coverages
-        frequencies[isnan.(frequencies)] .= 0.0
-        a, p = size(frequencies)
-        ### allele frequencies (alpha1)
-        idx = collect(1:a)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
-        frq = sort(frequencies[idx,:])
-        emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
-        eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
-        ### coverage (alpha2)
-        minimum_coverage = sort(coverages[1,:])[Int(ceil(alpha2*p))]
-        ### write
-        if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (minimum_coverage >= cov)
-            if outype=="pileup"
-                SAVE(line, out)
-            elseif outype=="syncx"
-                SAVE(window, out)
+        if FILTER(line, maximum_missing_fraction)
+            window = PARSE([PARSE(line)])
+            X = copy(window.cou)
+            X[ismissing.(X)] .= 0
+            coverages = sum(X, dims=1)
+            idx = coverages[1,:] .> 0
+            X = X[:, idx]
+            coverages = coverages[:, idx]
+            frequencies = X ./ coverages
+            frequencies[isnan.(frequencies)] .= 0.0
+            a, p = size(frequencies)
+            ### allele frequencies (alpha1)
+            idx = collect(1:a)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
+            frq = sort(frequencies[idx,:])
+            emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
+            eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
+            ### coverage (alpha2)
+            cov = sort(coverages[1,:])[Int(ceil(alpha2*p))]
+            ### write
+            if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (cov >= minimum_coverage)
+                if outype=="pileup"
+                    SAVE(line, out)
+                elseif outype=="syncx"
+                    SAVE(window, out)
+                end
             end
         end
     end
@@ -444,10 +466,10 @@ function FILTER(pileup::String, outype::String, init::Int, term::Int, alpha1::Fl
     return(out)
 end
 
-function FILTER(syncx::String, init::Int, term::Int, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, cov::Int64=5, out::String="")::String
+function FILTER(syncx::String, init::Int, term::Int, maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # include("user_functions.jl"); using .user_functions: pileup2syncx
-    # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
-    # # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
+    # # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
+    # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup")
     # file = open(syncx, "r")
     # seekend(file)
     # final_position = position(file)
@@ -456,14 +478,15 @@ function FILTER(syncx::String, init::Int, term::Int, alpha1::Float64=0.05, maf::
     # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
     # init = vec_positions[2]
     # term = vec_positions[3]
+    # maximum_missing_fraction = 0.50
     # alpha1 = 0.05
     # maf = 0.01
     # alpha2 = 0.50
-    # cov = 2
+    # minimum_coverage = 2
     # out = ""
     ### Output file
     if out == ""
-       out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx")
+       out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
     end
     ### Set position to the next line if the current position is a truncated line
     file = open(syncx, "r")
@@ -477,21 +500,28 @@ function FILTER(syncx::String, init::Int, term::Int, alpha1::Float64=0.05, maf::
     seek(file, init)
     ### Filter
     while position(file) < term
-        window = PARSE([PARSE(SyncxLine(1, readline(file)))])
-        window.cou[ismissing.(window.cou)] .= 0
-        _, p = size(window.cou)
-        coverages = sum(window.cou, dims=1)
-        frequencies = window.cou ./ coverages
-        frequencies[isnan.(frequencies)] .= 0.0
-        ### allele frequencies (alpha1)
-        idx = collect(1:7)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
-        frq = sort(frequencies[idx,:])
-        emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
-        eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
-        ### coverage (alpha2)
-        minimum_coverage = sort(coverages[1,:])[Int(ceil(alpha2*p))]
-        if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (minimum_coverage >= cov)
-            SAVE(window, out)
+        line = SyncxLine(1, readline(file));
+        if FILTER(line, maximum_missing_fraction)
+            window = PARSE([PARSE(line)])
+            X = copy(window.cou)
+            X[ismissing.(X)] .= 0
+            coverages = sum(X, dims=1)
+            idx = coverages[1,:] .> 0
+            X = X[:, idx]
+            coverages = coverages[:, idx]
+            frequencies = X ./ coverages
+            frequencies[isnan.(frequencies)] .= 0.0
+            _, p = size(frequencies)
+            ### allele frequencies (alpha1)
+            idx = collect(1:7)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
+            frq = sort(frequencies[idx,:])
+            emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
+            eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
+            ### coverage (alpha2)
+            cov = sort(coverages[1,:])[Int(ceil(alpha2*p))]
+            if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (cov >= minimum_coverage)
+                SAVE(window, out)
+            end
         end
     end
     close(file)
@@ -622,20 +652,26 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
             IMPUTE!(window, model, distance)
             SAVE(EXTRACT(window, 1), out)
         end
-        j += 1
-        line = SyncxLine(j, readline(file))
-        i = position(file)
-        locus = try
-                    PARSE(line)
-                catch
-                    break
-                end
-        SLIDE!(window, locus)
-        IMPUTE!(window, model, distance)
-        SAVE(EXTRACT(window, 1), out)
+        if !eof(file)
+            j += 1
+            line = SyncxLine(j, readline(file))
+            i = position(file)
+            locus = try
+                        PARSE(line)
+                    catch
+                        break
+                    end
+            SLIDE!(window, locus)
+            SAVE(EXTRACT(window, 1), out)
+            IMPUTE!(window, model, distance)
+        end
+    end
+    if !eof(file)
+        SAVE(EXTRACT(window, 2:window_size), out)
+    else
+        SAVE(window, out)
     end
     close(file)
-    SAVE(EXTRACT(window, 2:window_size), out)
     return(out)
 end
 
