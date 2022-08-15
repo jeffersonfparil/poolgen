@@ -675,6 +675,29 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
     return(out)
 end
 
+# ### PHENOTYPE
+# using ProgressMeter
+# include("user_functions.jl")
+# using .user_functions: pileup2syncx, filter, impute
+# pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
+
+# syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_1.syncx"
+
+# X_temp = []
+# file = open(syncx, "r")
+# seekend(file)
+# n = position(file)
+# pb = ProgressMeter.Progress(n, desc="Extracting info from syncx file..., start=0")
+# seekstart(file)
+# @time while !eof(file)
+#     push!(X_temp, PARSE(SyncxLine(1, readline(file))))
+#     ProgressMeter.update!(pb, position(file))
+# end
+# close(file)
+
+# X = PARSE(Array{LocusAlleleCounts}(X_temp))
+# X.cou
+
 ### MISC: ### SPARSITY SIMULATION AND CROSS-VALIDATION
 function SIMULATESPARSITY(filename, read_length::Int=100, missing_loci_fraction::Float64=0.50, missing_pools_fraction::Float64=0.25, pileup_simulated_missing::String="")
     ###########################################################

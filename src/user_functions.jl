@@ -36,7 +36,7 @@ function pileup2syncx(pileup::String; out::String="")::String
         term = positions_term[i]
         digits = length(string(length(positions_init)))
         id = lpad(i, (digits-length(string(i))), "0")
-        tmp = string(pileup, "-FILTERED-", id, ".tmp")
+        tmp = string(pileup, "-PILEUP2SYNCX-", id, ".tmp")
         filename = PILEUP2SYNCX(pileup, init, term, tmp)
         [filename]
     end
