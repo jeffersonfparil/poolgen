@@ -12,7 +12,7 @@ struct PileupLine
 end
 
 struct SyncxLine
-    index::Int      ### line number
+    index::Int      ### line number (not critical)
     line::String    ### a line of the syncx file
 end
 
@@ -37,6 +37,20 @@ mutable struct Window
     ref::Vector{Char}   ### vector of reference alleles
     cou::Matrix{Any}    ### n (window size*number of alleles) rows x p (number of pools) columns
     imp::Matrix{Int}    ### number of times a locus has been imputed (corresponds to the elements of cou)
+end
+
+struct PhenotypeLine
+    index::Int          ### line number (not critical)
+    line::String        ### a line of delimited phenotype text file
+    delimiter::String   ### string (single or multiple characters) delimeter
+    id_col::Int         ### column number of ID names corresponsing to the columns in the genotype file
+    y_cols::Vector{Int} ### vector of column numbers corresponding to the phenotype columns needed
+end
+
+struct Phenotype
+    ids::Vector{String}         ### names of individuals (n individuals)
+    trait_names::Vector{String} ### names of traits (m traits)
+    Y::Matrix{Any}              ### n x m matrix of phenotype values
 end
 
 end

@@ -13,7 +13,7 @@ using MultivariateStats
 using ProgressMeter
 
 include("structs.jl")
-using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window
+using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype
 
 ### DATA PARSING AND EXTRACTION
 function PARSE(line::PileupLine, minimum_quality=20)::LocusAlleleCounts
@@ -146,6 +146,52 @@ function PARSE(window::Vector{LocusAlleleCounts})::Window
     end
     imp = zeros((n*7, p))
     return(Window(chr, pos, ref, cou, imp))
+end
+
+function PARSE(line::PhenotypeLine, trait_names::Vector{String}=[""], missing_strings::Vector{String}=["NA", ""])::Phenotype
+    # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test.csv"
+    # file = open(phenotype, "r")
+    # header = PhenotypeLine(1, readline(file), ",", 1, [2,3,4,5,10,11])
+    # line = PhenotypeLine(1, readline(file), ",", 1, [2,3,4,5,10,11])
+    # close(file)
+    # missing_strings = ["NA", ""]
+    lin = split(line.line, line.delimiter)
+    y = map(x -> sum(x .== missing_strings)>0 ? missing : parse(Float64, x), lin[line.y_cols])
+    ids = [string(lin[line.id_col])]
+    if trait_names==[""]
+        trait_names = repeat([""], length(y))
+    end
+    Y = convert(Array{Any}, reshape(y, 1, length(y)))
+    return(Phenotype(ids, trait_names, Y))
+end
+
+function PARSE(lines::Vector{Phenotype}, rename_traits::Vector{String}=[""])::Phenotype
+    # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test.csv"
+    # file = open(phenotype, "r")
+    # header = PhenotypeLine(1, readline(file), ",", 1, [2,3,4,5,10,11])
+    # line1 = PARSE(PhenotypeLine(1, readline(file), ",", 1, [2,3,4,5,10,11]))
+    # line2 = PARSE(PhenotypeLine(1, readline(file), ",", 1, [2,3,4,5,10,11]))
+    # line3 = PARSE(PhenotypeLine(1, readline(file), ",", 1, [2,3,4,5,10,11]))
+    # lines = [line1, line2, line3]
+    # close(file)
+    # rename_traits = ["a", "b", "c", "d", "e", "f"]
+    ids = lines[1].ids
+    trait_names = lines[1].trait_names
+    Y = lines[1].Y
+    for i in 2:length(lines)
+        # i = 1
+        if trait_names == lines[i].trait_names
+            append!(ids, lines[i].ids)
+            Y = vcat(Y, lines[i].Y)
+        else
+            continue
+        end
+    end
+    if rename_traits != [""]
+        trait_names = rename_traits
+    end
+    @assert (length(ids), length(trait_names)) == size(Y)
+    return(Phenotype(ids, trait_names, Y))
 end
 
 function EXTRACT(window::Window, locus::Int)::Window
@@ -675,7 +721,44 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
     return(out)
 end
 
-# ### PHENOTYPE
+
+function LOAD(phenotype::String, delimiter::Sring=",", header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[0], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])
+    phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test.csv"
+    delimiter = ","
+    header = true
+    id_col = 1
+    phenotype_cols = [0]
+    missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # file = open(phenotype, "r")
+    # header = PhenotypeLine(1, readline(file), ",", 1, [2,3,4,5,10,11])
+    # line = PhenotypeLine(1, readline(file), ",", 1, [2,3,4,5,10,11])
+    # close(file)
+
+
+    file = open(phenotype, "r")
+    if header
+        header_line = convert(Vector{String}, split(readline(file), delimiter))
+    end
+    lines = []
+    while !eof(file)
+        l = readline(file)
+        m = length(split(l, delimiter))
+        if phenotype_cols==[0]
+            phenotype_cols = collect(1:m)[collect(1:m) .!= id_col]
+        end
+        push!(lines, PARSE(PhenotypeLine(1, l, delimiter, id_col, phenotype_cols), [""], missing_strings))
+    end
+    close(file)
+
+    X = PARSE(convert(Vector{Phenotype}, lines), header_line[phenotype_cols])
+
+end
+
+function LOAD(syncx::String)
+
+end
+
+
 # using ProgressMeter
 # include("user_functions.jl")
 # using .user_functions: pileup2syncx, filter, impute
