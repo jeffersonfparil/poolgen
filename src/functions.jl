@@ -722,7 +722,7 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
 end
 
 
-function LOAD(phenotype::String, delimiter::Sring=",", header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[0], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])
+function LOAD(phenotype::String, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[0], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])
     phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test.csv"
     delimiter = ","
     header = true
