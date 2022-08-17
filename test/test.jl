@@ -55,11 +55,11 @@ mv(string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alph
                      minimum_coverage=minimum_coverage,
                      out="")
 
-maximum_missing_fraction = 0.50
-alpha1 = 0.05
-maf = 0.0001
+maximum_missing_fraction = 0.99
+alpha1 = 0.01
+maf = 0.000
 alpha2 = 0.50
-minimum_coverage = 1
+minimum_coverage = 0
 @time poolgen.filter("test/test_2.pileup",
                      "pileup",
                      alpha1=alpha1,

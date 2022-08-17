@@ -7,13 +7,13 @@
 module structs
 
 struct PileupLine
-    index::Int      ### line number
-    line::String    ### a line of the pileup file
+    idx::Int    ### line number
+    lin::String ### a line of the pileup file
 end
 
 struct SyncxLine
-    index::Int      ### line number (not critical)
-    line::String    ### a line of the syncx file
+    idx::Int    ### line number (not critical)
+    lin::String ### a line of the syncx file
 end
 
 struct LocusAlleleCounts
@@ -40,17 +40,17 @@ mutable struct Window
 end
 
 struct PhenotypeLine
-    index::Int          ### line number (not critical)
-    line::String        ### a line of delimited phenotype text file
-    delimiter::String   ### string (single or multiple characters) delimeter
-    id_col::Int         ### column number of ID names corresponsing to the columns in the genotype file
-    y_cols::Vector{Int} ### vector of column numbers corresponding to the phenotype columns needed
+    idx::Int          ### line number (not critical)
+    lin::String        ### a line of delimited phenotype text file
+    dlm::String   ### string (single or multiple characters) delimeter
+    idc::Int         ### column number of ID names corresponsing to the columns in the genotype file
+    trc::Vector{Int} ### vector of column numbers corresponding to the phenotype columns needed
 end
 
 struct Phenotype
-    ids::Vector{String}         ### names of individuals (n individuals)
-    trait_names::Vector{String} ### names of traits (m traits)
-    Y::Matrix{Any}              ### n x m matrix of phenotype values
+    iid::Vector{String}         ### names of individuals (n individuals)
+    tid::Vector{String} ### names of traits (m traits)
+    phe::Matrix{Any}              ### n x m matrix of phenotype values
 end
 
 end

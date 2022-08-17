@@ -11,7 +11,7 @@ using ProgressMeter
 
 include("functions.jl")
 using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
-using .functions: PARSE, SPLIT, MERGE, PILEUP2SYNCX, FILTER, IMPUTE, SAVE
+using .functions: PARSE, SPLIT, MERGE, PILEUP2SYNCX, LOAD, FILTER, IMPUTE, SAVE
 
 function pileup2syncx(pileup::String; out::String="")::String
     # using Distributed
@@ -31,7 +31,7 @@ function pileup2syncx(pileup::String; out::String="")::String
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, pileup)
     ### Parse to convert from pileup to syncx format
-    @time filenames_out = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
+    @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
         digits = length(string(length(positions_init)))
@@ -73,7 +73,7 @@ function filter(pileup::String, outype::String; maximum_missing_fraction::Float6
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, pileup)
     ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and minimum_coverage)
-    @time filenames_out = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
+    @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
         digits = length(string(length(positions_init)))
@@ -97,8 +97,8 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     # @everywhere using .structs: PileupLine, LocusAlleleCounts, Window
     # @everywhere using .functions: SPLIT, MERGE, FILTER
     # @everywhere using .user_functions: pileup2syncx
-    # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
-    # # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup")
+    # # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
+    # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup")
     # maximum_missing_fraction = 0.10
     # alpha1 = 0.05
     # maf = 0.001
@@ -113,7 +113,7 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx)
     ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and minimum_coverage)
-    @time filenames_out = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
+    @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
         digits = length(string(length(positions_init)))
@@ -172,7 +172,7 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     positions_init = positions_init[1:idx]
     positions_term = positions_term[1:idx]
     ### Impute
-    @time filenames_out = @sync @showprogress @distributed (append!) for i in 1:length(positions_init)
+    @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
         digits = length(string(length(positions_init)))
