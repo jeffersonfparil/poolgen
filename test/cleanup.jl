@@ -1,29 +1,22 @@
-alpha1 = 0.05
-maf = 0.001
-alpha2 = 0.50
-cov = 10
-window_size=20
-model=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
-distance=true
-rm("test/test_1.syncx")
-rm(string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".pileup"))
-rm(string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, "-FROM_PILEUP.syncx"))
-rm(string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx"))
-rm(string("test/test_1-IMPUTED-window_", window_size, "-model_", model, "-distance_", distance, ".syncx"))
+dir = "/home/jeffersonfparil/Documents/poolgen/test"
+cd(dir)
 
-alpha1 = 0.05
-maf = 0.0001
-alpha2 = 0.50
-cov = 1
-window_size=20
-model=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
-distance=true
-rm("test/test_2.syncx")
-rm(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".pileup"))
-rm(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, "-FROM_PILEUP.syncx"))
-rm(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", cov, ".syncx"))
-rm(string("test/test_2-IMPUTED-window_", window_size, "-model_", model, "-distance_", distance, ".syncx"))
+vec_files = readdir()
+for f in vec_files[match.(Regex("FILTERED"), vec_files) .!= nothing]
+    rm(f)
+end
 
-rm("test/test_GP_workflow-01_RAW.syncx")
-rm("test/test_GP_workflow-02_FILTERED.syncx")
-rm("test/test_GP_workflow-03_IMPUTED.syncx")
+vec_files = readdir()
+for f in vec_files[match.(Regex("IMPUTED"), vec_files) .!= nothing]
+    rm(f)
+end
+
+vec_files = readdir()
+for f in vec_files[match.(Regex("RAW"), vec_files) .!= nothing]
+    rm(f)
+end
+
+vec_files = readdir()
+for f in vec_files[match.(Regex("syncx"), vec_files) .!= nothing]
+    rm(f)
+end

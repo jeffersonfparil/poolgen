@@ -55,13 +55,14 @@ mv(string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alph
                      minimum_coverage=minimum_coverage,
                      out="")
 
-maximum_missing_fraction = 0.99
+maximum_missing_fraction = 0.90
 alpha1 = 0.01
-maf = 0.000
+maf = 0.001
 alpha2 = 0.50
-minimum_coverage = 0
+minimum_coverage = 1
 @time poolgen.filter("test/test_2.pileup",
                      "pileup",
+                     maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
@@ -70,6 +71,7 @@ minimum_coverage = 0
 
 @time poolgen.filter("test/test_2.pileup",
                      "syncx",
+                     maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
@@ -79,6 +81,7 @@ minimum_coverage = 0
 mv(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx"),
    string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, "-FROM_PILEUP.syncx"))
 @time poolgen.filter("test/test_2.syncx",
+                     maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,

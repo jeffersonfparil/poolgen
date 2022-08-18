@@ -99,7 +99,7 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     # @everywhere using .user_functions: pileup2syncx
     # # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
     # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup")
-    # maximum_missing_fraction = 0.10
+    # maximum_missing_fraction = 0.90
     # alpha1 = 0.05
     # maf = 0.001
     # alpha2 = 0.50

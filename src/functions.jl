@@ -472,19 +472,44 @@ function LOAD(syncx::String, count::Bool)::Window
 end
 
 ### FILTER
-function FILTER(line, maximum_missing_fraction::Float64)::Bool
+function FILTER(line, maximum_missing_fraction::Float64, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5)::Tuple{Bool, Window}
     # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
-    # # filaname = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"
+    # # filename = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
     # file = open(filename, "r")
     # line = PileupLine(1, readline(file)); close(file)
     # # line = SyncxLine(1, readline(file)); close(file)
-    # maximum_missing_fraction = 0.25
-    ### Output file
+    # close(file)
+    # maximum_missing_fraction = 0.90
+    # alpha1 = 0.05
+    # maf = 0.01
+    # alpha2 = 0.50
+    # minimum_coverage = 2
+    ## parse input line: pileup or syncx
     window = PARSE([PARSE(line)])
-    window.cou[ismissing.(window.cou)] .= 0
-    coverages = sum(window.cou, dims=1)[1,:]
-    out = sum(coverages .== 0) <= Int(round(length(coverages)*maximum_missing_fraction))
-    return(out)
+    ### copy the allele counts and set missing to zero
+    X = copy(window.cou)
+    X[ismissing.(X)] .= 0
+    ### calculate the coverage per pool and count the number of zero coverga pools and the maximum number of zero coverage pools
+    coverages = sum(X, dims=1)
+    zero_cov_count = sum(coverages[1,:] .== 0)
+    maximum_zero_cov_count = Int(round(length(coverages[1,:])*maximum_missing_fraction))
+    ### Filter-out zero coverage pools for the calculation of minimum allele frequency and minimum coverage thresholds
+    idx = coverages[1,:] .> 0
+    X = X[:, idx]
+    coverages = coverages[:, idx]
+    frequencies = X ./ coverages
+    frequencies[isnan.(frequencies)] .= 0.0
+    _, p = size(frequencies)
+    ### allele frequencies (alpha1)
+    idx = collect(1:7)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
+    frq = sort(frequencies[idx,:])
+    emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
+    eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
+    ### coverage (alpha2)
+    cov = sort(coverages[1,:])[Int(ceil(alpha2*p))]
+    ### output
+    out = (zero_cov_count <= maximum_zero_cov_count) & (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (cov >= minimum_coverage)
+    return(out, window)
 end
 
 function FILTER(pileup::String, outype::String, init::Int, term::Int, maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
@@ -526,31 +551,12 @@ function FILTER(pileup::String, outype::String, init::Int, term::Int, maximum_mi
     ### Filter
     while position(file) < term
         line = PileupLine(1, readline(file));
-        if FILTER(line, maximum_missing_fraction)
-            window = PARSE([PARSE(line)])
-            X = copy(window.cou)
-            X[ismissing.(X)] .= 0
-            coverages = sum(X, dims=1)
-            idx = coverages[1,:] .> 0
-            X = X[:, idx]
-            coverages = coverages[:, idx]
-            frequencies = X ./ coverages
-            frequencies[isnan.(frequencies)] .= 0.0
-            a, p = size(frequencies)
-            ### allele frequencies (alpha1)
-            idx = collect(1:a)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
-            frq = sort(frequencies[idx,:])
-            emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
-            eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
-            ### coverage (alpha2)
-            cov = sort(coverages[1,:])[Int(ceil(alpha2*p))]
-            ### write
-            if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (cov >= minimum_coverage)
-                if outype=="pileup"
-                    SAVE(line, out)
-                elseif outype=="syncx"
-                    SAVE(window, out)
-                end
+        test, window = FILTER(line, maximum_missing_fraction, alpha1, maf, alpha2, minimum_coverage)
+        if test
+            if outype=="pileup"
+                SAVE(line, out)
+            elseif outype=="syncx"
+                SAVE(window, out)
             end
         end
     end
@@ -593,27 +599,9 @@ function FILTER(syncx::String, init::Int, term::Int, maximum_missing_fraction::F
     ### Filter
     while position(file) < term
         line = SyncxLine(1, readline(file));
-        if FILTER(line, maximum_missing_fraction)
-            window = PARSE([PARSE(line)])
-            X = copy(window.cou)
-            X[ismissing.(X)] .= 0
-            coverages = sum(X, dims=1)
-            idx = coverages[1,:] .> 0
-            X = X[:, idx]
-            coverages = coverages[:, idx]
-            frequencies = X ./ coverages
-            frequencies[isnan.(frequencies)] .= 0.0
-            _, p = size(frequencies)
-            ### allele frequencies (alpha1)
-            idx = collect(1:7)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
-            frq = sort(frequencies[idx,:])
-            emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
-            eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
-            ### coverage (alpha2)
-            cov = sort(coverages[1,:])[Int(ceil(alpha2*p))]
-            if (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (cov >= minimum_coverage)
-                SAVE(window, out)
-            end
+        test, window = FILTER(line, maximum_missing_fraction, alpha1, maf, alpha2, minimum_coverage)
+        if test
+            SAVE(window, out)
         end
     end
     close(file)
