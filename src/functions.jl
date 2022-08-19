@@ -496,19 +496,24 @@ function FILTER(line, maximum_missing_fraction::Float64, alpha1::Float64=0.05, m
     ### Filter-out zero coverage pools for the calculation of minimum allele frequency and minimum coverage thresholds
     idx = coverages[1,:] .> 0
     X = X[:, idx]
-    coverages = coverages[:, idx]
-    frequencies = X ./ coverages
-    frequencies[isnan.(frequencies)] .= 0.0
-    _, p = size(frequencies)
-    ### allele frequencies (alpha1)
-    idx = collect(1:7)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
-    frq = sort(frequencies[idx,:])
-    emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
-    eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
-    ### coverage (alpha2)
-    cov = sort(coverages[1,:])[Int(ceil(alpha2*p))]
-    ### output
-    out = (zero_cov_count <= maximum_zero_cov_count) & (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (cov >= minimum_coverage)
+    ### Return false if there are no non-zero coverage pools
+    if prod(size(X)) > 0
+        coverages = coverages[:, idx]
+        frequencies = X ./ coverages
+        frequencies[isnan.(frequencies)] .= 0.0
+        _, p = size(frequencies)
+        ### allele frequencies (alpha1)
+        idx = collect(1:7)[(sum(frequencies, dims=2) .== maximum(sum(frequencies, dims=2)))[:,1]][1]
+        frq = sort(frequencies[idx,:])
+        emaxbf = frq[(end-Int(ceil(alpha1*p)))] ### expected maximum biallelic frequency at alpha1
+        eminbf = 1 - emaxbf                     ### expected minimum biallelic frequency at alpha1
+        ### coverage (alpha2)
+        cov = sort(coverages[1,:])[Int(ceil(alpha2*p))]
+        ### output
+        out = (zero_cov_count <= maximum_zero_cov_count) & (eminbf >= maf) & (emaxbf < (1-maf)) & (eminbf < 1) & (emaxbf > 0) & (cov >= minimum_coverage)
+    else
+        out = false
+    end
     return(out, window)
 end
 
