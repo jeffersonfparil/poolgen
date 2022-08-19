@@ -496,8 +496,8 @@ function FILTER(line, maximum_missing_fraction::Float64, alpha1::Float64=0.05, m
     ### Filter-out zero coverage pools for the calculation of minimum allele frequency and minimum coverage thresholds
     idx = coverages[1,:] .> 0
     X = X[:, idx]
-    ### Return false if there are no non-zero coverage pools
-    if prod(size(X)) > 0
+    ### Return false if there are only at most a single non-zero coverage pool
+    if prod(size(X)) > 7
         coverages = coverages[:, idx]
         frequencies = X ./ coverages
         frequencies[isnan.(frequencies)] .= 0.0
