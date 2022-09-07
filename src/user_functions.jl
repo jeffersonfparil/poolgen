@@ -107,7 +107,7 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     # out = ""
     ### Define output file if not specified
     if out == ""
-        out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
+        out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-missing_", maximum_missing_fraction, "-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
     end
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())

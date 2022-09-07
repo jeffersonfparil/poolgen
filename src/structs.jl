@@ -40,17 +40,17 @@ mutable struct Window
 end
 
 struct PhenotypeLine
-    idx::Int          ### line number (not critical)
-    lin::String        ### a line of delimited phenotype text file
-    dlm::String   ### string (single or multiple characters) delimeter
+    idx::Int         ### line number (not critical)
+    lin::String      ### a line of delimited phenotype text file
+    dlm::String      ### string (single or multiple characters) delimeter
     idc::Int         ### column number of ID names corresponsing to the columns in the genotype file
     trc::Vector{Int} ### vector of column numbers corresponding to the phenotype columns needed
 end
 
 struct Phenotype
-    iid::Vector{String}         ### names of individuals (n individuals)
+    iid::Vector{String} ### names of individuals (n individuals)
     tid::Vector{String} ### names of traits (m traits)
-    phe::Matrix{Any}              ### n x m matrix of phenotype values
+    phe::Matrix{Any}    ### n x m matrix of phenotype values
 end
 
 end

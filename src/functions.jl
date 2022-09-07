@@ -106,7 +106,7 @@ end
 function PARSE(line::SyncxLine)::LocusAlleleCounts
     # file = open("/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx", "r")
     # line = SyncxLine(1, readline(file))
-    lin = split(line.lin, "\t")
+    lin = map(x -> x=="0:0:0:0:0:0:0" ? "missing:missing:missing:missing:missing:missing:missing" : string(x), split(line.lin, "\t"))
     chr = lin[1]
     pos = parse(Int, lin[2])
     vco = map(x -> x=="missing" ? missing : parse(Int, x), vcat(split.(lin[3:end], ":")...))
@@ -383,6 +383,12 @@ function SAVE(window::Window, filename::String)
     for i in 1:m
         # i = 1
         counts = reshape(window.cou[:,i], (7, Int(n/7)))
+        ### Set missing loci from missing:missing:missing:missing:missing:missing:missing into 0:0:0:0:0:0:1
+        for j in 1:Int(n/7)
+            if sum(ismissing.(counts[:, j])) > 0
+                counts[:, j] = [0, 0, 0, 0, 0, 0, 0]
+            end
+        end
         OUT = hcat(OUT, [join(x,':') for x in eachcol(counts)])
     end
     out = join([join(x,'\t') for x in eachrow(OUT)], '\n')
@@ -426,11 +432,11 @@ function PILEUP2SYNCX(pileup::String, init::Int, term::Int, out::String="")::Str
 end
 
 function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[0], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])::Phenotype
-    # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test.csv"
+    # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.csv"
     # delimiter = ","
     # header = true
-    # id_col = 1
-    # phenotype_cols = [0]
+    # id_col = 3 ### pool IDs
+    # phenotype_cols = [8, 9] ### colorimetric resistance metric, and survival rate
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
     file = open(phenotype, "r")
     if header
@@ -443,7 +449,7 @@ function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::I
         if phenotype_cols==[0]
             phenotype_cols = collect(1:m)[collect(1:m) .!= id_col]
         end
-        push!(lines, PARSE(PhenotypeLine(1, l, delimiter, id_col, phenotype_cols), [""], missing_strings))
+        push!(lines, PARSE(PhenotypeLine(1, l, delimiter, id_col, phenotype_cols), header_line[phenotype_cols], missing_strings))
     end
     close(file)
     return(PARSE(convert(Vector{Phenotype}, lines), header_line[phenotype_cols]))
@@ -765,16 +771,57 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
 end
 
 # ### MODEL
-# include("/home/jeffersonfparil/Documents/poolgen/src/user_functions.jl")
-# using .user_functions: pileup2syncx
-# GENOTYPE = LOAD(pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"), false)
-# PHENOTYPE = LOAD("/home/jeffersonfparil/Documents/poolgen/test/test_1.csv", ",")
+# # impute("../test/test_3-raw.syncx", out="../test_3-imputed.syncx")
+# # filter("../test_3-imputed.syncx", maximum_missing_fraction=0.0, out="../test/test_3.syncx")
+# GENOTYPE = LOAD("../test/test_3.syncx", false)
+# PHENOTYPE = LOAD("../test/test_3-pheno-any-filename.csv", ",", true, 3, [8,9])
+
 
 # X = Float64.(GENOTYPE.cou')
-# Y = Float64.(PHENOTYPE.phe[:,1])
-# Y = 
+# Y = Float64.(PHENOTYPE.phe)
+# # Y = Float64.(PHENOTYPE.phe[:,1])
 
-# B = X \ Y[:,1]
+# # idx = match.(Regex("^NC"), repeat(GENOTYPE.chr, inner=7)) .!= nothing
+# # X = X[:, idx]
+# # lab = repeat([string(GENOTYPE.chr[i], GENOTYPE.pos[i]) for i in eachindex(GENOTYPE.chr)], inner=7)[idx]
+# # unique(repeat(GENOTYPE.chr, inner=7)[idx])
+
+# B = X \ Y
+
+# using Plots
+# # Plots.plot(abs.(B[:,1]), seriestype=:scatter)
+
+# B = abs.(B)
+
+# idx_phe = 1
+# ### add lengths of all the chromosome to find xlim!!!!
+# l = 0
+# for chr in sort(unique(GENOTYPE.chr))
+#     # chr = sort(unique(GENOTYPE.chr))[1]
+#     idx = GENOTYPE.chr .== chr
+#     pos = GENOTYPE.pos[idx]
+#     l += maximum(pos)
+# end
+
+
+
+# p = Plots.scatter([0], [0], xlims=[0, l], ylims=[minimum(B[:, idx_phe]), maximum(B[:, idx_phe])], legend=false, markersize=0, markerstrokewidth=0)
+# x0 = 0
+# for chr in sort(unique(GENOTYPE.chr))
+#     # chr = sort(unique(GENOTYPE.chr))[1]
+#     idx = GENOTYPE.chr .== chr
+#     pos = GENOTYPE.pos[idx]
+#     x = repeat(x0 .+ pos, inner=7)
+#     y = B[repeat(idx, inner=7), idx_phe]
+#     Plots.scatter!(x, y, legend=false,
+#                    markerstrokewidth=0.001,
+#                    markeralpha=0.4)
+#     x0 = maximum(x)
+# end
+# Plots.@show p
+
+
+
 
 
 ### MISC: ### SPARSITY SIMULATION AND CROSS-VALIDATION
