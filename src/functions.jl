@@ -624,7 +624,7 @@ function FILTER(phenotype::Phenotype, maximum_missing_fraction::Float64, alpha1:
 end
 
 ### IMPUTE
-function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true)::Window
+function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, distance_nPCA::Int=3)::Window
     n, p = size(window.cou)
     ### Find the indices of pools with missing data.
     ### These will be used independently and iteratively as our response variables
@@ -643,7 +643,7 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
                     D[i,j] = abs(window.pos[i] - window.pos[j])
                 end
             end
-            Z = MultivariateStats.projection(MultivariateStats.fit(PCA, repeat(D, inner=(7,1)); maxoutdim=3)) ### using the first 3 PCs by default
+            Z = MultivariateStats.projection(MultivariateStats.fit(PCA, repeat(D, inner=(7,1)); maxoutdim=distance_nPCA)) ### using the first 3 PCs by default
             X = hcat(X, Z)
         end
 
@@ -701,7 +701,7 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
     return(window)
 end
 
-function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String
+function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, distance_nPCA::Int=3, out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_1.syncx"
     # # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
     # file = open(syncx, "r")
@@ -744,7 +744,7 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
                 push!(window, locus)
             end
             window = PARSE(Array{LocusAlleleCounts}(window))
-            IMPUTE!(window, model, distance)
+            IMPUTE!(window, model, distance, distance_nPCA)
             SAVE(EXTRACT(window, 1), out)
         end
         if !eof(file)
@@ -758,7 +758,7 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
                     end
             SLIDE!(window, locus)
             SAVE(EXTRACT(window, 1), out)
-            IMPUTE!(window, model, distance)
+            IMPUTE!(window, model, distance, distance_nPCA)
         end
     end
     if !eof(file)
@@ -771,6 +771,9 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
 end
 
 # ### MODEL
+# using LinearAlgebra
+# using Distributions
+# using Plots
 # # impute("../test/test_3-raw.syncx", out="../test_3-imputed.syncx")
 # # filter("../test_3-imputed.syncx", maximum_missing_fraction=0.0, out="../test/test_3.syncx")
 # GENOTYPE = LOAD("../test/test_3.syncx", false)
@@ -779,46 +782,118 @@ end
 
 # X = Float64.(GENOTYPE.cou')
 # Y = Float64.(PHENOTYPE.phe)
-# # Y = Float64.(PHENOTYPE.phe[:,1])
+# y = Float64.(PHENOTYPE.phe[:,1])
 
-# # idx = match.(Regex("^NC"), repeat(GENOTYPE.chr, inner=7)) .!= nothing
-# # X = X[:, idx]
-# # lab = repeat([string(GENOTYPE.chr[i], GENOTYPE.pos[i]) for i in eachindex(GENOTYPE.chr)], inner=7)[idx]
-# # unique(repeat(GENOTYPE.chr, inner=7)[idx])
 
-# B = X \ Y
+# ### SIM
+# # n = 100
+# # m = 10000
+# # k = 1
+# # X = rand(Distributions.Uniform(0, 1), n, m)
+# # b_true = zeros(m)
+# # idx_b_true = rand(1:m, k)
+# # b_true[idx_b_true] = rand(k)
+# # y = X * b_true
 
-# using Plots
-# # Plots.plot(abs.(B[:,1]), seriestype=:scatter)
+# ######################## START FUNCTIONS?
 
-# B = abs.(B)
+# idx = sum(X, dims=1) .> 0
+# X = X[:, idx[1,:]]
+# idx = Distributions.var(X, dims=1) .> 1e-7
+# X = X[:, idx[1,:]]
+# X = (X .- 0.5) ### centre on 0, i.e. freq=0 becomes -0.5 and freq=1 becomes +0.5
 
-# idx_phe = 1
-# ### add lengths of all the chromosome to find xlim!!!!
-# l = 0
-# for chr in sort(unique(GENOTYPE.chr))
-#     # chr = sort(unique(GENOTYPE.chr))[1]
-#     idx = GENOTYPE.chr .== chr
-#     pos = GENOTYPE.pos[idx]
-#     l += maximum(pos)
+
+
+
+# # function ppoints(n)
+# #     a = n <= 10 ? 3/8 : 1/2
+# #     out = (collect(1:n) .- a) ./ (n + 1 - 2*a)
+# #     return(out)
+# # end
+
+
+# function GWAS_univariate(y::Vector{Float64}, X::Matrix{Float64})
+#     n, m = size(X)
+#     vec_b = []
+#     vec_t = []
+#     vec_pval = []
+#     for i in 1:m
+#         # i = 1
+#         x = hcat(ones(n), X[:, i])
+#         b = try
+#                 inv(x' * x) * x' * y
+#             catch
+#                 pinv(x' * x) * x' * y
+#             end
+#         ε = y - (x * b)
+#         se_ε = sqrt((ε' * ε) / (n-2))
+#         # V_ε = (se_ε^2) / (n-2)
+#         # COV_b = (V_ε * inv(x' * x))
+#         COV_b = (se_ε * inv(x' * x))
+#         se_b = [COV_b[1,1], COV_b[2,2]] / sqrt(2)
+#         # se_b = sqrt.(V_b) ./ sqrt(n-1)
+#         t = b ./ se_b
+#         pval = Distributions.ccdf(Distributions.Chisq(n-1), t.^2)
+#         # pval = Distributions.cdf(Distributions.Normal(), -abs.(t)) + Distributions.ccdf(Distributions.Normal(), +abs.(t))
+#         append!(vec_b,    b[2])
+#         append!(vec_t,    t[2])
+#         append!(vec_pval, pval[2])
+#     end
+    
+#     LOD          = -log10.(vec_pval)
+#     LOD_expected = -log10.(cdf(Distributions.Uniform(0, 1), (collect(1:m) .- 0.5) ./ m))
+
+#     p1 = Plots.scatter(vec_b, legend=false)
+#     p2 = Plots.scatter(LOD)
+#     p3 = Plots.scatter(sort(LOD_expected), sort(LOD))
+#     Plots.plot!([0,1], [0,1], seriestype=:straightline)
+#     p4 = Plots.scatter(sort(LOD_expected)[1:(end-10)], sort(LOD)[1:(end-10)])
+#     Plots.plot!([0,1], [0,1], seriestype=:straightline)
+#     Plots.plot(p1, p2, p3, p4, layout=(2,2))
+    
+
+
 # end
 
 
+# function GWAS_multiple(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64}
+#     X = hcat(ones(size(X, 1)), Float64.(X))
+#     n, m = size(X)
+#     # @time B = X \ Y; ### Slow
+#     @time b = X' * inv(X * X') * y; ### Wayyyy faster! ~12 times faster!
 
-# p = Plots.scatter([0], [0], xlims=[0, l], ylims=[minimum(B[:, idx_phe]), maximum(B[:, idx_phe])], legend=false, markersize=0, markerstrokewidth=0)
-# x0 = 0
-# for chr in sort(unique(GENOTYPE.chr))
-#     # chr = sort(unique(GENOTYPE.chr))[1]
-#     idx = GENOTYPE.chr .== chr
-#     pos = GENOTYPE.pos[idx]
-#     x = repeat(x0 .+ pos, inner=7)
-#     y = B[repeat(idx, inner=7), idx_phe]
-#     Plots.scatter!(x, y, legend=false,
-#                    markerstrokewidth=0.001,
-#                    markeralpha=0.4)
-#     x0 = maximum(x)
+#     ε = y - (X * b)
+#     V_ε = (ε' * ε) / n
+
+#     X_inv = LinearAlgebra.pinv(X)
+#     X_T_inv = LinearAlgebra.pinv(X')
+#     c = []
+#     for i in 1:m
+#         # i = 1
+#         append!(c, sum(X_inv[i, : ] .* X_T_inv[:, i]))
+#     end
+
+#     V_b = V_ε * (c .+ 1e-10)
+#     se_b = sqrt.(V_b) ./ sqrt(n)
+
+#     t = b ./ se_b
+
+#     # T = Distributions.TDist(m)
+#     C = Distributions.Chisq(m-1)
+#     pvalues = Distributions.ccdf(C, t.^2)
+#     rand(C, 10)
+
+#     # using Plots
+#     Plots.histogram(b, bins=100, legend=false)
+#     Plots.histogram(t, bins=100, legend=false)
+#     Plots.histogram(t.^2, bins=100, legend=false)
+#     Plots.scatter(-log10.(pvalues), legend=false)
+
+#     return(b, ε, t, V_b, V_ε)
 # end
-# Plots.@show p
+# b, ε, t, V_b, V_ε = GWAS_multiple(y, X)
+
 
 
 

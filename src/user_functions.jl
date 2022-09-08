@@ -127,7 +127,7 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     return(out)
 end
 
-function impute(filename::String; window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String
+function impute(filename::String; window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, distance_nPCA::Int=3, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
     # @everywhere using ProgressMeter
@@ -178,7 +178,7 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
         digits = length(string(length(positions_init)))
         id = lpad(i, (digits-length(string(i))), "0")
         tmp = string(syncx, "-IMPUTED-", id, ".syncx.tmp")
-        filename = IMPUTE(syncx, init, term, window_size, model, distance, tmp)
+        filename = IMPUTE(syncx, init, term, window_size, model, distance, distance_nPCA, tmp)
         [filename]
     end
     ### Sort the chunks so we maintain the one-to-one correspondence between input and output loci arrangement
