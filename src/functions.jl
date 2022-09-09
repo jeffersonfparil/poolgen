@@ -785,7 +785,7 @@ end
 # y = Float64.(PHENOTYPE.phe[:,1])
 
 
-# ### SIM
+# # ### SIM
 # # n = 100
 # # m = 10000
 # # k = 1
@@ -797,24 +797,58 @@ end
 
 # ######################## START FUNCTIONS?
 
-# idx = sum(X, dims=1) .> 0
-# X = X[:, idx[1,:]]
-# idx = Distributions.var(X, dims=1) .> 1e-7
-# X = X[:, idx[1,:]]
-# X = (X .- 0.5) ### centre on 0, i.e. freq=0 becomes -0.5 and freq=1 becomes +0.5
+# ### Keep only p-1 alleles per locus where p is the number of polymorphic alleles in a locus
+# _X = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
+# vec_idx = []
+# for j in axes(_X, 2)
+#     x = _X[:, j]
+#     idx_nonzeros = collect(1:7)[x .!= 0]
+#     idx = (j-1)*7 .+ idx_nonzeros[x[idx_nonzeros] .!= minimum(x[idx_nonzeros])]
+#     append!(vec_idx, idx)
+# end
+# X = X[:, vec_idx]
+# # idx = sum(X, dims=1) .> 0
+# # X = X[:, idx[1,:]]
 
 
+# ### Remove non-polymorphic loci
+# idx = (Distributions.var(X, dims=1) .> 1e-7)[1,:]
+# X = X[:, idx]
+
+# ### update index
+# vec_idx = vec_idx[idx]
+
+# ### centre on 0, i.e. freq=0 becomes -0.5 and freq=1 becomes +0.5
+# X = (X .- 0.5)
 
 
-# # function ppoints(n)
-# #     a = n <= 10 ? 3/8 : 1/2
-# #     out = (collect(1:n) .- a) ./ (n + 1 - 2*a)
-# #     return(out)
-# # end
+# ### Remove highly collinear alleles
+# cor_threshold = 0.90
+# idx = []
+# @showprogress for j1 in axes(X, 2)
+#     vec_j2 = collect((j1+1):size(X, 2))
+#     for j2 in vec_j2
+#         #   j1 = 1
+#         #   j2 = 3
+#         if abs(cor(X[:,j1], X[:,j2])) > cor_threshold
+#             append!(idx, j2)
+#         end
+#     end
+# end
+# # idx_bk = copy(idx)
+# idx = unique(sort(idx))
+# X = X[:, idx]
 
+# ### AGAIN! Update index
+# vec_idx = vec_idx[idx]
 
-# function GWAS_univariate(y::Vector{Float64}, X::Matrix{Float64})
+# ### Find the loci IDs
+# vec_chr = repeat(GENOTYPE.chr, inner=7)[vec_idx]
+# vec_pos = repeat(GENOTYPE.pos, inner=7)[vec_idx]
+
+# function GWAS_univariate(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
 #     n, m = size(X)
+#     k = 2 ### 1st df for intercept, and the second df for the allele
 #     vec_b = []
 #     vec_t = []
 #     vec_pval = []
@@ -827,72 +861,105 @@ end
 #                 pinv(x' * x) * x' * y
 #             end
 #         ε = y - (x * b)
-#         se_ε = sqrt((ε' * ε) / (n-2))
-#         # V_ε = (se_ε^2) / (n-2)
-#         # COV_b = (V_ε * inv(x' * x))
-#         COV_b = (se_ε * inv(x' * x))
-#         se_b = [COV_b[1,1], COV_b[2,2]] / sqrt(2)
-#         # se_b = sqrt.(V_b) ./ sqrt(n-1)
+#         V_ε = (ε' * ε) / (n-k)
+#         se_ε = sqrt(V_ε)
+#         COV_b = V_ε * inv(x' * x)
+#         se_b = sqrt.([COV_b[1,1], COV_b[k,k]])
 #         t = b ./ se_b
-#         pval = Distributions.ccdf(Distributions.Chisq(n-1), t.^2)
+#         pval = Distributions.ccdf(Distributions.Chisq(k-1), t.^2)
 #         # pval = Distributions.cdf(Distributions.Normal(), -abs.(t)) + Distributions.ccdf(Distributions.Normal(), +abs.(t))
-#         append!(vec_b,    b[2])
-#         append!(vec_t,    t[2])
-#         append!(vec_pval, pval[2])
+#         append!(vec_b,    b[k])
+#         append!(vec_t,    t[k])
+#         append!(vec_pval, pval[k])
 #     end
-    
-#     LOD          = -log10.(vec_pval)
-#     LOD_expected = -log10.(cdf(Distributions.Uniform(0, 1), (collect(1:m) .- 0.5) ./ m))
-
-#     p1 = Plots.scatter(vec_b, legend=false)
-#     p2 = Plots.scatter(LOD)
-#     p3 = Plots.scatter(sort(LOD_expected), sort(LOD))
-#     Plots.plot!([0,1], [0,1], seriestype=:straightline)
-#     p4 = Plots.scatter(sort(LOD_expected)[1:(end-10)], sort(LOD)[1:(end-10)])
-#     Plots.plot!([0,1], [0,1], seriestype=:straightline)
-#     Plots.plot(p1, p2, p3, p4, layout=(2,2))
-    
-
-
+#     vec_lod = -log10.(vec_pval)
+#     # ### TEST PLOTS
+#     # LOD           = -log10.(vec_pval)
+#     # LOD_expected  = -log10.(cdf(Distributions.Uniform(0, 1), (collect(1:m) .- 0.5) ./ m))
+#     # LOD_threshold = -log10(0.05/m)
+#     # p1 = Plots.scatter(vec_b, legend=false)
+#     # p2 = Plots.scatter(LOD)
+#     # p3 = Plots.scatter(sort(LOD_expected), sort(LOD))
+#     # Plots.plot!([0,1], [0,1], seriestype=:straightline)
+#     # p4 = Plots.scatter(sort(LOD_expected)[1:(end-10)], sort(LOD)[1:(end-10)])
+#     # Plots.plot!([0,1], [0,1], seriestype=:straightline)
+#     # Plots.plot(p1, p2, p3, p4, layout=(2,2))
+#     return(vec_b, vec_t, vec_pval, vec_lod)
 # end
 
+# vec_b, vec_t, vec_pval, vec_lod = GWAS_univariate(y, X)
 
-# function GWAS_multiple(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64}
-#     X = hcat(ones(size(X, 1)), Float64.(X))
-#     n, m = size(X)
-#     # @time B = X \ Y; ### Slow
-#     @time b = X' * inv(X * X') * y; ### Wayyyy faster! ~12 times faster!
 
-#     ε = y - (X * b)
-#     V_ε = (ε' * ε) / n
-
-#     X_inv = LinearAlgebra.pinv(X)
-#     X_T_inv = LinearAlgebra.pinv(X')
-#     c = []
-#     for i in 1:m
-#         # i = 1
-#         append!(c, sum(X_inv[i, : ] .* X_T_inv[:, i]))
+# function GWAS_plot(vec_chr, vec_pos, vec_lod)
+#     ### add lengths of all the chromosome to find xlim!!!!
+#     names_chr = sort(unique(vec_chr)) 
+#     l = 0
+#     for chr in names_chr
+#         # chr = sort(unique(vec_chr))[1]
+#         idx = vec_chr .== chr
+#         pos = vec_pos[idx]
+#         l += maximum(pos)
 #     end
 
-#     V_b = V_ε * (c .+ 1e-10)
-#     se_b = sqrt.(V_b) ./ sqrt(n)
+#     p1 = Plots.scatter([0], [0], xlims=[0, l], ylims=[minimum(vec_lod), maximum(vec_lod)], legend=false, markersize=0, markerstrokewidth=0)
+#     x0 = 0
+#     for chr in names_chr
+#         # chr = sort(unique(vec_chr))[1]
+#         idx = vec_chr .== chr
+#         pos = vec_pos[idx]
+#         x = x0 .+ pos
+#         y = vec_lod[idx]
+#         Plots.scatter!(x, y, legend=false,
+#                     markerstrokewidth=0.001,
+#                     markeralpha=0.4)
+#         x0 = maximum(x)
+#     end
 
-#     t = b ./ se_b
-
-#     # T = Distributions.TDist(m)
-#     C = Distributions.Chisq(m-1)
-#     pvalues = Distributions.ccdf(C, t.^2)
-#     rand(C, 10)
-
-#     # using Plots
-#     Plots.histogram(b, bins=100, legend=false)
-#     Plots.histogram(t, bins=100, legend=false)
-#     Plots.histogram(t.^2, bins=100, legend=false)
-#     Plots.scatter(-log10.(pvalues), legend=false)
-
-#     return(b, ε, t, V_b, V_ε)
+#     m = length(vec_lod)
+#     LOD_expected  = -log10.(cdf(Distributions.Uniform(0, 1), (collect(1:m) .- 0.5) ./ m))
+#     LOD_threshold = -log10(0.05/m)
+#     p2 = Plots.scatter(sort(LOD_expected), sort(vec_lod), markerstrokewidth=0.001, markeralpha=0.4, legend=false)
+#     Plots.plot!([0,1], [0,1], seriestype=:straightline, legend=false)
+#     p3 = Plots.plot(p1, p2, layout=(2,1))
+#     return(p3)
 # end
-# b, ε, t, V_b, V_ε = GWAS_multiple(y, X)
+
+# # function GWAS_multiple(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64}
+# #     X = hcat(ones(size(X, 1)), Float64.(X))
+# #     n, m = size(X)
+# #     # @time B = X \ Y; ### Slow
+# #     @time b = X' * inv(X * X') * y; ### Wayyyy faster! ~12 times faster!
+
+# #     ε = y - (X * b)
+# #     V_ε = (ε' * ε) / n
+
+# #     X_inv = LinearAlgebra.pinv(X)
+# #     X_T_inv = LinearAlgebra.pinv(X')
+# #     c = []
+# #     for i in 1:m
+# #         # i = 1
+# #         append!(c, sum(X_inv[i, : ] .* X_T_inv[:, i]))
+# #     end
+
+# #     V_b = V_ε * (c .+ 1e-10)
+# #     se_b = sqrt.(V_b) ./ sqrt(n)
+
+# #     t = b ./ se_b
+
+# #     # T = Distributions.TDist(m)
+# #     C = Distributions.Chisq(m-1)
+# #     pvalues = Distributions.ccdf(C, t.^2)
+# #     rand(C, 10)
+
+# #     # using Plots
+# #     Plots.histogram(b, bins=100, legend=false)
+# #     Plots.histogram(t, bins=100, legend=false)
+# #     Plots.histogram(t.^2, bins=100, legend=false)
+# #     Plots.scatter(-log10.(pvalues), legend=false)
+
+# #     return(b, ε, t, V_b, V_ε)
+# # end
+# # b, ε, t, V_b, V_ε = GWAS_multiple(y, X)
 
 
 

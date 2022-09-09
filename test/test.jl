@@ -14,11 +14,9 @@ end
 println("##########################################")
 println("Pileup to syncx conversion")
 println("##########################################")
-@time poolgen.pileup2syncx("test/test_1.pileup",
-               out="")
+@time poolgen.pileup2syncx("test/test_1.pileup")
 
-@time poolgen.pileup2syncx("test/test_2.pileup",
-               out="")
+@time poolgen.pileup2syncx("test/test_2.pileup")
 
 println("##########################################")
 println("Filtering")

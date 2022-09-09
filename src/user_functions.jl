@@ -30,12 +30,12 @@ function pileup2syncx(pileup::String; out::String="")::String
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, pileup)
+    digits = length(string(length(positions_init)))
     ### Parse to convert from pileup to syncx format
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
-        digits = length(string(length(positions_init)))
-        id = lpad(i, (digits-length(string(i))), "0")
+        id = lpad(i, (digits+1)-length(string(i)), "0")
         tmp = string(pileup, "-PILEUP2SYNCX-", id, ".tmp")
         filename = PILEUP2SYNCX(pileup, init, term, tmp)
         [filename]
@@ -72,12 +72,12 @@ function filter(pileup::String, outype::String; maximum_missing_fraction::Float6
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, pileup)
+    digits = length(string(length(positions_init)))
     ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and minimum_coverage)
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
-        digits = length(string(length(positions_init)))
-        id = lpad(i, (digits-length(string(i))), "0")
+        id = lpad(i, (digits+1)-length(string(i)), "0")
         tmp = string(pileup, "-FILTERED-", id, ".tmp")
         filename = FILTER(pileup, outype, init, term, maximum_missing_fraction, alpha1, maf, alpha2, minimum_coverage, tmp)
         [filename]
@@ -112,12 +112,12 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx)
+    digits = length(string(length(positions_init)))
     ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and minimum_coverage)
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
-        digits = length(string(length(positions_init)))
-        id = lpad(i, (digits-length(string(i))), "0")
+        id = lpad(i, (digits+1)-length(string(i)), "0")
         tmp = string(syncx, "-FILTERED-", id, ".tmp")
         filename = FILTER(syncx, init, term, maximum_missing_fraction, alpha1, maf, alpha2, minimum_coverage, tmp)
         [filename]
@@ -171,17 +171,17 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     idx = collect(1:length(positions_term))[positions_term .== maximum(positions_term)][1]
     positions_init = positions_init[1:idx]
     positions_term = positions_term[1:idx]
+    digits = length(string(length(positions_init)))
     ### Impute
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
-        digits = length(string(length(positions_init)))
-        id = lpad(i, (digits-length(string(i))), "0")
+        id = lpad(i, (digits+1)-length(string(i)), "0")
         tmp = string(syncx, "-IMPUTED-", id, ".syncx.tmp")
         filename = IMPUTE(syncx, init, term, window_size, model, distance, distance_nPCA, tmp)
         [filename]
     end
-    ### Sort the chunks so we maintain the one-to-one correspondence between input and output loci arrangement
+    ### Merge the chunks
     if length(filenames_out) > 1
         MERGE(filenames_out, window_size, out)
     else
