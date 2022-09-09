@@ -774,8 +774,8 @@ end
 # using LinearAlgebra
 # using Distributions
 # using Plots
-# # impute("../test/test_3-raw.syncx", out="../test_3-imputed.syncx")
-# # filter("../test_3-imputed.syncx", maximum_missing_fraction=0.0, out="../test/test_3.syncx")
+# # impute("../test/test_3-raw.syncx", out="../test/test_3-imputed.syncx")
+# # filter("../test/test_3-imputed.syncx", maximum_missing_fraction=0.0, out="../test/test_3.syncx")
 # GENOTYPE = LOAD("../test/test_3.syncx", false)
 # PHENOTYPE = LOAD("../test/test_3-pheno-any-filename.csv", ",", true, 3, [8,9])
 
@@ -823,24 +823,28 @@ end
 
 
 # ### Remove highly collinear alleles
-# cor_threshold = 0.90
-# idx = []
-# @showprogress for j1 in axes(X, 2)
-#     vec_j2 = collect((j1+1):size(X, 2))
-#     for j2 in vec_j2
-#         #   j1 = 1
-#         #   j2 = 3
-#         if abs(cor(X[:,j1], X[:,j2])) > cor_threshold
-#             append!(idx, j2)
+# function remove_collinear_alleles_and_loci(X::Matrix{Float64}, vec_idx::Vector{Float64}; cor_threshold::Float64=0.90)::Tuple{Matrix{Float64}, Vector{Float64}}
+#     # cor_threshold = 0.90
+#     idx = []
+#     @showprogress for j1 in axes(X, 2)
+#         vec_j2 = collect((j1+1):size(X, 2))
+#         for j2 in vec_j2
+#             #   j1 = 1
+#             #   j2 = 3
+#             if abs(cor(X[:,j1], X[:,j2])) > cor_threshold
+#                 append!(idx, j2)
+#             end
 #         end
 #     end
+#     # idx_bk = copy(idx)
+#     idx = unique(sort(idx))
+#     X = X[:, idx]
+#     ### AGAIN! Update index
+#     vec_idx = vec_idx[idx]
+#     ### Output
+#     return(X, vec_idx)
 # end
-# # idx_bk = copy(idx)
-# idx = unique(sort(idx))
-# X = X[:, idx]
-
-# ### AGAIN! Update index
-# vec_idx = vec_idx[idx]
+# # X, vec_idx = remove_collinear_alleles_and_loci(X, vec_idx)
 
 # ### Find the loci IDs
 # vec_chr = repeat(GENOTYPE.chr, inner=7)[vec_idx]
@@ -923,6 +927,8 @@ end
 #     p3 = Plots.plot(p1, p2, layout=(2,1))
 #     return(p3)
 # end
+
+# p = GWAS_plot(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})
 
 # # function GWAS_multiple(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64}
 # #     X = hcat(ones(size(X, 1)), Float64.(X))
