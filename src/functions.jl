@@ -11,6 +11,9 @@ using Random
 using GLMNet
 using MultivariateStats
 using ProgressMeter
+using LinearAlgebra
+using Distributions
+using Plots
 
 include("structs.jl")
 using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype
@@ -619,8 +622,27 @@ function FILTER(syncx::String, init::Int, term::Int, maximum_missing_fraction::F
     return(out)
 end
 
-function FILTER(phenotype::Phenotype, maximum_missing_fraction::Float64, alpha1::Float64, alpha2::Float64)
-    PHENOTYPE = LOAD("/home/jeffersonfparil/Documents/poolgen/test/test_1.csv", ",")
+function FILTER(GENOTYPE::Window, epsilon::Float64=1e-10)::Tuple{Matrix{Float64}, Vector{Int64}}
+    # GENOTYPE = LOAD("../test/test_3.syncx", false)
+    X = Float64.(GENOTYPE.cou')
+    ### Keep only p-1 alleles per locus where p is the number of polymorphic alleles in a locus
+    _X = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
+    vec_idx = []
+    for j in axes(_X, 2)
+        x = _X[:, j]
+        idx_nonzeros = collect(1:7)[x .!= 0]
+        idx = (j-1)*7 .+ idx_nonzeros[x[idx_nonzeros] .!= minimum(x[idx_nonzeros])]
+        append!(vec_idx, idx)
+    end
+    X = X[:, vec_idx]
+    ### Remove non-polymorphic loci
+    idx = (Distributions.var(X, dims=1) .> epsilon)[1,:]
+    X = X[:, idx]
+    ### update index
+    vec_idx = vec_idx[idx]
+    ### centre on 0, i.e. freq=0 becomes -0.5 and freq=1 becomes +0.5
+    X = (X .- 0.5)
+    return(X, vec_idx)
 end
 
 ### IMPUTE
@@ -770,60 +792,8 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
     return(out)
 end
 
-### MODEL
-using LinearAlgebra
-using Distributions
-using Plots
-# impute("../test/test_3-raw.syncx", out="../test/test_3-imputed.syncx")
-# filter("../test/test_3-imputed.syncx", maximum_missing_fraction=0.0, out="../test/test_3.syncx")
-GENOTYPE = LOAD("../test/test_3.syncx", false)
-PHENOTYPE = LOAD("../test/test_3-pheno-any-filename.csv", ",", true, 3, [8,9])
-
-
-X = Float64.(GENOTYPE.cou')
-Y = Float64.(PHENOTYPE.phe)
-y = Float64.(PHENOTYPE.phe[:,1])
-
-
-# ### SIM
-# n = 100
-# m = 10000
-# k = 1
-# X = rand(Distributions.Uniform(0, 1), n, m)
-# b_true = zeros(m)
-# idx_b_true = rand(1:m, k)
-# b_true[idx_b_true] = rand(k)
-# y = X * b_true
-
-######################## START FUNCTIONS?
-
-### Keep only p-1 alleles per locus where p is the number of polymorphic alleles in a locus
-_X = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
-vec_idx = []
-for j in axes(_X, 2)
-    x = _X[:, j]
-    idx_nonzeros = collect(1:7)[x .!= 0]
-    idx = (j-1)*7 .+ idx_nonzeros[x[idx_nonzeros] .!= minimum(x[idx_nonzeros])]
-    append!(vec_idx, idx)
-end
-X = X[:, vec_idx]
-# idx = sum(X, dims=1) .> 0
-# X = X[:, idx[1,:]]
-
-
-### Remove non-polymorphic loci
-idx = (Distributions.var(X, dims=1) .> 1e-7)[1,:]
-X = X[:, idx]
-
-### update index
-vec_idx = vec_idx[idx]
-
-### centre on 0, i.e. freq=0 becomes -0.5 and freq=1 becomes +0.5
-X = (X .- 0.5)
-
-
 ### Remove highly collinear alleles
-function remove_collinear_alleles_and_loci(X::Matrix{Float64}, vec_idx::Vector{Float64}; cor_threshold::Float64=0.90)::Tuple{Matrix{Float64}, Vector{Float64}}
+function REMOVE_COLLINEAR_ALLELES_AND_LOCI(X::Matrix{Float64}, vec_idx::Vector{Float64}; cor_threshold::Float64=0.90)::Tuple{Matrix{Float64}, Vector{Float64}}
     # cor_threshold = 0.90
     idx = []
     @showprogress for j1 in axes(X, 2)
@@ -844,20 +814,14 @@ function remove_collinear_alleles_and_loci(X::Matrix{Float64}, vec_idx::Vector{F
     ### Output
     return(X, vec_idx)
 end
-# X, vec_idx = remove_collinear_alleles_and_loci(X, vec_idx)
 
-### Find the loci IDs
-vec_chr = repeat(GENOTYPE.chr, inner=7)[vec_idx]
-vec_pos = repeat(GENOTYPE.pos, inner=7)[vec_idx]
-
-function best_fitting_distribution(data::Vector{Float64})
+function BEST_FITTING_DISTRIBUTION(vec_b::Vector{Float64})
     DIST_NAMES =   [Distributions.Bernoulli, Distributions.Beta, Distributions.Binomial, Distributions.Categorical,
                     Distributions.DiscreteUniform, Distributions.Exponential, Distributions.Normal, Distributions.Gamma,
                     Distributions.Geometric, Distributions.Laplace, Distributions.Pareto, Distributions.Poisson,
                     Distributions.InverseGaussian, Distributions.Uniform]
-    DIST_INSTANCES = [try Distributions.fit_mle(D, data); catch nothing; end for D in DIST_NAMES]
-    NEG_LOGLIK = [try -sum(Distributions.logpdf.(D, data)); catch nothing; end for D in DIST_INSTANCES]
-    # NEG_LOGLIK = [try sum(Distributions.pdf.(D, data)); catch nothing; end for D in DIST_INSTANCES]
+    DIST_INSTANCES = [try Distributions.fit_mle(D, vec_b); catch nothing; end for D in DIST_NAMES]
+    NEG_LOGLIK = [try -sum(Distributions.logpdf.(D, vec_b)); catch nothing; end for D in DIST_INSTANCES]
     DISTRIBUTIONS_DF = hcat((DIST_NAMES[NEG_LOGLIK .!= nothing],
                             DIST_INSTANCES[NEG_LOGLIK .!= nothing],
                             NEG_LOGLIK[NEG_LOGLIK .!= nothing])...)
@@ -869,21 +833,20 @@ function best_fitting_distribution(data::Vector{Float64})
     return(D)
 end
 
-function estimate_pval_lod(data::Vector{Float64})::Tuple{Vector{Float64}, Vector{Float64}}
-    D, D_name = best_fitting_distribution(data)
+function ESTIMATE_PVAL_LOD(vec_b::Vector{Float64})::Tuple{Vector{Float64}, Vector{Float64}}
+    D, D_name = BEST_FITTING_DISTRIBUTION(vec_b)
     println(string("Distribution used: ", D_name))
-    if (D == nothing) | (std(data) == 0)
-        PVAL = repeat([1.0], inner=length(data))
+    if (D == nothing) | (std(vec_b) == 0)
+        PVAL = repeat([1.0], inner=length(vec_b))
         LOD = PVAL .- 1.0
     else
-        PVAL = [Distributions.cdf(D, x) <= Distributions.ccdf(D, x) ? 2*Distributions.cdf(D, x) : 2*Distributions.ccdf(D, x) for x in data]
+        PVAL = [Distributions.cdf(D, x) <= Distributions.ccdf(D, x) ? 2*Distributions.cdf(D, x) : 2*Distributions.ccdf(D, x) for x in vec_b]
         LOD = -log.(10, PVAL)
-        # UnicodePlots.scatterplot(LOD)
     end
     return(PVAL, LOD)
 end
 
-function GWAS_univariate(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
+function GWAS_SIMPLREG(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
     n, m = size(X)
     k = 2 ### 1st df for intercept, and the second df for the allele
     vec_b = []
@@ -924,7 +887,7 @@ function GWAS_univariate(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{F
     return(vec_b, vec_t, vec_pval, vec_lod)
 end
 
-function GWAS_plot_manhattan(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
+function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
     ### add lengths of all the chromosome to find xlim!!!!
     names_chr = sort(unique(vec_chr)) 
     l = 0
@@ -954,7 +917,7 @@ function GWAS_plot_manhattan(vec_chr::Vector{String}, vec_pos::Vector{Int64}, ve
     return(p1)
 end
 
-function GWAS_plot_qq(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
+function GWAS_PLOT_QQ(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
     m = length(vec_lod)
     LOD_expected  = -log10.(cdf(Distributions.Uniform(0, 1), (collect(1:m) .- 0.5) ./ m))
     p2 = Plots.scatter(sort(LOD_expected), sort(vec_lod), markerstrokewidth=0.001, markeralpha=0.4, legend=false)
@@ -962,79 +925,102 @@ function GWAS_plot_qq(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::
     return(p2)
 end
 
-function GWAS_plot(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
-    p1 = GWAS_plot_manhattan(vec_chr, vec_pos, vec_lod)
-    p2 = GWAS_plot_qq(vec_chr, vec_pos, vec_lod)
+function GWAS_PLOT(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
+    p1 = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
+    p2 = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod)
     p3 = Plots.plot(p1, p2, layout=(2,1))
     return(p3)
 end
 
-
-vec_b, vec_t, vec_pval, vec_lod = GWAS_univariate(y, X)
-
-PVAL, LOD = estimate_pval_lod(vec_b)
-
-p_Xp = GWAS_plot_manhattan(vec_chr, vec_pos, vec_lod) 
-p_Lp = GWAS_plot_manhattan(vec_chr, vec_pos, LOD) 
-Plots.plot(p_Xp, p_Lp, layout=(2,1))
-
-
-idx = match.(Regex("^NC"), vec_chr) .!= nothing
-vec_chr = vec_chr[idx]
-vec_pos = vec_pos[idx]
-vec_lod = vec_lod[idx]
-PVAL = PVAL[idx]
-LOD = LOD[idx]
-
-p = GWAS_plot(vec_chr, vec_pos, LOD)
-
-idx = sortperm(LOD, rev=true)
-LOD[idx][1:10]
-vec_chr[idx][1:10]
-vec_pos[idx][1:10]
-
-
-function GWAS_recompute_pvalues(p_values::Vector{Float64})::Vector{Float64}
-
+function GWAS_MULTIREG(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
+    X = hcat(ones(size(X, 1)), Float64.(X))
+    # b = X \ Y; ### Slow
+    b = X' * inv(X * X') * y; ### Wayyyy faster! ~12 times faster!
+    return(b[2:end])
 end
 
+# ### MODEL
+# PHENOTYPE = LOAD("../test/test_3-pheno-any-filename.csv", ",", true, 3, [8,9])
+# Y = Float64.(PHENOTYPE.phe)
+# y = Float64.(PHENOTYPE.phe[:,1])
 
-# function GWAS_multiple(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64}
-#     X = hcat(ones(size(X, 1)), Float64.(X))
-#     n, m = size(X)
-#     # @time B = X \ Y; ### Slow
-#     @time b = X' * inv(X * X') * y; ### Wayyyy faster! ~12 times faster!
+# GENOTYPE = LOAD("../test/test_3.syncx", false)
+# X, vec_idx = FILTER(GENOTYPE)
 
-#     ε = y - (X * b)
-#     V_ε = (ε' * ε) / n
+# ### Find the loci IDs
+# vec_chr = repeat(GENOTYPE.chr, inner=7)[vec_idx]
+# vec_pos = repeat(GENOTYPE.pos, inner=7)[vec_idx]
 
-#     X_inv = LinearAlgebra.pinv(X)
-#     X_T_inv = LinearAlgebra.pinv(X')
-#     c = []
-#     for i in 1:m
-#         # i = 1
-#         append!(c, sum(X_inv[i, : ] .* X_T_inv[:, i]))
+# vec_b, vec_t, vec_pval, vec_lod = GWAS_SIMPLREG(y, X)
+
+# PVAL, LOD = ESTIMATE_PVAL_LOD(vec_b)
+
+# p = GWAS_PLOT(vec_chr, vec_pos, LOD)
+
+# p_Xp = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod) 
+# p_Lp = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, LOD) 
+# Plots.plot(p_Xp, p_Lp, layout=(2,1))
+
+# p_Lqq = GWAS_PLOT_QQ(vec_chr, vec_pos, LOD) 
+
+# vec_b = GWAS_MULTIREG(y, X)
+# PVAL, LOD = ESTIMATE_PVAL_LOD(vec_b)
+
+# p_Mp = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, LOD) 
+
+# Plots.plot(p_Lp, p_Lqq, p_Xp, p_Mp, layout=(2,2))
+
+
+# ### Proposed new method
+
+# ### simulate n_sim data-points
+# function MODEL_SIMULATE_SIMPLREG(y::Vector{Float64}, n_degrees::Int64=3, n_sim::Int64=100)
+#     # n_degrees = 2
+#     # n_sim = 100
+#     n = length(y)
+#     k = 1 + n_degrees
+#     P = ones(n)
+#     for i in 1:n_degrees
+#         P = hcat(P, collect(1:n).^i)
 #     end
-
-#     V_b = V_ε * (c .+ 1e-10)
-#     se_b = sqrt.(V_b) ./ sqrt(n)
-
-#     t = b ./ se_b
-
-#     # T = Distributions.TDist(m)
-#     C = Distributions.Chisq(m-1)
-#     pvalues = Distributions.ccdf(C, t.^2)
-#     rand(C, 10)
-
-#     # using Plots
-#     Plots.histogram(b, bins=100, legend=false)
-#     Plots.histogram(t, bins=100, legend=false)
-#     Plots.histogram(t.^2, bins=100, legend=false)
-#     Plots.scatter(-log10.(pvalues), legend=false)
-
-#     return(b, ε, t, V_b, V_ε)
+#     b = inv(P' * P) * P' * y
+#     # e = y .- (P*b)
+#     # Ve = (e' * e) ./ (n-k)
+#     # Vb = Ve .* inv(P' * P)
+#     P_sim = ones(n_sim)
+#     for i in 1:n_degrees
+#         P_sim = hcat(P_sim, collect(range(1, n, length=100)).^i)
+#     end
+#     y_sim = P_sim * b
+#     return(y_sim)
 # end
-# b, ε, t, V_b, V_ε = GWAS_multiple(y, X)
+
+
+# y_sim = MODEL_SIMULATE_SIMPLREG(y)
+# n = length(y_sim)
+# k = 2
+
+# for j in 1:m
+#     # j = 2
+#     x = X[:, j]
+#     x_sim = MODEL_SIMULATE_SIMPLREG(x)
+#     X_sim = hcat(ones(length(x_sim)), x_sim)
+    
+#     b = inv(X_sim' * X_sim) * X_sim' * y_sim
+#     e = y_sim .- (X_sim*b)
+#     Ve = (e' * e) ./ (n-k)
+#     Vb = Ve .* inv(X_sim' * X_sim)
+#     sb = sqrt.(Vb)
+
+#     p1 = Plots.plot(y, legend=false)
+#     p2 = Plots.plot(x, legend=false)
+#     p3 = Plots.plot(y_sim, legend=false)
+#     p4 = Plots.plot(x_sim, legend=false)
+#     Plots.plot(p1, p2, p3, p4, layout=(2,2))
+
+#     b ./ [sb[1,1], sb[2,2]]
+
+# end
 
 
 
