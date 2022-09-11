@@ -939,6 +939,68 @@ function GWAS_MULTIREG(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
     return(b[2:end])
 end
 
+### Proposed new method
+function MODEL_SIMULATE_SIMPLREG(y::Vector{Float64}, n_degrees::Int64=3, n_sim::Int64=100, round_digits::Int64=4)::Vector{Float64}
+    # n_degrees = 2
+    # n_sim = 100
+    n = length(y)
+    k = 1 + n_degrees
+    P = ones(n)
+    for i in 1:n_degrees
+        P = hcat(P, collect(1:n).^i)
+    end
+    b = inv(P' * P) * P' * y
+    # e = y .- (P*b)
+    # Ve = (e' * e) ./ (n-k)
+    # Vb = Ve .* inv(P' * P)
+    P_sim = ones(n_sim)
+    for i in 1:n_degrees
+        P_sim = hcat(P_sim, collect(range(1, n, length=100)).^i)
+    end
+    y_sim = round.(P_sim * b, digits=round_digits)
+    return(y_sim)
+end
+
+function GWAS_SIMULREG(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
+    _, m = size(X)
+    y_sim = MODEL_SIMULATE_SIMPLREG(y)
+    n = length(y_sim)
+    k = 2
+    vec_b = []
+    vec_t = []
+    vec_pval = []
+    @time for j in 1:m
+        # j = 37417
+        # j = 103647
+        x = X[:, j]
+        x_sim = MODEL_SIMULATE_SIMPLREG(x)
+        if var(x_sim) != 0.0
+            X_sim = hcat(ones(length(x_sim)), x_sim)
+            b = inv(X_sim' * X_sim) * X_sim' * y_sim
+            e = y_sim .- (X_sim*b)
+            Ve = (e' * e) ./ (n-k)
+            Vb = Ve .* inv(X_sim' * X_sim)
+            sb = sqrt.([Vb[1,1], Vb[k,1k]])
+            t = b ./ sb
+            pval = Distributions.ccdf(Distributions.Chisq(k-1), t.^2)
+        else
+            b = [0.0, 0.0]
+            t = [0.0, 0.0]
+            pval = [1.0, 1.0]
+        end
+        # p1 = Plots.plot(y, legend=false)
+        # p2 = Plots.plot(x, legend=false)
+        # p3 = Plots.plot(y_sim, legend=false)
+        # p4 = Plots.plot(x_sim, legend=false)
+        # Plots.plot(p1, p2, p3, p4, layout=(2,2))
+        append!(vec_b, b[k])
+        append!(vec_t, t[k])
+        append!(vec_pval, pval[k])
+    end
+    vec_lod = -log10.(vec_pval)
+    return(vec_b, vec_t, vec_pval, vec_lod)
+end
+
 # ### MODEL
 # PHENOTYPE = LOAD("../test/test_3-pheno-any-filename.csv", ",", true, 3, [8,9])
 # Y = Float64.(PHENOTYPE.phe)
@@ -951,78 +1013,29 @@ end
 # vec_chr = repeat(GENOTYPE.chr, inner=7)[vec_idx]
 # vec_pos = repeat(GENOTYPE.pos, inner=7)[vec_idx]
 
-# vec_b, vec_t, vec_pval, vec_lod = GWAS_SIMPLREG(y, X)
+# @time vec_b, vec_t, vec_pval, vec_lod = GWAS_SIMPLREG(y, X)
+# m_simplreg = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
+# q_simplreg = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
 
-# PVAL, LOD = ESTIMATE_PVAL_LOD(vec_b)
-
-# p = GWAS_PLOT(vec_chr, vec_pos, LOD)
-
-# p_Xp = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod) 
-# p_Lp = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, LOD) 
-# Plots.plot(p_Xp, p_Lp, layout=(2,1))
-
-# p_Lqq = GWAS_PLOT_QQ(vec_chr, vec_pos, LOD) 
+# vec_pval, vec_lod = ESTIMATE_PVAL_LOD(vec_b)
+# m_simplreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
+# q_simplreg_H = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
 
 # vec_b = GWAS_MULTIREG(y, X)
-# PVAL, LOD = ESTIMATE_PVAL_LOD(vec_b)
+# vec_pval, vec_lod = ESTIMATE_PVAL_LOD(vec_b)
+# m_mutltreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
+# q_mutltreg_H = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
 
-# p_Mp = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, LOD) 
+# vec_b, vec_t, vec_pval, vec_lod = GWAS_SIMULREG(y, X)
+# m_simulreg = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
+# q_simulreg = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
 
-# Plots.plot(p_Lp, p_Lqq, p_Xp, p_Mp, layout=(2,2))
+# vec_pval, vec_lod = ESTIMATE_PVAL_LOD(Float64.(vec_b))
+# m_simulreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
+# q_simulreg_H = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
 
-
-# ### Proposed new method
-
-# ### simulate n_sim data-points
-# function MODEL_SIMULATE_SIMPLREG(y::Vector{Float64}, n_degrees::Int64=3, n_sim::Int64=100)
-#     # n_degrees = 2
-#     # n_sim = 100
-#     n = length(y)
-#     k = 1 + n_degrees
-#     P = ones(n)
-#     for i in 1:n_degrees
-#         P = hcat(P, collect(1:n).^i)
-#     end
-#     b = inv(P' * P) * P' * y
-#     # e = y .- (P*b)
-#     # Ve = (e' * e) ./ (n-k)
-#     # Vb = Ve .* inv(P' * P)
-#     P_sim = ones(n_sim)
-#     for i in 1:n_degrees
-#         P_sim = hcat(P_sim, collect(range(1, n, length=100)).^i)
-#     end
-#     y_sim = P_sim * b
-#     return(y_sim)
-# end
-
-
-# y_sim = MODEL_SIMULATE_SIMPLREG(y)
-# n = length(y_sim)
-# k = 2
-
-# for j in 1:m
-#     # j = 2
-#     x = X[:, j]
-#     x_sim = MODEL_SIMULATE_SIMPLREG(x)
-#     X_sim = hcat(ones(length(x_sim)), x_sim)
-    
-#     b = inv(X_sim' * X_sim) * X_sim' * y_sim
-#     e = y_sim .- (X_sim*b)
-#     Ve = (e' * e) ./ (n-k)
-#     Vb = Ve .* inv(X_sim' * X_sim)
-#     sb = sqrt.(Vb)
-
-#     p1 = Plots.plot(y, legend=false)
-#     p2 = Plots.plot(x, legend=false)
-#     p3 = Plots.plot(y_sim, legend=false)
-#     p4 = Plots.plot(x_sim, legend=false)
-#     Plots.plot(p1, p2, p3, p4, layout=(2,2))
-
-#     b ./ [sb[1,1], sb[2,2]]
-
-# end
-
-
+# Plots.plot(m_simplreg, m_simplreg_H, m_mutltreg_H, m_simulreg, m_simulreg_H, layout=(5, 1))
+# Plots.plot(m_simplreg, m_simplreg_H, m_mutltreg_H, m_simulreg_H, layout=(2, 2))
 
 
 
