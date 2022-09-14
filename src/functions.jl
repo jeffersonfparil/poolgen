@@ -462,6 +462,7 @@ function LOAD(syncx::String, count::Bool)::Window
     # include("user_functions.jl"); using .user_functions: pileup2syncx
     # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
     # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup")
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # count = false
     file = open(syncx, "r")
     loci = []
@@ -474,10 +475,77 @@ function LOAD(syncx::String, count::Bool)::Window
         for i in 1:7:size(GENOTYPE.cou,1)
             # i = 1
             g = GENOTYPE.cou[i:(i+6), :]
+            g[5, :] .= 0 ### And since we are outputting frequencies we need to remove insertion counts since they're also counted as the bases the are.
             GENOTYPE.cou[i:(i+6), :] = g ./ sum(g, dims=1)
         end
     end
     return(GENOTYPE)
+end
+
+function CONVERT(syncx_or_sync::String, init::Int, term::Int, out::String="")::String
+    # syncx_or_sync = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
+    # # syncx_or_sync = "/home/jeffersonfparil/Documents/poolgen/test/test_3-test.sync"
+    # file = open(syncx_or_sync, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
+    # init = vec_positions[2]
+    # term = vec_positions[3]
+    # out = ""
+    ### Output file
+    if out == ""
+        extension = [split(syncx_or_sync, ".")[end][end] == 'x' ? ".sync" : ".syncx"][1]
+        out = string(join(split(syncx_or_sync, ".")[1:(end-1)], "."), extension)
+    end
+    ### Set position to the next line if the current position is a truncated line
+    file = open(syncx_or_sync, "r")
+    if (init>0)
+        seek(file, init-1)
+        line = readline(file)
+        if line != ""
+            init = position(file)
+        end
+    end
+    seek(file, init)
+    file_out = open(out, "a")
+
+    p = length(split(split(readline(file), "\t")[3], ":"))
+    ### Filter
+    if p == 7
+        ### SYNCX to SYNC
+        seek(file, init)
+        idx = [1, 2, 3, 4, 6, 7] ### Remove column 5, i.e. INSERTION COUNT COLUMN
+        while position(file) < term
+            line = split(readline(file), "\t")
+            n = length(line) - 2
+            X = parse.(Int, reshape(vcat(split.(line[3:end], ":")...), 7, n))'
+            X = X[:, idx]
+            for i in 1:n
+                line[i+2] = join(X[i,:], ":")
+            end
+            line = string(join(line, "\t"), "\n")
+            write(file_out, line)
+        end
+    else
+        ### SYNC to SYNCX
+        seek(file, init)
+        while position(file) < term
+            line = split(readline(file), "\t")
+            n = length(line) - 2
+            X = parse.(Int, reshape(vcat(split.(line[3:end], ":")...), 6, n))'
+            X = hcat(X[:,1:4], zeros(Int64, n), X[:,5:end])
+            for i in 1:n
+                line[i+2] = join(X[i,:], ":")
+            end
+            line = string(join(line, "\t"), "\n")
+            write(file_out, line)
+        end
+    end
+    close(file)
+    close(file_out)
+    return(out)
 end
 
 ### FILTER
@@ -736,6 +804,7 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
     # window_size = 20
     # model = "LASSO"
     # distance = true
+    # distance_nPCA = 3
     # out = ""
     ### Output syncx
     if out==""
@@ -833,7 +902,7 @@ function BEST_FITTING_DISTRIBUTION(vec_b::Vector{Float64})
     return(D)
 end
 
-function ESTIMATE_PVAL_LOD(vec_b::Vector{Float64})::Tuple{Vector{Float64}, Vector{Float64}}
+function ESTIMATE_LOD(vec_b::Vector{Float64})::Vector{Float64}
     D, D_name = BEST_FITTING_DISTRIBUTION(vec_b)
     println(string("Distribution used: ", D_name))
     if (D == nothing) | (std(vec_b) == 0)
@@ -843,7 +912,7 @@ function ESTIMATE_PVAL_LOD(vec_b::Vector{Float64})::Tuple{Vector{Float64}, Vecto
         PVAL = [Distributions.cdf(D, x) <= Distributions.ccdf(D, x) ? 2*Distributions.cdf(D, x) : 2*Distributions.ccdf(D, x) for x in vec_b]
         LOD = -log.(10, PVAL)
     end
-    return(PVAL, LOD)
+    return(LOD)
 end
 
 function GWAS_SIMPLREG(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
@@ -887,7 +956,7 @@ function GWAS_SIMPLREG(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Flo
     return(vec_b, vec_t, vec_pval, vec_lod)
 end
 
-function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
+function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Plots.GRBackend}
     ### add lengths of all the chromosome to find xlim!!!!
     names_chr = sort(unique(vec_chr)) 
     l = 0
@@ -898,7 +967,7 @@ function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, ve
         l += maximum(pos)
     end
 
-    p1 = Plots.scatter([0], [0], xlims=[0, l], ylims=[minimum(vec_lod), maximum(vec_lod)], legend=false, markersize=0, markerstrokewidth=0)
+    p1 = Plots.scatter([0], [0], xlims=[0, l], ylims=[minimum(vec_lod), maximum(vec_lod)], legend=false, markersize=0, markerstrokewidth=0, title=title)
     x0 = 0
     for chr in names_chr
         # chr = sort(unique(vec_chr))[1]
@@ -917,17 +986,17 @@ function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, ve
     return(p1)
 end
 
-function GWAS_PLOT_QQ(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
+function GWAS_PLOT_QQ(vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Plots.GRBackend}
     m = length(vec_lod)
     LOD_expected  = -log10.(cdf(Distributions.Uniform(0, 1), (collect(1:m) .- 0.5) ./ m))
     p2 = Plots.scatter(sort(LOD_expected), sort(vec_lod), markerstrokewidth=0.001, markeralpha=0.4, legend=false)
-    Plots.plot!([0,1], [0,1], seriestype=:straightline, legend=false)
+    Plots.plot!([0,1], [0,1], seriestype=:straightline, legend=false, title=title)
     return(p2)
 end
 
 function GWAS_PLOT(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
     p1 = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
-    p2 = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod)
+    p2 = GWAS_PLOT_QQ(vec_lod)
     p3 = Plots.plot(p1, p2, layout=(2,1))
     return(p3)
 end
@@ -1002,40 +1071,548 @@ function GWAS_SIMULREG(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Flo
 end
 
 # ### MODEL
-# PHENOTYPE = LOAD("../test/test_3-pheno-any-filename.csv", ",", true, 3, [8,9])
-# Y = Float64.(PHENOTYPE.phe)
+# PHENOTYPE = LOAD("../test/test_3-pheno-any-filename.csv", ",", true, 3, collect(8:14))
+# Y = Float64.(PHENOTYPE.phe) ### QUANTRES, SURVI, SD, MIN, MAX, PERC, Q
 # y = Float64.(PHENOTYPE.phe[:,1])
 
 # GENOTYPE = LOAD("../test/test_3.syncx", false)
 # X, vec_idx = FILTER(GENOTYPE)
+# n, m = size(X)
 
 # ### Find the loci IDs
 # vec_chr = repeat(GENOTYPE.chr, inner=7)[vec_idx]
 # vec_pos = repeat(GENOTYPE.pos, inner=7)[vec_idx]
 
-# @time vec_b, vec_t, vec_pval, vec_lod = GWAS_SIMPLREG(y, X)
-# m_simplreg = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
-# q_simplreg = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
 
-# vec_pval, vec_lod = ESTIMATE_PVAL_LOD(vec_b)
-# m_simplreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
-# q_simplreg_H = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
 
-# vec_b = GWAS_MULTIREG(y, X)
-# vec_pval, vec_lod = ESTIMATE_PVAL_LOD(vec_b)
-# m_mutltreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
-# q_mutltreg_H = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
+# ### Simulate
+# # using Random
+# # Random.seed!(123)
+# G = rand((0, 1), 100, m)
+# X = zeros(n, m)
+# b = zeros(m)
+# idx_QTL = Int.(ceil.([0.1, 0.5, 0.9] .* m))
+# b[idx_QTL] = [5, 10, 15]
+# t = (G * b) .+ rand(Normal(0, 1), 100)
+# # t = rand(Normal(), 100)
+# y = zeros(n)
+# idx = sortperm(t)
+# t = t[idx]
+# G = G[idx, :]
+# for i in 1:20:100
+#     X[Int(ceil(i/20)), :] = mean(G[i:(i+19), :], dims=1)
+#     y[Int(ceil(i/20))] = mean(t[i:(i+19)])
+# end
+# # GENOTYPE = Window(repeat(["A", "B", "C", "D", "E"], inner=20_000), )
+# # X, vec_idx = FILTER(GENOTYPE)
+# # X = rand(n, m)
 
-# vec_b, vec_t, vec_pval, vec_lod = GWAS_SIMULREG(y, X)
-# m_simulreg = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
-# q_simulreg = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
+# # ### Compute kinship matrices
+# # function PEARSONS_CORRELATION(X)
+# #     ### Performs as fast as cor(X) so why not just reimplement it so we are completely transparent eh?!
+# #     _X_ = X .- mean(X, dims=2)
+# #     V = (_X_ * _X_') ./ size(_X_, 2)
+# #     C = zeros(n, n)
+# #     for i in 1:n
+# #         for j in 1:n
+# #             C[i, j] = V[i, j] / (sqrt(V[i,i]) * sqrt(V[j,j]))
+# #         end
+# #     end
+# #     return(C)
+# # end
 
-# vec_pval, vec_lod = ESTIMATE_PVAL_LOD(Float64.(vec_b))
-# m_simulreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
-# q_simulreg_H = GWAS_PLOT_QQ(vec_chr, vec_pos, vec_lod) 
+# # C = PEARSONS_CORRELATION(X)
 
-# Plots.plot(m_simplreg, m_simplreg_H, m_mutltreg_H, m_simulreg, m_simulreg_H, layout=(5, 1))
-# Plots.plot(m_simplreg, m_simplreg_H, m_mutltreg_H, m_simulreg_H, layout=(2, 2))
+# # M = MultivariateStats.fit(MultivariateStats.PCA, C)
+# # P = MultivariateStats.projection(M)
+# # S = MultivariateStats.principalvars(M) ./ MultivariateStats.tvar(M) * 100
+# # C = P[:, 1:((n-1)-2)]
+# # # C = P[:, 1]
+# # # C = mean(X, dims=2)
+# # # C = hcat(P[:, 1], mean(X, dims=2))
+# # k = 2 + size(C,2)
+
+
+# # X = rand(n, 2*m)
+# # idx = var(X, dims=1) .> 1e-10
+# # X = X[:, idx[1,:]]
+# # X = X[:, 1:m]
+# # b = zeros(m)
+# # idx_QTL = Int.(ceil.([0.1, 0.5, 0.9] .* m))
+# # b[idx_QTL] = [20, 20, 20]
+# # y = (X * b) .+ rand(Distributions.Normal(0,1), n)
+# # idx = sortperm(y)
+# # y = y[idx]
+# # X = X[idx, :]
+
+
+# # using MixedModels, DataFrames
+# vec_b = []
+# vec_pval = []
+# @showprogress for i in 1:m
+# # @showprogress for i in 1:500:m
+#     # i = 149
+#     # @show i
+#     # x = hcat(ones(n), C, X[:, i])
+#     # x = hcat(ones(n), X[:, i], C)
+#     x = hcat(ones(n), X[:, i]); k = 2
+#     if var(X[:, i]) > 0.0
+#         # x = X[:, i]; k = 1
+#         b = try
+#                 inv(x' * x) * x' * y
+#             catch
+#                 pinv(x' * x) * x' * y
+#             end
+#         ε = y - (x * b)
+#         V_ε = (ε' * ε) / (n-k)
+#         se_ε = sqrt(V_ε)
+#         COV_b = V_ε * inv(x' * x)
+#         se_b = sqrt(COV_b[k,k])
+#         # se_b = sqrt(COV_b[2,2])
+#         t = b[k] / se_b
+#         # t = b[2] / se_b
+#         pval = Distributions.ccdf(Distributions.Chisq(n-k), t^2)
+#     else
+#         b = repeat([0], inner=k)
+#         pval = 1.0
+#     end
+#     # pval = Distributions.cdf(Distributions.Normal(), -abs.(t)) + Distributions.ccdf(Distributions.Normal(), +abs.(t))
+#     append!(vec_b,    b[k])
+#     append!(vec_pval, pval)
+
+#     # x = X[:,i]
+#     # c = string.(collect(1:n))
+#     # df = DataFrames.DataFrame(y=y, x=x, c=c)
+#     # fm = @formula(y ~ 1 + x + (1 + x|c))
+#     # f = MixedModels.fit(MixedModel, fm, df)
+#     # append!(vec_b,    f.beta[2])
+#     # append!(vec_pval, f.pvalues[2])
+  
+# end
+
+# # vec_pval = Float64.(vec_pval)
+# vec_lod = -log10.(vec_pval)
+
+
+# D = Distributions.fit_mle(Distributions.Laplace, Float64.(vec_b))
+# vec_pval = [Distributions.cdf(D, x) <= Distributions.ccdf(D, x) ? 2*Distributions.cdf(D, x) : 2*Distributions.ccdf(D, x) for x in vec_b]
+# vec_lod = -log.(10, vec_pval)
+
+# vec_lod = ESTIMATE_LOD(Float64.(vec_b))
+# vec_pval = 10.0.^(-vec_lod)
+# p = GWAS_PLOT_MANHATTAN(repeat(["A"], inner=m), collect(1:m), vec_lod)
+# for q in idx_QTL
+#     Plots.plot!([q, q], [0,1], seriestype=:straightline, legend=false)
+# end
+# p
+
+
+# vec_pval[vec_pval .== 0.0] .= minimum(vec_pval[vec_pval .> 0.0])
+# vec_pval[vec_pval .== 1.0] .= maximum(vec_pval[vec_pval .< 1.0])
+# # vec_pval = vec_pval[vec_pval .> 0.0]
+# # vec_pval = vec_pval[vec_pval .< 1.0]
+
+
+# D = Distributions.fit_mle(Distributions.Beta, vec_pval)
+# r = rand(D, length(vec_pval))
+
+# # D2 = Distributions.Beta(0.43, 0.23)
+# D2 = Distributions.Beta(0.98, 0.93)
+# r2 = rand(D2, length(vec_pval))
+# # r2 = (r2 .- minimum(r2)) .+ 1e-100
+
+# p0 = Plots.scatter(sort(-log10.(r2)), sort(-log10.(vec_pval)), title="QQ", legend=false)
+# p1 = histogram(vec_pval, title="Observed", legend=false)
+# p2 = histogram(r, title="Modelled Observed", legend=false)
+# p3 = histogram(r2, title="Expected", legend=false)
+# Plots.plot(p0, p1, p2, p3, layout=(2,2))
+
+# n = 3
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p3 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=3")
+
+# n = 4
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p4 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=4")
+
+# n = 5
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p5 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=5")
+
+# n = 6
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p6 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=6")
+
+# n = 7
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p7 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=7")
+
+# n = 8
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p8 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=8")
+
+# n = 9
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p9 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=9")
+
+# n = 10
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p10 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=10")
+
+# n = 20
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p20 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=20")
+
+# n = 100
+# X = rand(n, m)
+# vec_cor = []
+# @showprogress for j in 1:m
+#     append!(vec_cor, cor(collect(1:n), X[:,j]))
+# end
+# p100 = Plots.histogram(Float64.(abs.(vec_cor)), legend=false, title="n=100")
+
+# Plots.plot(p3, p4, p5, p10, p20, p100, layout=(2,3))
+
+# vec_p = []
+# x = append!(collect(2:10), collect(20:10:100))
+# for n in x
+#     # n=3
+#     append!(vec_p, (((n^2)-1)/(2*(n^2)))^n)
+# end
+# Plots.scatter(x, vec_p)
+# Plots.plot!(x, vec_p)
+
+
+# # vec_expected_pval = Distributions.cdf(D, collect(1:m)./m)
+# vec_q = collect(1:m)./(m+1)
+# vec_expected_pval_pdf = [Distributions.pdf(D, x) for x in vec_q]
+# Int.(round.((vec_expected_pval_pdf ./ sum(vec_expected_pval_pdf)) .* m))
+# plot(vec_expected_pval, sort(vec_pval))
+
+
+# vec_lod = -log10.(vec_pval)
+# # GWAS_PLOT(vec_chr[1:500:m], vec_pos[1:500:m], vec_lod)
+# # LOD = ESTIMATE_LOD(Float64.(vec_b))
+# # GWAS_PLOT(vec_chr[1:500:m], vec_pos[1:500:m], LOD)
+# ### TEST PLOTS
+# GWAS_PLOT(vec_chr, vec_pos, vec_lod)
+
+# LOD = ESTIMATE_LOD(Float64.(vec_b))
+# GWAS_PLOT(vec_chr, vec_pos, LOD)
+
+
+# # ### IMplementing GWAlpha
+# # using Optim
+
+# # function neg_log_likelihood_cdfbeta(beta::Array{Float64,1}, data_A::Array{Float64,1}, data_B::Array{Float64,1})
+# # 	-sum(
+# # 		 log.(10,
+# # 		 	 (Distributions.cdf.(Distributions.Beta(beta[1], beta[2]), data_A)) .-
+# # 		 	 (Distributions.cdf.(Distributions.Beta(beta[1], beta[2]), append!(zeros(1), data_A[1:(length(data_A)-1)])))
+# # 		     )
+# # 		 )     -sum(
+# # 		 log.(10,
+# # 		 	 (Distributions.cdf.(Distributions.Beta(beta[3], beta[4]), data_B)) .-
+# # 		 	 (Distributions.cdf.(Distributions.Beta(beta[3], beta[4]), append!(zeros(1), data_B[1:(length(data_B)-1)])))
+# # 		     )
+# # 		 )
+# # end
+
+# # SD = Y[1,3]
+# # MIN = Y[1,4]
+# # MAX = Y[1,5]
+# # PERC = Y[1:(end-1),6]
+# # QUAN = Y[1:(end-1),7]
+# # BINS = append!([x for x in PERC], 1) - append!(zeros(1), PERC)
+
+# # Q = reshape(GENOTYPE.cou, 7, Int(size(GENOTYPE.cou, 1)/7), 5);
+# # i = 1
+# # FREQS = Q[:, i, :]'
+# # allele_freqs = sum(FREQS .* BINS, dims=1)
+# # MAF = 0.001
+
+# # if (minimum(allele_freqs[allele_freqs .!= 0.0]) >= MAF) & (maximum(allele_freqs) < (1.0 - MAF)) #locus filtering by mean MAF
+# #     for allele in 1:7
+# #         if (allele_freqs[allele] > 0.0) & (maximum(FREQS[:,allele]) < 0.999999)  #allele filtering remove alleles with no counts and that the number of pools with allele frequency close to one should not occur even once!
+# #         # if (sum(FREQS[:,allele] .== 0.0) < NPOOLS) & (sum(FREQS[:,allele] .> 0.999999) < 1) #filter-out alleles with at least 1 pool fixed for that allele because it causes a failure in the optimization
+# #             freqA = FREQS[:, allele]
+# #             pA = sum(freqA .* BINS)
+# #             pB = 1 - pA
+# #             BINA = (freqA .* BINS) ./ pA
+# #             BINB = ( (1 .- freqA) .* BINS ) ./ (1-pA)
+# #             percA = cumsum(BINA)
+# #             percB = cumsum(BINB)
+
+# #             ### optimize (minimize) -log-likelihood of these major allele frequencies modelled as a beta distribution
+# #             # using Nelder-Mead optimization or Box minimisation (try-catch if one or the other fails with preference to Nelder-Mead)
+# #             lower_limits = [1e-20, 1e-20, 1e-20, 1e-20]
+# #             upper_limits = [1.0, 1.0, 1.0, 1.0]
+# #             initial_values = [0.1, 0.1, 0.1, 0.1]
+# #             BETA = try
+# #                 Optim.optimize(beta->neg_log_likelihood_cdfbeta(beta, percA, percB), initial_values, NelderMead())
+# #             catch
+# #                 try
+# #                     Optim.optimize(beta->neg_log_likelihood_cdfbeta(beta, percA, percB), lower_limits, upper_limits, initial_values)
+# #                 catch ### lower limits of 1e-20 to 1e-6 causes beta dist parameter values to shrink to zero somehow - so we're setting lower limits to 1e-5 instead
+# #                     lower_limits = [1e-5, 1e-5, 1e-5, 1e-5]
+# #                     Optim.optimize(beta->neg_log_likelihood_cdfbeta(beta, percA, percB), lower_limits, upper_limits, initial_values)
+# #                 end
+# #             end
+# #             MU_A = MIN + ((MAX-MIN)*BETA.minimizer[1]/(BETA.minimizer[1]+BETA.minimizer[2]))
+# #             MU_B = MIN + ((MAX-MIN)*BETA.minimizer[3]/(BETA.minimizer[3]+BETA.minimizer[4]))
+
+# #             ### compute alpha
+# #             W_PENAL = 2*sqrt(pA*pB)
+# #             ALPHA = W_PENAL*(MU_A - MU_B) / SD
+# #             OUT_ALPHA[allele] =  ALPHA
+# #             OUT_allele[allele] =  allele
+# #             OUT_snp[allele] =  snp
+# #             OUT_1[allele] =  1
+# #             OUT_pA[allele] =  pA
+# #         else
+# #             ## for explicit zero effects for null (low to none) frequency alleles
+# #             OUT_ALPHA[allele] =  0.0
+# #             OUT_allele[allele] =  allele
+# #             OUT_snp[allele] =  snp
+# #             OUT_1[allele] =  0
+# #             OUT_pA[allele] =  allele_freqs[allele]
+# #         end
+# #     end
+# # end
+
+
+# # function GWAlpha_ML_iterator(COUNTS::SharedArray{Int64,3}, snp::Int64, BINS::Array{Float64,1}, MAF::Float64, MIN::Float64, MAX::Float64, SD::Float64)
+# # 	OUT_ALPHA = convert(Array{Float64}, zeros(6))
+# # 	OUT_allele = zeros(6)
+# # 	OUT_snp = zeros(6)
+# # 	OUT_1 = zeros(6)
+# # 	OUT_pA = convert(Array{Float64}, zeros(6))
+# # 	# #parse allele counts from the sync file
+# # 	# COUNTS = zeros(Int64, NPOOLS, 6)
+# # 	# for i in 1:NPOOLS
+# # 	# 	COUNTS[i,:] = [parse(Int64, x) for x in split.(SYNC[snp, 4:(NPOOLS+3)], [':'])[i]]
+# # 	# end
+# # 	#convert to frequencies per pool
+# # 	counts = COUNTS[:,:,snp]
+# # 	FREQS = counts ./ ( sum(counts, dims=2) .+ 1e-10 ) #added 1e-10 to the denominator to avoid NAs in pools with no allele counts (zero depth; which should actually have been filtered out after mpileup using awk)
+# # 	allele_freqs = sum(FREQS .* BINS, dims=1)
+# # 	#iterate across alleles while filtering by MAF
+# # 	if (sum(counts) != 0.0)
+# # 		if (minimum(allele_freqs[allele_freqs .!= 0.0]) >= MAF) & (maximum(allele_freqs) < (1.0 - MAF)) #locus filtering by mean MAF
+# # 			for allele in 1:6
+# # 				if (allele_freqs[allele] > 0.0) & (maximum(FREQS[:,allele]) < 0.999999)  #allele filtering remove alleles with no counts and that the number of pools with allele frequency close to one should not occur even once!
+# # 				# if (sum(FREQS[:,allele] .== 0.0) < NPOOLS) & (sum(FREQS[:,allele] .> 0.999999) < 1) #filter-out alleles with at least 1 pool fixed for that allele because it causes a failure in the optimization
+# # 					freqA = FREQS[:, allele]
+# # 					pA = sum(freqA .* BINS)
+# # 					pB = 1 - pA
+# # 					BINA = (freqA .* BINS) ./ pA
+# # 					BINB = ( (1 .- freqA) .* BINS ) ./ (1-pA)
+# # 					percA = cumsum(BINA)
+# # 					percB = cumsum(BINB)
+
+# # 					### optimize (minimize) -log-likelihood of these major allele frequencies modelled as a beta distribution
+# # 					# using Nelder-Mead optimization or Box minimisation (try-catch if one or the other fails with preference to Nelder-Mead)
+# # 					lower_limits = [1e-20, 1e-20, 1e-20, 1e-20]
+# # 					upper_limits = [1.0, 1.0, 1.0, 1.0]
+# # 					initial_values = [0.1, 0.1, 0.1, 0.1]
+# # 					BETA = try
+# # 						Optim.optimize(beta->neg_log_likelihood_cdfbeta(beta, percA, percB), initial_values, NelderMead())
+# # 					catch
+# # 						try
+# # 							Optim.optimize(beta->neg_log_likelihood_cdfbeta(beta, percA, percB), lower_limits, upper_limits, initial_values)
+# # 						catch ### lower limits of 1e-20 to 1e-6 causes beta dist parameter values to shrink to zero somehow - so we're setting lower limits to 1e-5 instead
+# # 							lower_limits = [1e-5, 1e-5, 1e-5, 1e-5]
+# # 							Optim.optimize(beta->neg_log_likelihood_cdfbeta(beta, percA, percB), lower_limits, upper_limits, initial_values)
+# # 						end
+# # 					end
+# # 					MU_A = MIN + ((MAX-MIN)*BETA.minimizer[1]/(BETA.minimizer[1]+BETA.minimizer[2]))
+# # 					MU_B = MIN + ((MAX-MIN)*BETA.minimizer[3]/(BETA.minimizer[3]+BETA.minimizer[4]))
+
+# # 					### compute alpha
+# # 					W_PENAL = 2*sqrt(pA*pB)
+# # 					ALPHA = W_PENAL*(MU_A - MU_B) / SD
+# # 					OUT_ALPHA[allele] =  ALPHA
+# # 					OUT_allele[allele] =  allele
+# # 					OUT_snp[allele] =  snp
+# # 					OUT_1[allele] =  1
+# # 					OUT_pA[allele] =  pA
+# # 				else
+# # 					## for explicit zero effects for null (low to none) frequency alleles
+# # 					OUT_ALPHA[allele] =  0.0
+# # 					OUT_allele[allele] =  allele
+# # 					OUT_snp[allele] =  snp
+# # 					OUT_1[allele] =  0
+# # 					OUT_pA[allele] =  allele_freqs[allele]
+# # 				end
+# # 			end
+# # 		end
+# # 	end
+# # 	return([OUT_ALPHA, OUT_allele, OUT_snp, OUT_1, OUT_pA])
+# # end
+
+# # function GWAlpha_ML(;filename_sync::String, filename_phen_py::String, MAF::Float64)
+# # 	### load the sync and phenotype files
+# # 	SYNC = DelimitedFiles.readdlm(filename_sync, '\t')
+# # 	phen = DelimitedFiles.readdlm(filename_phen_py, '\t')
+
+# # 	### gather phenotype specifications
+# # 	NPOOLS = length(split(phen[5], ['=', ',', '[', ']', ';'])) - 3 #less the first leading and trailing elements
+# # 	if length(split(phen[1], ['=', '\"'])) < 3
+# # 		global NAME = split(phen[1], ['=', '\''])[3]
+# # 	else
+# # 		global NAME = split(phen[1], ['=', '\"'])[3]
+# # 	end
+# # 	SD = parse.(Float64, split(phen[2], ['=',';'])[2])
+# # 	MIN = parse.(Float64, split(phen[3], ['=',';'])[2])
+# # 	MAX = parse.(Float64, split(phen[4], ['=',';'])[2])
+# # 	PERC = parse.(Float64, split(phen[5], ['=', ',', '[', ']', ';'])[3:(NPOOLS+1)])
+# # 	QUAN = parse.(Float64, split(phen[6], ['=', ',', '[', ']', ';'])[3:(NPOOLS+1)])
+# # 	BINS = append!([x for x in PERC], 1) - append!(zeros(1), PERC)
+
+
+# # 	### gather genotype (allele frequency) specifications
+# # 	NSNP = size(SYNC)[1]
+# # 	n_pools_sync = size(SYNC)[2] - 3
+# # 	if NPOOLS != n_pools_sync
+# # 		println("The number of pools with phenotype data does not match the number of pools with allele frequency data!")
+# # 		println("Please check you input files :-)")
+# # 		println("Remove leading and intervening whitespaces in the phenotype file.")
+# # 		exit()
+# # 	else
+# # 		n_pools_sync = nothing #clear out contents of this redundant n_pools variable
+# # 	end
+
+# # 	### creating an allele counts SharedArray from SYNC to minimize memory usage
+# # 	### input shared array
+# # 	COUNTS = SharedArrays.SharedArray{Int64,3}(NPOOLS, 6, size(SYNC)[1])
+# # 	progress_bar = ProgressMeter.Progress(NPOOLS, dt=1, desc="Converting the sync file into a SharedArray of allele counts: ",  barglyphs=BarGlyphs("[=> ]"), barlen=50, color=:yellow)
+# # 	for i in 1:NPOOLS
+# # 		COUNTS[i,:,:] = parse.(Int64, hcat(split.(SYNC[:, 4:(NPOOLS+3)], [':'])[:, i]...))
+# # 		ProgressMeter.update!(progress_bar, i)
+# # 	end
+# # 	### output shared arrays
+# # 	alpha_out = SharedArrays.SharedArray{Float64,1}(NSNP*6)
+# # 	allele_id = SharedArrays.SharedArray{Int64,1}(NSNP*6)
+# # 	locus_id = SharedArrays.SharedArray{Int64,1}(NSNP*6)
+# # 	locus_w_eff = SharedArrays.SharedArray{Int64,1}(NSNP*6)
+# # 	allele_freq = SharedArrays.SharedArray{Float64,1}(NSNP*6)
+
+# # 	if length(Distributed.procs()) > 1
+# # 		println("Performing GWAlpha_ML in parallel...")
+# # 	 	@time x = @sync @distributed for snp in 1:NSNP
+# # 			# println(snp)
+# # 			OUT = GWAlpha_ML_iterator(COUNTS, snp, BINS, MAF, MIN, MAX, SD)
+# # 			idx = collect(((6*snp)-5):(6*snp))
+# # 			alpha_out[idx] = OUT[1]
+# # 			allele_id[idx] = OUT[2]
+# # 			locus_id[idx] = OUT[3]
+# # 			locus_w_eff[idx] = OUT[4]
+# # 			allele_freq[idx] = OUT[5]
+# # 		end
+# # 	else
+# # 		for snp in 1:NSNP
+# # 			# println(snp)
+# # 			OUT = GWAlpha_ML_iterator(COUNTS, snp, BINS, MAF, MIN, MAX, SD)
+# # 			idx = collect(((6*snp)-5):(6*snp))
+# # 			alpha_out[idx] = OUT[1]
+# # 			allele_id[idx] = OUT[2]
+# # 			locus_id[idx] = OUT[3]
+# # 			locus_w_eff[idx] = OUT[4]
+# # 			allele_freq[idx] = OUT[5]
+# # 		end
+# # 	end
+# # 	ALPHA_OUT = alpha_out[locus_w_eff .== 1]
+# # 	ALLELE_ID_INT = allele_id[locus_w_eff .== 1]
+# # 	LOCUS_ID = locus_id[locus_w_eff .== 1]
+# # 	LOCUS_W_EFF = locus_w_eff[locus_w_eff .== 1]
+# # 	ALLELE_FREQ = allele_freq[locus_w_eff .== 1]
+
+# # 	### estimate heuristic p-values
+# # 	P_VALUES, LOD = significance_testing_module.estimate_pval_lod(convert(Array{Float64,1}, ALPHA_OUT))
+# # 	### output
+# # 	ALLELE_ID = repeat(["N"], inner=length(ALLELE_ID_INT))
+# # 	for i in 1:length(ALLELE_ID) #convert int allele ID into corresponding A, T, C, G, N, DEL
+# # 		if ALLELE_ID_INT[i] == 1; ALLELE_ID[i] = "A"
+# # 		elseif ALLELE_ID_INT[i] == 2; ALLELE_ID[i] = "T"
+# # 		elseif ALLELE_ID_INT[i] == 3; ALLELE_ID[i] = "C"
+# # 		elseif ALLELE_ID_INT[i] == 4; ALLELE_ID[i] = "G"
+# # 		elseif ALLELE_ID_INT[i] == 5; ALLELE_ID[i] = "N"
+# # 		elseif ALLELE_ID_INT[i] == 6; ALLELE_ID[i] = "DEL"
+# # 		end
+# # 	end
+# # 	OUT = (CHROM=convert(Array{Any,1},SYNC[LOCUS_ID,1]), POS=convert(Array{Int64,1},SYNC[LOCUS_ID,2]), ALLELE=convert(Array{Any,1},ALLELE_ID), FREQ=convert(Array{Float64,1},ALLELE_FREQ), ALPHA=convert(Array{Float64},ALPHA_OUT), PVALUES=convert(Array{Float64},P_VALUES), LOD=convert(Array{Float64},LOD))
+# # 	return(OUT)
+# # end
+
+
+
+# # @time vec_b, vec_t, vec_pval, vec_lod = GWAS_SIMPLREG(y, X)
+# # m_simplreg = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod, "Iterative")
+# # q_simplreg = GWAS_PLOT_QQ(vec_lod, "Iterative")
+# # a_simplreg = GWAS_PLOT(vec_chr, vec_pos, vec_lod)
+
+# # vec_pval, vec_lod = ESTIMATE_PVAL_LOD(vec_b)
+# # m_simplreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod, "Iterative (heuristic pval)")
+# # q_simplreg_H = GWAS_PLOT_QQ(vec_lod, "Iterative (heuristic pval)")
+# # a_simplreg_H = GWAS_PLOT(vec_chr, vec_pos, vec_lod)
+
+# # vec_b = GWAS_MULTIREG(y, X)
+# # vec_pval, vec_lod = ESTIMATE_PVAL_LOD(vec_b)
+# # m_mutltreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod, "Multiple (heuristic pval)")
+# # q_mutltreg_H = GWAS_PLOT_QQ(vec_lod, "Multiple (heuristic pval)")
+# # a_mutltreg_H = GWAS_PLOT(vec_chr, vec_pos, vec_lod)
+
+# # vec_b, vec_t, vec_pval, vec_lod = GWAS_SIMULREG(y, X)
+# # m_simulreg = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod, "Simulated iterative")
+# # q_simulreg = GWAS_PLOT_QQ(vec_lod, "Simulated iterative")
+# # a_simulreg = GWAS_PLOT(vec_chr, vec_pos, vec_lod)
+
+# # vec_pval, vec_lod = ESTIMATE_PVAL_LOD(Float64.(vec_b))
+# # m_simulreg_H = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod, "Simulated iterative (heuristic pval")
+# # q_simulreg_H = GWAS_PLOT_QQ(vec_lod, "Simulated iterative (heuristic pval")
+# # a_simulreg_H = GWAS_PLOT(vec_chr, vec_pos, vec_lod)
+
+# # # Plots.plot(m_simplreg, m_simplreg_H, m_mutltreg_H, m_simulreg, m_simulreg_H, layout=(5, 1))
+# # Plots.plot(m_simplreg, m_simplreg_H, m_mutltreg_H, m_simulreg_H, layout=(2, 2))
+# # Plots.plot(q_simplreg, q_simplreg_H, q_mutltreg_H, q_simulreg_H, layout=(2, 2))
+
+# # Plots.plot(m_simplreg, q_simplreg, m_simplreg_H, q_simplreg_H, m_mutltreg_H, q_mutltreg_H, m_simulreg_H, q_simulreg_H, layout=(4, 2))
 
 
 
