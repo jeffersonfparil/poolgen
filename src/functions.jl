@@ -511,7 +511,7 @@ function CONVERT(syncx_or_sync::String, init::Int, term::Int, out::String="")::S
     seek(file, init)
     file_out = open(out, "a")
 
-    p = length(split(split(readline(file), "\t")[3], ":"))
+    p = length(split(split(readline(file), "\t")[end], ":"))
     ### Filter
     if p == 7
         ### SYNCX to SYNC
@@ -525,6 +525,7 @@ function CONVERT(syncx_or_sync::String, init::Int, term::Int, out::String="")::S
             for i in 1:n
                 line[i+2] = join(X[i,:], ":")
             end
+            line = vcat(line[1:2], "N", line[3:end])
             line = string(join(line, "\t"), "\n")
             write(file_out, line)
         end
@@ -533,12 +534,13 @@ function CONVERT(syncx_or_sync::String, init::Int, term::Int, out::String="")::S
         seek(file, init)
         while position(file) < term
             line = split(readline(file), "\t")
-            n = length(line) - 2
-            X = parse.(Int, reshape(vcat(split.(line[3:end], ":")...), 6, n))'
+            n = length(line) - 3
+            X = parse.(Int, reshape(vcat(split.(line[4:end], ":")...), 6, n))'
             X = hcat(X[:,1:4], zeros(Int64, n), X[:,5:end])
             for i in 1:n
-                line[i+2] = join(X[i,:], ":")
+                line[i+3] = join(X[i,:], ":")
             end
+            line = vcat(line[1:2], line[4:end]) ### remove reference allele column
             line = string(join(line, "\t"), "\n")
             write(file_out, line)
         end
