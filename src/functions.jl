@@ -13,6 +13,7 @@ using MultivariateStats
 using ProgressMeter
 using LinearAlgebra
 using Distributions
+using Optim
 using Plots
 
 include("structs.jl")
@@ -434,30 +435,6 @@ function PILEUP2SYNCX(pileup::String, init::Int, term::Int, out::String="")::Str
     return(out)
 end
 
-function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[0], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])::Phenotype
-    # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.csv"
-    # delimiter = ","
-    # header = true
-    # id_col = 3 ### pool IDs
-    # phenotype_cols = [8, 9] ### colorimetric resistance metric, and survival rate
-    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    file = open(phenotype, "r")
-    if header
-        header_line = convert(Vector{String}, split(readline(file), delimiter))
-    end
-    lines = []
-    while !eof(file)
-        l = readline(file)
-        m = length(split(l, delimiter))
-        if phenotype_cols==[0]
-            phenotype_cols = collect(1:m)[collect(1:m) .!= id_col]
-        end
-        push!(lines, PARSE(PhenotypeLine(1, l, delimiter, id_col, phenotype_cols), header_line[phenotype_cols], missing_strings))
-    end
-    close(file)
-    return(PARSE(convert(Vector{Phenotype}, lines), header_line[phenotype_cols]))
-end
-
 function LOAD(syncx::String, count::Bool)::Window
     # include("user_functions.jl"); using .user_functions: pileup2syncx
     # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
@@ -482,7 +459,53 @@ function LOAD(syncx::String, count::Bool)::Window
     return(GENOTYPE)
 end
 
-function LOAD(py_phenotype::String)::Tuple{String, Float64, Float64, Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}}
+function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[0], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])::Phenotype
+    # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.csv"
+    # delimiter = ","
+    # header = true
+    # id_col = 3 ### pool IDs
+    # phenotype_cols = [8, 9] ### colorimetric resistance metric, and survival rate
+    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    file = open(phenotype, "r")
+    if header
+        header_line = convert(Vector{String}, split(readline(file), delimiter))
+    end
+    lines = []
+    while !eof(file)
+        l = readline(file)
+        m = length(split(l, delimiter))
+        if phenotype_cols==[0]
+            phenotype_cols = collect(1:m)[collect(1:m) .!= id_col]
+        end
+        push!(lines, PARSE(PhenotypeLine(1, l, delimiter, id_col, phenotype_cols), header_line[phenotype_cols], missing_strings))
+    end
+    close(file)
+    return(PARSE(convert(Vector{Phenotype}, lines), header_line[phenotype_cols]))
+end
+
+function LOAD_OUT(tsv_gwalpha::String, include_all_sites::Bool=false)::Tuple{Vector{String}, Vector{Int64}, Vector{String}, Vector{Float64}, Vector{Float64}}
+    # tsv_gwalpha = "/home/jeffersonfparil/Documents/poolgen/test/test_3-GWAlpha-maf_0.001.tsv"
+    file = open(tsv_gwalpha, "r")
+    vec_chr = []
+    vec_pos = []
+    vec_allele = []
+    vec_freq = []
+    vec_alpha = []
+    while !eof(file)
+        line = split(readline(file), "\t")
+        if (include_all_sites == false) & (line[4] != "0")
+            push!(vec_chr, line[1])
+            push!(vec_pos, parse(Int, line[2]))
+            push!(vec_allele, line[3])
+            push!(vec_freq, parse(Float64, line[5]))
+            push!(vec_alpha, parse(Float64, line[6]))
+        end
+    end
+    close(file)
+    return(vec_chr, vec_pos, vec_allele, vec_freq, vec_alpha)
+end
+
+function LOAD_PY(py_phenotype::String)::Tuple{String, Float64, Float64, Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}}
     # py_phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.py"
     file = open(py_phenotype, "r")
     phenotype_name = replace(replace(split(readline(file), "=")[end], "\"" => ""), ";" => "")
@@ -918,7 +941,7 @@ function NLL_BETA(beta::Array{Float64,1}, data_A::Array{Float64,1}, data_B::Arra
 		 )
 end
 
-function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, out::String="")
+function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, maf::Float64, out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # py_phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.py"
     # file = open(syncx, "r")
@@ -928,13 +951,15 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     # close(file)
     # init = vec_positions[2] # init = 0
     # term = vec_positions[3] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
+    # maf = 0.001
     # out = ""
     ### Output syncx
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWAlpha.tsv")
     end
+    file_out = open(out, "a")
     ### Extract phenotype information
-    phenotype_name, sigma, min, max, perc, q, bins = LOAD(py_phenotype)
+    phenotype_name, sigma, min, max, perc, q, bins = LOAD_PY(py_phenotype)
     ### Open syncx file
     file = open(syncx, "r")
     ### Set position to the next line if the current position is a truncated line
@@ -947,191 +972,78 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     end
     seek(file, init)
     ### GWAlpha iteratively
+    # vec_alpha = []
+    # vec_chr = []
+    # vec_pos = []
+    # vec_allele = []
+    # vec_1 = []
+    # vec_pA = []
+    vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     i = init
     while (i < term) & (!eof(file))
         i = position(file)
-        locus = PARSE([PARSE(SyncxLine(j, readline(file)))])
-        freqs = locus.cou ./ sum(locus.cou, dims=2)
+        locus = PARSE([PARSE(SyncxLine(i, readline(file)))])
+        freqs = (locus.cou ./ sum(locus.cou, dims=1))'
         freqs[isnan.(freqs)] .= 0.0
-	    allele_freqs = sum(freqs' .* bins, dims=1)
+	    allele_freqs = sum(freqs .* bins, dims=1)
+        if (sum(locus.cou) != 0.0)
+            if (minimum(allele_freqs[allele_freqs .!= 0.0]) >= maf) & (maximum(allele_freqs) < (1.0 - maf)) #locus filtering by mean MAF
+                for allele in 1:7
+                    # allele = 1
+                    if (allele_freqs[allele] > 0.0) & (maximum(freqs[:,allele]) < 0.999999)  #allele filtering remove alleles with no counts and that the number of pools with allele frequency close to one should not occur even once!
+                        freqA = freqs[:, allele]
+                        pA = sum(freqA .* bins)
+                        pB = 1 - pA
+                        binA = (freqA .* bins) ./ pA
+                        binB = ( (1 .- freqA) .* bins ) ./ (1-pA)
+                        percA = cumsum(binA)
+                        percB = cumsum(binB)
+                        ### optimize (minimize) -log-likelihood of these major allele frequencies modelled as a beta distribution
+                        # using Nelder-Mead optimization or Box minimisation (try-catch if one or the other fails with preference to Nelder-Mead)
+                        lower_limits = [1e-20, 1e-20, 1e-20, 1e-20]
+                        upper_limits = [1.0, 1.0, 1.0, 1.0]
+                        initial_values = [0.1, 0.1, 0.1, 0.1]
+                        b = try
+                            Optim.optimize(beta->NLL_BETA(beta, percA, percB), initial_values, NelderMead())
+                        catch
+                            try
+                                Optim.optimize(beta->NLL_BETA(beta, percA, percB), lower_limits, upper_limits, initial_values)
+                            catch ### lower limits of 1e-20 to 1e-6 causes beta dist parameter values to shrink to zero somehow - so we're setting lower limits to 1e-5 instead
+                                lower_limits = [1e-5, 1e-5, 1e-5, 1e-5]
+                                Optim.optimize(beta->NLL_BETA(beta, percA, percB), lower_limits, upper_limits, initial_values)
+                            end
+                        end
+                        muA = min + ((max-min)*b.minimizer[1]/(b.minimizer[1]+b.minimizer[2]))
+                        muB = min + ((max-min)*b.minimizer[3]/(b.minimizer[3]+b.minimizer[4]))
+                        ### compute alpha
+                        w_penalty = 2*sqrt(pA*pB)
+                        a = w_penalty*(muA - muB) / sigma
+                        line = join([locus.chr[1], locus.pos[1], vec_alleles[allele], 1, pA, a], "\t")
+                        # append!(vec_alpha, a)
+                        # append!(vec_chr, locus.chr)
+                        # append!(vec_pos, locus.pos)
+                        # append!(vec_allele, allele)
+                        # append!(vec_1, 1)
+                        # append!(vec_pA, pA)
+                    else
+                        ## for explicit zero effects for null (low to none) frequency alleles
+                        line = join([locus.chr[1], locus.pos[1], vec_alleles[allele], 0, allele_freqs[allele], 0.0], "\t")
+                        # append!(vec_alpha, 0.0)
+                        # append!(vec_chr, locus.chr)
+                        # append!(vec_pos, locus.pos)
+                        # append!(vec_allele, allele)
+                        # append!(vec_1, 0)
+                        # append!(vec_pA, allele_freqs[allele])
+                    end
+                    write(file_out, string(line, "\n"))
+                end
+            end
+        end
     end
-
+    close(file)
+    close(file_out)
+    return(out)
 end
-
-
-function GWAlpha_ML_iterator(COUNTS::SharedArray{Int64,3}, snp::Int64, BINS::Array{Float64,1}, MAF::Float64, MIN::Float64, MAX::Float64, SD::Float64)
-	OUT_ALPHA = convert(Array{Float64}, zeros(6))
-	OUT_allele = zeros(6)
-	OUT_snp = zeros(6)
-	OUT_1 = zeros(6)
-	OUT_pA = convert(Array{Float64}, zeros(6))
-	# #parse allele counts from the sync file
-	# COUNTS = zeros(Int64, NPOOLS, 6)
-	# for i in 1:NPOOLS
-	# 	COUNTS[i,:] = [parse(Int64, x) for x in split.(SYNC[snp, 4:(NPOOLS+3)], [':'])[i]]
-	# end
-	#convert to frequencies per pool
-	counts = COUNTS[:,:,snp]
-	FREQS = counts ./ ( sum(counts, dims=2) .+ 1e-10 ) #added 1e-10 to the denominator to avoid NAs in pools with no allele counts (zero depth; which should actually have been filtered out after mpileup using awk)
-	allele_freqs = sum(FREQS .* BINS, dims=1)
-	#iterate across alleles while filtering by MAF
-	if (sum(counts) != 0.0)
-		if (minimum(allele_freqs[allele_freqs .!= 0.0]) >= MAF) & (maximum(allele_freqs) < (1.0 - MAF)) #locus filtering by mean MAF
-			for allele in 1:6
-				if (allele_freqs[allele] > 0.0) & (maximum(FREQS[:,allele]) < 0.999999)  #allele filtering remove alleles with no counts and that the number of pools with allele frequency close to one should not occur even once!
-				# if (sum(FREQS[:,allele] .== 0.0) < NPOOLS) & (sum(FREQS[:,allele] .> 0.999999) < 1) #filter-out alleles with at least 1 pool fixed for that allele because it causes a failure in the optimization
-					freqA = FREQS[:, allele]
-					pA = sum(freqA .* BINS)
-					pB = 1 - pA
-					BINA = (freqA .* BINS) ./ pA
-					BINB = ( (1 .- freqA) .* BINS ) ./ (1-pA)
-					percA = cumsum(BINA)
-					percB = cumsum(BINB)
-
-					### optimize (minimize) -log-likelihood of these major allele frequencies modelled as a beta distribution
-					# using Nelder-Mead optimization or Box minimisation (try-catch if one or the other fails with preference to Nelder-Mead)
-					lower_limits = [1e-20, 1e-20, 1e-20, 1e-20]
-					upper_limits = [1.0, 1.0, 1.0, 1.0]
-					initial_values = [0.1, 0.1, 0.1, 0.1]
-					BETA = try
-						Optim.optimize(beta->NLL_BETA(beta, percA, percB), initial_values, NelderMead())
-					catch
-						try
-							Optim.optimize(beta->NLL_BETA(beta, percA, percB), lower_limits, upper_limits, initial_values)
-						catch ### lower limits of 1e-20 to 1e-6 causes beta dist parameter values to shrink to zero somehow - so we're setting lower limits to 1e-5 instead
-							lower_limits = [1e-5, 1e-5, 1e-5, 1e-5]
-							Optim.optimize(beta->NLL_BETA(beta, percA, percB), lower_limits, upper_limits, initial_values)
-						end
-					end
-					MU_A = MIN + ((MAX-MIN)*BETA.minimizer[1]/(BETA.minimizer[1]+BETA.minimizer[2]))
-					MU_B = MIN + ((MAX-MIN)*BETA.minimizer[3]/(BETA.minimizer[3]+BETA.minimizer[4]))
-
-					### compute alpha
-					W_PENAL = 2*sqrt(pA*pB)
-					ALPHA = W_PENAL*(MU_A - MU_B) / SD
-					OUT_ALPHA[allele] =  ALPHA
-					OUT_allele[allele] =  allele
-					OUT_snp[allele] =  snp
-					OUT_1[allele] =  1
-					OUT_pA[allele] =  pA
-				else
-					## for explicit zero effects for null (low to none) frequency alleles
-					OUT_ALPHA[allele] =  0.0
-					OUT_allele[allele] =  allele
-					OUT_snp[allele] =  snp
-					OUT_1[allele] =  0
-					OUT_pA[allele] =  allele_freqs[allele]
-				end
-			end
-		end
-	end
-	return([OUT_ALPHA, OUT_allele, OUT_snp, OUT_1, OUT_pA])
-end
-
-function GWAlpha_ML(;filename_sync::String, filename_phen_py::String, MAF::Float64)
-	### load the sync and phenotype files
-	SYNC = DelimitedFiles.readdlm(filename_sync, '\t')
-	phen = DelimitedFiles.readdlm(filename_phen_py, '\t')
-
-	### gather phenotype specifications
-	NPOOLS = length(split(phen[5], ['=', ',', '[', ']', ';'])) - 3 #less the first leading and trailing elements
-	if length(split(phen[1], ['=', '\"'])) < 3
-		global NAME = split(phen[1], ['=', '\''])[3]
-	else
-		global NAME = split(phen[1], ['=', '\"'])[3]
-	end
-	SD = parse.(Float64, split(phen[2], ['=',';'])[2])
-	MIN = parse.(Float64, split(phen[3], ['=',';'])[2])
-	MAX = parse.(Float64, split(phen[4], ['=',';'])[2])
-	PERC = parse.(Float64, split(phen[5], ['=', ',', '[', ']', ';'])[3:(NPOOLS+1)])
-	QUAN = parse.(Float64, split(phen[6], ['=', ',', '[', ']', ';'])[3:(NPOOLS+1)])
-	BINS = append!([x for x in PERC], 1) - append!(zeros(1), PERC)
-
-	### gather genotype (allele frequency) specifications
-	NSNP = size(SYNC)[1]
-	n_pools_sync = size(SYNC)[2] - 3
-	if NPOOLS != n_pools_sync
-		println("The number of pools with phenotype data does not match the number of pools with allele frequency data!")
-		println("Please check you input files :-)")
-		println("Remove leading and intervening whitespaces in the phenotype file.")
-		exit()
-	else
-		n_pools_sync = nothing #clear out contents of this redundant n_pools variable
-	end
-
-	### creating an allele counts SharedArray from SYNC to minimize memory usage
-	### input shared array
-	COUNTS = SharedArrays.SharedArray{Int64,3}(NPOOLS, 6, size(SYNC)[1])
-	progress_bar = ProgressMeter.Progress(NPOOLS, dt=1, desc="Converting the sync file into a SharedArray of allele counts: ",  barglyphs=BarGlyphs("[=> ]"), barlen=50, color=:yellow)
-	for i in 1:NPOOLS
-		COUNTS[i,:,:] = parse.(Int64, hcat(split.(SYNC[:, 4:(NPOOLS+3)], [':'])[:, i]...))
-		ProgressMeter.update!(progress_bar, i)
-	end
-	### output shared arrays
-	alpha_out = SharedArrays.SharedArray{Float64,1}(NSNP*6)
-	allele_id = SharedArrays.SharedArray{Int64,1}(NSNP*6)
-	locus_id = SharedArrays.SharedArray{Int64,1}(NSNP*6)
-	locus_w_eff = SharedArrays.SharedArray{Int64,1}(NSNP*6)
-	allele_freq = SharedArrays.SharedArray{Float64,1}(NSNP*6)
-
-	if length(Distributed.procs()) > 1
-		println("Performing GWAlpha_ML in parallel...")
-	 	@time x = @sync @distributed for snp in 1:NSNP
-			# println(snp)
-			OUT = GWAlpha_ML_iterator(COUNTS, snp, BINS, MAF, MIN, MAX, SD)
-			idx = collect(((6*snp)-5):(6*snp))
-			alpha_out[idx] = OUT[1]
-			allele_id[idx] = OUT[2]
-			locus_id[idx] = OUT[3]
-			locus_w_eff[idx] = OUT[4]
-			allele_freq[idx] = OUT[5]
-		end
-	else
-		for snp in 1:NSNP
-			# println(snp)
-			OUT = GWAlpha_ML_iterator(COUNTS, snp, BINS, MAF, MIN, MAX, SD)
-			idx = collect(((6*snp)-5):(6*snp))
-			alpha_out[idx] = OUT[1]
-			allele_id[idx] = OUT[2]
-			locus_id[idx] = OUT[3]
-			locus_w_eff[idx] = OUT[4]
-			allele_freq[idx] = OUT[5]
-		end
-	end
-	ALPHA_OUT = alpha_out[locus_w_eff .== 1]
-	ALLELE_ID_INT = allele_id[locus_w_eff .== 1]
-	LOCUS_ID = locus_id[locus_w_eff .== 1]
-	LOCUS_W_EFF = locus_w_eff[locus_w_eff .== 1]
-	ALLELE_FREQ = allele_freq[locus_w_eff .== 1]
-
-	### estimate heuristic p-values
-	P_VALUES, LOD = significance_testing_module.estimate_pval_lod(convert(Array{Float64,1}, ALPHA_OUT))
-	### output
-	ALLELE_ID = repeat(["N"], inner=length(ALLELE_ID_INT))
-	for i in 1:length(ALLELE_ID) #convert int allele ID into corresponding A, T, C, G, N, DEL
-		if ALLELE_ID_INT[i] == 1; ALLELE_ID[i] = "A"
-		elseif ALLELE_ID_INT[i] == 2; ALLELE_ID[i] = "T"
-		elseif ALLELE_ID_INT[i] == 3; ALLELE_ID[i] = "C"
-		elseif ALLELE_ID_INT[i] == 4; ALLELE_ID[i] = "G"
-		elseif ALLELE_ID_INT[i] == 5; ALLELE_ID[i] = "N"
-		elseif ALLELE_ID_INT[i] == 6; ALLELE_ID[i] = "DEL"
-		end
-	end
-	OUT = (CHROM=convert(Array{Any,1},SYNC[LOCUS_ID,1]), POS=convert(Array{Int64,1},SYNC[LOCUS_ID,2]), ALLELE=convert(Array{Any,1},ALLELE_ID), FREQ=convert(Array{Float64,1},ALLELE_FREQ), ALPHA=convert(Array{Float64},ALPHA_OUT), PVALUES=convert(Array{Float64},P_VALUES), LOD=convert(Array{Float64},LOD))
-	return(OUT)
-end
-
-
-
-
-
-
-
-
-
-
-
-
 
 function BEST_FITTING_DISTRIBUTION(vec_b::Vector{Float64})
     DIST_NAMES =   [Distributions.Bernoulli, Distributions.Beta, Distributions.Binomial, Distributions.Categorical,
@@ -1243,12 +1155,34 @@ function GWAS_PLOT_QQ(vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Pl
     return(p2)
 end
 
-function GWAS_PLOT(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64})::Plots.Plot{Plots.GRBackend}
+function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plot{Plots.GRBackend}
+    # tsv_gwalpha = "/home/jeffersonfparil/Documents/poolgen/test/test_3-GWAlpha-maf_0.001.tsv"
+    # estimate_empirical_lod = true
+    vec_chr, vec_pos, vec_allele, vec_freq, vec_alpha = LOAD_OUT(tsv_gwalpha)
+    if estimate_empirical_lod
+        vec_lod = ESTIMATE_LOD(vec_alpha)
+    end
     p1 = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
     p2 = GWAS_PLOT_QQ(vec_lod)
     p3 = Plots.plot(p1, p2, layout=(2,1))
     return(p3)
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function GWAS_MULTIREG(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
     X = hcat(ones(size(X, 1)), Float64.(X))

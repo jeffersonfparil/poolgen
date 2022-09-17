@@ -11,7 +11,7 @@ using ProgressMeter
 
 include("functions.jl")
 using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
-using .functions: PARSE, SPLIT, MERGE, CONVERT, PILEUP2SYNCX, LOAD, FILTER, IMPUTE, SAVE
+using .functions: PARSE, SAVE, SPLIT, MERGE, CONVERT, PILEUP2SYNCX, FILTER, IMPUTE, GWALPHA
 
 function convert(syncx_or_sync::String; out::String="")::String
     # using Distributed
@@ -220,6 +220,47 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     else
         MERGE(filenames_out, out)
     end
+    return(out)
+end
+
+function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, out::String="")::String
+    # using Distributed
+    # Distributed.addprocs(length(Sys.cpu_info())-1)
+    # @everywhere using ProgressMeter
+    # @everywhere include("functions.jl")
+    # @everywhere include("user_functions.jl")
+    # @everywhere using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
+    # @everywhere using .functions: SPLIT, MERGE, GWALPHA
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
+    # py_phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.py"
+    # maf = 0.001
+    # out = ""
+    ### Define output file if not specified
+    if out == ""
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWAlpha-maf_", round(maf, digits=5), ".tsv")
+    end
+    ### Define the full path to the input and output files since calling functions within @distributed loop will revert back to the root directory from where julia was executed from
+    if dirname(syncx) == ""
+        syncx = string(pwd(), "/", syncx)
+    end
+    if dirname(out) == ""
+        out = string(pwd(), "/", out)
+    end
+    ### Find file positions for parallel processing
+    threads = length(Distributed.workers())
+    positions_init, positions_term = SPLIT(threads, syncx)
+    digit = length(string(length(positions_init)))
+    ### Impute
+    @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
+        init = positions_init[i]
+        term = positions_term[i]
+        id = lpad(i, (digit+1)-length(string(i)), "0")
+        tmp = string(syncx, "-GWAlpha-", id, ".tsv.tmp")
+        filename = GWALPHA(syncx, py_phenotype, init, term, maf, tmp)
+        [filename]
+    end
+    ### Merge the chunks
+    MERGE(filenames_out, out)
     return(out)
 end
 
