@@ -223,7 +223,7 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     return(out)
 end
 
-function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, out::String="")::String
+function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
     # @everywhere using ProgressMeter
@@ -234,6 +234,7 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, out::
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # py_phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.py"
     # maf = 0.001
+    # penalty = false
     # out = ""
     ### Define output file if not specified
     if out == ""
@@ -256,7 +257,7 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, out::
         term = positions_term[i]
         id = lpad(i, (digit+1)-length(string(i)), "0")
         tmp = string(syncx, "-GWAlpha-", id, ".tsv.tmp")
-        filename = GWALPHA(syncx, py_phenotype, init, term, maf, tmp)
+        filename = GWALPHA(syncx, py_phenotype, init, term, maf, penalty, tmp)
         [filename]
     end
     ### Merge the chunks

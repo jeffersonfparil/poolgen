@@ -941,7 +941,7 @@ function NLL_BETA(beta::Array{Float64,1}, data_A::Array{Float64,1}, data_B::Arra
 		 )
 end
 
-function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, maf::Float64, out::String="")::String
+function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, maf::Float64, penalty::Bool=true, out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # py_phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.py"
     # file = open(syncx, "r")
@@ -952,6 +952,7 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     # init = vec_positions[2] # init = 0
     # term = vec_positions[3] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
     # maf = 0.001
+    # penalty = true
     # out = ""
     ### Output syncx
     if out==""
@@ -1016,7 +1017,11 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
                         muA = min + ((max-min)*b.minimizer[1]/(b.minimizer[1]+b.minimizer[2]))
                         muB = min + ((max-min)*b.minimizer[3]/(b.minimizer[3]+b.minimizer[4]))
                         ### compute alpha
-                        w_penalty = 2*sqrt(pA*pB)
+                        if penalty
+                            w_penalty = 2*sqrt(pA*pB)
+                        else
+                            w_penalty = 1.0
+                        end
                         a = w_penalty*(muA - muB) / sigma
                         line = join([locus.chr[1], locus.pos[1], vec_alleles[allele], 1, pA, a], "\t")
                         # append!(vec_alpha, a)
