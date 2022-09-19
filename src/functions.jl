@@ -459,7 +459,7 @@ function LOAD(syncx::String, count::Bool)::Window
     return(GENOTYPE)
 end
 
-function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[0], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])::Phenotype
+function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[8,9], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])::Phenotype
     # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.csv"
     # delimiter = ","
     # header = true
@@ -982,8 +982,8 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     i = init
     while (i < term) & (!eof(file))
-        i = position(file)
         locus = PARSE([PARSE(SyncxLine(i, readline(file)))])
+        i = position(file)
         freqs = (locus.cou ./ sum(locus.cou, dims=1))'
         freqs[isnan.(freqs)] .= 0.0
 	    allele_freqs = sum(freqs .* bins, dims=1)
@@ -1081,47 +1081,6 @@ function ESTIMATE_LOD(vec_b::Vector{Float64})::Vector{Float64}
     return(LOD)
 end
 
-function GWAS_SIMPLREG(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
-    n, m = size(X)
-    k = 2 ### 1st df for intercept, and the second df for the allele
-    vec_b = []
-    vec_t = []
-    vec_pval = []
-    for i in 1:m
-        # i = 1
-        x = hcat(ones(n), X[:, i])
-        b = try
-                inv(x' * x) * x' * y
-            catch
-                pinv(x' * x) * x' * y
-            end
-        ε = y - (x * b)
-        V_ε = (ε' * ε) / (n-k)
-        se_ε = sqrt(V_ε)
-        COV_b = V_ε * inv(x' * x)
-        se_b = sqrt.([COV_b[1,1], COV_b[k,k]])
-        t = b ./ se_b
-        pval = Distributions.ccdf(Distributions.Chisq(k-1), t.^2)
-        # pval = Distributions.cdf(Distributions.Normal(), -abs.(t)) + Distributions.ccdf(Distributions.Normal(), +abs.(t))
-        append!(vec_b,    b[k])
-        append!(vec_t,    t[k])
-        append!(vec_pval, pval[k])
-    end
-    vec_lod = -log10.(vec_pval)
-    # ### TEST PLOTS
-    # LOD           = -log10.(vec_pval)
-    # LOD_expected  = -log10.(cdf(Distributions.Uniform(0, 1), (collect(1:m) .- 0.5) ./ m))
-    # LOD_threshold = -log10(0.05/m)
-    # p1 = Plots.scatter(vec_b, legend=false)
-    # p2 = Plots.scatter(LOD)
-    # p3 = Plots.scatter(sort(LOD_expected), sort(LOD))
-    # Plots.plot!([0,1], [0,1], seriestype=:straightline)
-    # p4 = Plots.scatter(sort(LOD_expected)[1:(end-10)], sort(LOD)[1:(end-10)])
-    # Plots.plot!([0,1], [0,1], seriestype=:straightline)
-    # Plots.plot(p1, p2, p3, p4, layout=(2,2))
-    return(vec_b, vec_t, vec_pval, vec_lod)
-end
-
 function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Plots.GRBackend}
     ### add lengths of all the chromosome to find xlim!!!!
     names_chr = sort(unique(vec_chr)) 
@@ -1172,6 +1131,121 @@ function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plo
     p3 = Plots.plot(p1, p2, layout=(2,1))
     return(p3)
 end
+
+function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], out::String="")::String
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
+    # close(file)
+    # init = vec_positions[2] # init = 0
+    # term = vec_positions[3] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
+    # maf = 0.001
+    # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.csv"
+    # delimiter = ","
+    # header = true
+    # id_col = 3 ### pool IDs
+    # phenotype_col = 9 ### survival rate
+    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # out = ""
+    ### Output syncx
+    if out==""
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWASIMPLEREG.tsv")
+    end
+    file_out = open(out, "a")
+    ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
+    P = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
+    y = P.phe[:,1]
+    y = (y .- mean(y)) ./ std(y)
+    n = length(y)
+    ### Open syncx file
+    file = open(syncx, "r")
+    ### Set position to the next line if the current position is a truncated line
+    if (init>0)
+        seek(file, init-1)
+        line = readline(file)
+        if line != ""
+            init = position(file)
+        end
+    end
+    seek(file, init)
+
+    vec_chr = []
+    vec_pos = []
+    vec_allele = []
+    vec_b = []
+    vec_σb = []
+    vec_pval = []
+    vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
+    i = init
+    while (i < term) & (!eof(file))
+        locus = PARSE([PARSE(SyncxLine(i, readline(file)))])
+        i = position(file)
+        X = locus.cou ./ sum(locus.cou, dims=1)
+        X = X'
+        if  (minimum(X[X .!= 0.0]) .>= maf) & (maximum(X[X .!= 0.0]) .<= (1 - maf))
+            idx = collect(1:7)[(var(X, dims=1) .> 0.0)[1, :]]
+            freqs = mean(X[:, idx], dims=1)[1,:]
+            idx = idx[freqs .!= maximum(freqs)]
+            X = X[:, idx]
+            n, k = size(X)
+            a = vec_alleles[idx]
+            # Remove completey correlated alleles
+            if k > 1
+                C = LinearAlgebra.triu(cor(X), 1)
+                idx = .!(maximum(C, dims=1) .≈ 1.0)[1, :]
+                X = X[:, idx]
+                a = a[idx]
+            end
+            n, k = size(X)
+            V =try
+                inv(X' * X)
+            catch
+                pinv(X' * X)
+            end
+            b = V * X' * y
+            ε = y - (X * b)
+            Vε = (ε' * ε) / (n-k)
+            if Vε < 0.0
+                Vε = abs(Vε)
+            elseif Vε == Inf
+                Vε = 1e-10
+            end
+            Vb = Vε * V
+            Vb = Vb .- minimum(Vb)
+            σb = []
+            for i in 1:k
+                # i = 1
+                append!(σb, sqrt(Vb[i,i]))
+            end
+
+            ### Correcting for the likelihood orrank correlation with small number of pools
+            b = b .* (1 - (((n^2 - 1) / (2*n^2))^n))
+            t = b ./ σb
+            pval = Distributions.ccdf(Distributions.Chisq(k), t.^2)
+            append!(vec_chr, repeat(locus.chr, inner=length(a)))
+            append!(vec_pos, repeat(locus.pos, inner=length(a)))
+            append!(vec_allele, a)
+            append!(vec_b, b)
+            append!(vec_σb, σb)
+            append!(vec_pval, pval)
+        end
+    end
+
+    # vec_lod = ESTIMATE_LOD(Float64.(vec_b))
+    vec_lod = -log10.(Float64.(vec_pval))
+    vec_lod[isnan.(vec_lod)] .= 0.0
+    vec_lod[vec_lod .== Inf] .= maximum(vec_lod[vec_lod .!= Inf])
+
+    GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_lod)
+    GWAS_PLOT_QQ(vec_lod)
+
+    return(out)
+end
+
+
+
 
 
 
