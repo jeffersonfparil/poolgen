@@ -1072,13 +1072,24 @@ function ESTIMATE_LOD(vec_b::Vector{Float64})::Vector{Float64}
     D, D_name = BEST_FITTING_DISTRIBUTION(vec_b)
     println(string("Distribution used: ", D_name))
     if (D == nothing) | (std(vec_b) == 0)
-        PVAL = repeat([1.0], inner=length(vec_b))
-        LOD = PVAL .- 1.0
+        pval = repeat([1.0], inner=length(vec_b))
+        lod = pval .- 1.0
     else
-        PVAL = [Distributions.cdf(D, x) <= Distributions.ccdf(D, x) ? 2*Distributions.cdf(D, x) : 2*Distributions.ccdf(D, x) for x in vec_b]
-        LOD = -log.(10, PVAL)
+        pval = [Distributions.cdf(D, x) <= Distributions.ccdf(D, x) ? 2*Distributions.cdf(D, x) : 2*Distributions.ccdf(D, x) for x in vec_b]
+        lod = -log.(10, pval)
     end
-    return(LOD)
+    return(lod)
+end
+
+function ESTIMATE_LOD(vec_b::Vector{Float64}, D)::Vector{Float64}
+    # D = [Distributions.Bernoulli, Distributions.Beta, Distributions.Binomial, Distributions.Categorical,
+    #      Distributions.DiscreteUniform, Distributions.Exponential, Distributions.Normal, Distributions.Gamma,
+    #      Distributions.Geometric, Distributions.Laplace, Distributions.Pareto, Distributions.Poisson,
+    #      Distributions.InverseGaussian, Distributions.Uniform][7]
+    distribution = Distributions.fit_mle(D, vec_b)
+    pval = [Distributions.cdf(distribution, x) <= Distributions.ccdf(distribution, x) ? 2*Distributions.cdf(distribution, x) : 2*Distributions.ccdf(distribution, x) for x in vec_b]
+    lod = -log.(10, pval)
+    return(lod)
 end
 
 function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Plots.GRBackend}
@@ -1132,6 +1143,129 @@ function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plo
     return(p3)
 end
 
+function BIULD_FOUNDING_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), vec_chr_lengths=[], vec_chr_names=[])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, BitArray}
+    # n = 2                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 2_300_000         ### total genome size
+    # k = 7                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### an arbitrarily large Int64 number to indicate no LD, i.e. the distance between the termini of 2 adjacent chromosomes is infinitely large LD-wise but we don;t want to use Inf as it is not Int64
+    # vec_chr_lengths = []  ### optional vector of chromosome lengths
+    # vec_chr_names = []    ### optional vector of chromosome names
+    ### Define lengths of each chromosome
+    if vec_chr_lengths == []
+        vec_chr_lengths = repeat([Int(floor(l / k))], k)
+        if sum(vec_chr_lengths)  < l
+            vec_chr_lengths[end] = vec_chr_lengths[end] + (l - sum(vec_chr_lengths))
+        end
+    end
+    ### Initiate the chromosome names output vector
+    vec_chr = []
+    ### Generate founders with two sets of chromosomes (randomly dsitributed 1's and 0's)
+    B = Distributions.Binomial(1, 0.5)
+    G = Bool.(rand(B, 2, n, m))
+    ### Sample SNP (or loci) locations from a uniform distrbution
+    U = Distributions.Uniform(1, l)
+    vec_pos = [0]
+    while length(vec_pos) < m
+        vec_pos = sort(unique(Int.(ceil.(rand(U, 2*m))))[1:m])
+    end
+    ### Calculate the preliminary distances between loci (we will correct for the distances between terminal loci of adjacent chromosomes below)
+    distances = append!([0], diff(vec_pos))
+    chr_counter = 1
+    for i in 1:m
+        # i = 1000
+        if vec_pos[i] > cumsum(vec_chr_lengths)[chr_counter]
+             ### set the distance between the terminal loci of two adjacent chromosomes
+             ### to some arbitrarily large number
+            distances[i] = ϵ
+            ### Move to the next chromosome if we have not reached the final chromosome yet
+            if chr_counter < length(vec_chr_lengths)
+                chr_counter += 1
+            end
+        end
+        ### Subtract the cummulative chromome length from the commulative position,
+        ### so that the position in each chromosome starts at 1
+        if chr_counter > 1
+            vec_pos[i] -= cumsum(vec_chr_lengths)[chr_counter-1]
+        end
+        ### Populate the chromosome names output vector
+        if vec_chr_names == []
+            append!(vec_chr, [string(chr_counter)])
+        else
+            append!(vec_chr, [vec_chr_names[chr_counter]])
+        end
+    end
+    ### Test plots where we should see k peaks each corresponding to a chromosome terminal
+    # p1 = Plots.plot(distances, title="distances", legend=false)
+    # p2 = Plots.plot(vec_pos, title="positions", legend=false)
+    # Plots.plot(p1, p2, layout=(1,2))
+    return(vec_chr, vec_pos, distances, G)
+end
+
+
+function MEIOSIS(X::BitMatrix, distances::Vector{Int64}, dist_noLD::Int64=10_000)::Vector{Bool}
+    # m = 10_000
+    # X = Bool.(sample([true, false], (2, m)))
+    # ### Sample locations from a uniform distrbution    
+    # U = Distributions.Uniform(1, 100*m)
+    # positions = [0]
+    # while length(positions) < m
+    #     positions = sort(unique(Int.(ceil.(rand(U, 2*m))))[1:m])
+    # end
+    # distances = append!([0], diff(positions))
+    # dist_noLD = 10_000
+    ### Find the number of loci
+    _, m = size(X)
+    ### Random sampling of first locus in  the chromosome
+    vec_idx = zeros(Bool, m)
+    vec_idx[1] = sample([true, false])
+    ### Iterate across the remaining loci and determine if each locus belong to one or the other homologous chromosome
+    for i in 2:m
+        # i = 2
+        p_LD = 1 - minimum([(1/2), (1/2) * (distances[i]/dist_noLD)]) ### probability of linkage (adjusted from 0.5 as a factor of the pairwise distance between loci)
+        linked = rand(Distributions.Binomial(1, p_LD)) == 1
+        if linked
+            vec_idx[i] =  vec_idx[i-1]
+        else
+            vec_idx[i] = !vec_idx[i-1]
+        end
+    end
+    # Plots.plot(vec_idx) ### should show 
+    ### Define the resulting allele
+    vec_gamete = zeros(Bool, m)
+    vec_gamete[  vec_idx] = X[1,   vec_idx] ### homologous chromosome 1
+    vec_gamete[.!vec_idx] = X[2, .!vec_idx] ### homologous chromosome 2
+    return(vec_gamete)
+end
+
+
+function SIMULATE()
+    # n = 50
+    # m = 10_000
+    # l = 1_500_000_000
+    # k = 5
+    # ϵ = Int(1e+15)
+    # vec_chr_lengths = []
+    # # vec_chr_names = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"]
+    # vec_chr_names = []
+    # dist_noLD = 100_000
+    # o = 1_000
+
+
+    vec_chr, vec_pos, distances, G = BIULD_FOUNDING_GENOMES(n, m, l, k, ϵ, vec_chr_lengths, vec_chr_names)
+
+
+    ### Generate gametes
+    vec_gametetes = zeros(Bool, o, m)
+    for i in 1:o
+        # i = 1
+        g = Bool.(G[:, sample(collect(1:n)), :])
+        vec_gametetes[i, :] = MEIOSIS(g, distances, dist_noLD)
+    end
+
+
+end
+
 function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # file = open(syncx, "r")
@@ -1139,8 +1273,8 @@ function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # threads = 4
     # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
     # close(file)
-    # init = vec_positions[2] # init = 0
-    # term = vec_positions[3] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
+    # init = vec_positions[1] # init = 0
+    # term = vec_positions[end] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
     # maf = 0.001
     # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.csv"
     # delimiter = ","
@@ -1176,6 +1310,7 @@ function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     vec_allele = []
     vec_b = []
     vec_σb = []
+    vec_t = []
     vec_pval = []
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     i = init
@@ -1199,45 +1334,70 @@ function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 a = a[idx]
             end
             n, k = size(X)
-            V =try
-                inv(X' * X)
-            catch
-                pinv(X' * X)
-            end
-            b = V * X' * y
-            ε = y - (X * b)
-            Vε = (ε' * ε) / (n-k)
-            if Vε < 0.0
-                Vε = abs(Vε)
-            elseif Vε == Inf
-                Vε = 1e-10
-            end
-            Vb = Vε * V
-            Vb = Vb .- minimum(Vb)
-            σb = []
             for i in 1:k
-                # i = 1
-                append!(σb, sqrt(Vb[i,i]))
-            end
-
-            ### Correcting for the likelihood orrank correlation with small number of pools
-            b = b .* (1 - (((n^2 - 1) / (2*n^2))^n))
-            t = b ./ σb
-            pval = Distributions.ccdf(Distributions.Chisq(k), t.^2)
-            append!(vec_chr, repeat(locus.chr, inner=length(a)))
-            append!(vec_pos, repeat(locus.pos, inner=length(a)))
-            append!(vec_allele, a)
-            append!(vec_b, b)
-            append!(vec_σb, σb)
-            append!(vec_pval, pval)
+                x = X[:,i]
+                V =try
+                    inv(x' * x)
+                catch
+                    pinv(x' * x)
+                end
+                b = V * X' * y
+                ε = y - (X * b)
+                Vε = (ε' * ε) / (n-k)
+                if ((Vε < 0.0) | (Vε == Inf)) == false
+                    Vb = Vε * V
+                    Vb = Vb .- minimum(Vb)
+                    σb = []
+                    for j in 1:k
+                        # j = 1
+                        append!(σb, sqrt(Vb[j,j]))
+                    end
+                    # ### Correcting for the likelihood orrank correlation with small number of pools
+                    # b = b .* (1 - (((n^2 - 1) / (2*n^2))^n))
+                    t = b ./ σb
+                    pval = Distributions.ccdf(Distributions.Chisq(k), t.^2)
+                    append!(vec_chr, repeat(locus.chr, inner=length(a)))
+                    append!(vec_pos, repeat(locus.pos, inner=length(a)))
+                    append!(vec_allele, a)
+                    append!(vec_b, b)
+                    append!(vec_σb, σb)
+                    append!(vec_t, t)
+                    append!(vec_pval, pval)
+                end
+            # for i in 1:k
+            #     # i = 1
+            #     # append!(vec_b, cor(y, X[:,i]))
+            #     c = HypothesisTests.CorrelationTest(y, X[:,i])
+            #     append!(vec_b, c.r)
+            #     # append!(vec_b, (c.r)*(std(X[:,1])/std(y)))
+            #     append!(vec_t, c.t)
+            #     append!(vec_pval, HypothesisTests.pvalue(c))
+            # end
         end
     end
 
-    # vec_lod = ESTIMATE_LOD(Float64.(vec_b))
-    vec_lod = -log10.(Float64.(vec_pval))
+
+    # using HypothesisTests
+    
+    Plots.histogram(vec_t)
+    vec_TLOD = ESTIMATE_LOD(abs.(vec_t))
+    GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_TLOD)
+    GWAS_PLOT_QQ(vec_TLOD)
+
+    vec_NLOD = ESTIMATE_LOD(Float64.(vec_b), Distributions.Normal)
+    GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_NLOD)
+    GWAS_PLOT_QQ(vec_NLOD)
+
+    vec_ELOD = ESTIMATE_LOD((vec_b), Distributions.Exponential)
+    GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_ELOD)
+    GWAS_PLOT_QQ(vec_ELOD)
+
+    vec_lod = ESTIMATE_LOD(Float64.(vec_b))
+    # vec_lod = ESTIMATE_LOD(abs.(vec_b))
+    # vec_lod = -log10.(Float64.(vec_pval))
     vec_lod[isnan.(vec_lod)] .= 0.0
     vec_lod[vec_lod .== Inf] .= maximum(vec_lod[vec_lod .!= Inf])
-
+    vec_pval = 10 .^(-vec_lod)
     GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_lod)
     GWAS_PLOT_QQ(vec_lod)
 
