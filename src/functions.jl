@@ -904,7 +904,226 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
     return(out)
 end
 
-### Remove highly collinear alleles
+### SIMULATION (using Int64 for the genotype encoding so we can include multi-allelic loci in the future)
+function BUILD_FOUNDING_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, Array{Int64, 3}}
+    # n = 2                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 2_300_000         ### total genome size
+    # k = 7                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### an arbitrarily large Int64 number to indicate no LD, i.e. the distance between the termini of 2 adjacent chromosomes is infinitely large LD-wise but we don;t want to use Inf as it is not Int64
+    # a = 2                 ### number of alleles per locus (biallelic or a=2 by default)
+    # vec_chr_lengths = []  ### optional vector of chromosome lengths
+    # vec_chr_names = []    ### optional vector of chromosome names
+    ### Define lengths of each chromosome
+    if vec_chr_lengths == []
+        vec_chr_lengths = repeat([Int(floor(l / k))], k)
+        if sum(vec_chr_lengths)  < l
+            vec_chr_lengths[end] = vec_chr_lengths[end] + (l - sum(vec_chr_lengths))
+        end
+    end
+    ### Initiate the chromosome names output vector
+    vec_chr = []
+    ### Generate founders with two sets of chromosomes (randomly dsitributed 1's and 0's)
+    B = Distributions.Binomial(a-1, 0.5)
+    G = rand(B, 2, n, m)
+    ### Sample SNP (or loci) locations from a uniform distrbution
+    U = Distributions.Uniform(1, l)
+    vec_pos = [0]
+    while length(vec_pos) < m
+        vec_pos = sort(unique(Int.(ceil.(rand(U, 2*m))))[1:m])
+    end
+    ### Calculate the preliminary distances between loci (we will correct for the distances between terminal loci of adjacent chromosomes below)
+    distances = append!([0], diff(vec_pos))
+    chr_counter = 1
+    for i in 1:m
+        # i = 1000
+        if vec_pos[i] > cumsum(vec_chr_lengths)[chr_counter]
+             ### set the distance between the terminal loci of two adjacent chromosomes
+             ### to some arbitrarily large number
+            distances[i] = ϵ
+            ### Move to the next chromosome if we have not reached the final chromosome yet
+            if chr_counter < length(vec_chr_lengths)
+                chr_counter += 1
+            end
+        end
+        ### Subtract the cummulative chromome length from the commulative position,
+        ### so that the position in each chromosome starts at 1
+        if chr_counter > 1
+            vec_pos[i] -= cumsum(vec_chr_lengths)[chr_counter-1]
+        end
+        ### Populate the chromosome names output vector
+        if vec_chr_names == []
+            append!(vec_chr, [string(chr_counter)])
+        else
+            append!(vec_chr, [vec_chr_names[chr_counter]])
+        end
+    end
+    ### Test plots where we should see k peaks each corresponding to a chromosome terminal
+    # p1 = Plots.plot(distances, title="distances", legend=false)
+    # p2 = Plots.plot(vec_pos, title="positions", legend=false)
+    # Plots.plot(p1, p2, layout=(1,2))
+    return(vec_chr, vec_pos, distances, G)
+end
+
+function MEIOSIS(X::Matrix{Int64}, distances::Vector{Int64}, dist_noLD::Int64=10_000)::Vector{Int64}
+    # m = 1_000
+    # X = sample([0, 1], (2, m))
+    # ### Sample locations from a uniform distrbution    
+    # U = Distributions.Uniform(1, 100*m)
+    # positions = [0]
+    # while length(positions) < m
+    #     positions = sort(unique(Int.(ceil.(rand(U, 2*m))))[1:m])
+    # end
+    # distances = append!([0], diff(positions))
+    # dist_noLD = 10_000
+    ### Find the number of loci
+    _, m = size(X)
+    ### Random sampling of first locus in  the chromosome
+    vec_idx = zeros(Bool, m)
+    vec_idx[1] = sample([true, false])
+    ### Iterate across the remaining loci and determine if each locus belong to one or the other homologous chromosome
+    for i in 2:m
+        # i = 2
+        p_LD = 1 - minimum([(1/2), (1/2) * (distances[i]/dist_noLD)]) ### probability of linkage (adjusted from 0.5 as a factor of the pairwise distance between loci)
+        linked = rand(Distributions.Binomial(1, p_LD)) == 1
+        if linked
+            vec_idx[i] =  vec_idx[i-1]
+        else
+            vec_idx[i] = !vec_idx[i-1]
+        end
+    end
+    # Plots.plot(vec_idx) ### should show blocks of 0's and 1's
+    ### Define the resulting allele
+    vec_gamete = zeros(Int64, m)
+    vec_gamete[  vec_idx] = X[1,   vec_idx] ### homologous chromosome 1
+    vec_gamete[.!vec_idx] = X[2, .!vec_idx] ### homologous chromosome 2
+    return(vec_gamete)
+end
+
+function SIMULATE()
+    n = 5                   ### number of founders
+    m = 10_000              ### number of loci
+    l = 20_000       ### total genome length
+    k = 1                   ### number of chromosomes
+    ϵ = Int(1e+15)          ### some arbitrarily large number to signify the distance at which LD is nil
+    a = 2                   ### number of alleles per locus
+    vec_chr_lengths = []    ### chromosome lengths
+    vec_chr_names = []      ### chromosome names
+    # vec_chr_names = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"]
+    dist_noLD = 10_000     ### distance at which LD is nil (related to ϵ)
+    o = 1_000               ### total number of simulated individuals
+    
+    
+    vec_chr, vec_pos, distances, G = BUILD_FOUNDING_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
+    
+    
+    
+    ### Generate gametes
+    P = zeros(Int64, 2, o, m)
+    @showprogress for i in 1:o
+        # i = 1
+        g = G[:, sample(collect(1:n)), :]
+        P[1, i, :] = MEIOSIS(g, distances, dist_noLD) ### homologous chromosome 1
+        P[2, i, :] = MEIOSIS(g, distances, dist_noLD) ### homologous chromosome 2
+    end
+
+
+
+
+
+end
+
+function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)
+    # n = 25                  ### number of founders
+    # m = 10_000              ### number of loci
+    # l = 135_000_000         ### total genome length
+    # k = 5                   ### number of chromosomes
+    # ϵ = Int(1e+15)          ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                   ### number of alleles per locus
+    # vec_chr_lengths = []    ### chromosome lengths
+    # vec_chr_names = []      ### chromosome names
+    # # vec_chr_names = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"]
+    # dist_noLD = 250_000     ### distance at which LD is nil (related to ϵ)
+    # o = 1_000               ### total number of simulated individuals
+    # vec_chr, vec_pos, distances, G = BUILD_FOUNDING_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
+    
+    
+    # ### Simulate t generations --> move this into the SIMULATE() function...
+    # generations = 10
+    # P_fin = zeros(Int64, 2, o, m)
+    # @showprogress for t in 1:generations
+    #     P = zeros(Int64, 2, o, m)
+    #     for i in 1:o
+    #         # i = 1
+    #         g = G[:, sample(collect(1:n)), :]
+    #         P[1, i, :] = MEIOSIS(g, distances, dist_noLD) ### homologous chromosome 1
+    #         P[2, i, :] = MEIOSIS(g, distances, dist_noLD) ### homologous chromosome 2
+    #     end
+    #     G = copy(P)
+    #     _, n, m  = size(G)
+    #     if t == generations
+    #         P_fin[:, :, :] .= G
+    #     end
+    # end
+
+    # idx = vec_chr .== vec_chr[1] ### extract only chromosome 1
+    # P = P_fin[:, :, idx]
+    # n_pairs = 10_000
+
+
+
+
+
+    ### Calculate LD on the first chromosome
+    _, n, m = size(P)
+    mat_pairs = zeros(2, 1)
+    while size(mat_pairs, 2) < n_pairs
+        mat_pairs = Int.(ceil.(rand(2, 2*n_pairs) .* m))
+        idx = abs.(mat_pairs[1,:] .- mat_pairs[2,:]) .> 0.00
+        mat_pairs = mat_pairs[:, idx]
+        mat_pairs = mat_pairs[:, 1:n_pairs]
+    end
+    vec_r2 = []
+    vec_dist = []
+    @showprogress for i in 1:n_pairs
+        # i = 19
+        idx = mat_pairs[:, i]
+        P_2_adjacent_loci = P[:, :, idx]
+        locus_1 = P_2_adjacent_loci[:, :, 1]
+        alleles_1 = sort(unique(locus_1))
+        P_alleles_1 = [sum(a .== locus_1) for a in alleles_1] ./ prod(size(locus_1))
+
+        locus_2 = P_2_adjacent_loci[:, :, 2]
+        alleles_2 = sort(unique(locus_2))
+        P_alleles_2 = [sum(a .== locus_2) for a in alleles_2] ./ prod(size(locus_2))
+        
+        vec_2_loci_genotypes = [join(P_2_adjacent_loci[1, i, :]) for i in 1:o]
+        append!(vec_2_loci_genotypes, [join(P_2_adjacent_loci[2, i, :]) for i in 1:o])
+        genotypes = sort(unique(vec_2_loci_genotypes))
+        P_2_loci_genotypes = [sum(g .== vec_2_loci_genotypes) for g in genotypes] ./ length(vec_2_loci_genotypes)
+
+        vec_D = []
+        for g in genotypes
+            # g = genotypes[4]
+            _alleles_ = parse.(Int64, String.(split(g, "")))
+            
+            P_AxB = P_alleles_1[alleles_1 .== _alleles_[1]][end] * P_alleles_2[alleles_2 .== _alleles_[2]][end]
+            P_AB  = P_2_loci_genotypes[genotypes .== g][end]
+            append!(vec_D, abs(P_AB - P_AxB))
+        end
+        D = mean(vec_D)
+        append!(vec_r2, D^2 / (prod(P_alleles_1)*prod(P_alleles_2)))
+        append!(vec_dist, abs(diff(vec_pos[idx])[end]))
+    end
+    # Plots.scatter(vec_dist, vec_r2)
+
+
+end
+
+
+
+
+### GWAS AND GP
 function REMOVE_COLLINEAR_ALLELES_AND_LOCI(X::Matrix{Float64}, vec_idx::Vector{Float64}; cor_threshold::Float64=0.90)::Tuple{Matrix{Float64}, Vector{Float64}}
     # cor_threshold = 0.90
     idx = []
@@ -1143,129 +1362,6 @@ function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plo
     return(p3)
 end
 
-function BIULD_FOUNDING_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), vec_chr_lengths=[], vec_chr_names=[])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, BitArray}
-    # n = 2                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 2_300_000         ### total genome size
-    # k = 7                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### an arbitrarily large Int64 number to indicate no LD, i.e. the distance between the termini of 2 adjacent chromosomes is infinitely large LD-wise but we don;t want to use Inf as it is not Int64
-    # vec_chr_lengths = []  ### optional vector of chromosome lengths
-    # vec_chr_names = []    ### optional vector of chromosome names
-    ### Define lengths of each chromosome
-    if vec_chr_lengths == []
-        vec_chr_lengths = repeat([Int(floor(l / k))], k)
-        if sum(vec_chr_lengths)  < l
-            vec_chr_lengths[end] = vec_chr_lengths[end] + (l - sum(vec_chr_lengths))
-        end
-    end
-    ### Initiate the chromosome names output vector
-    vec_chr = []
-    ### Generate founders with two sets of chromosomes (randomly dsitributed 1's and 0's)
-    B = Distributions.Binomial(1, 0.5)
-    G = Bool.(rand(B, 2, n, m))
-    ### Sample SNP (or loci) locations from a uniform distrbution
-    U = Distributions.Uniform(1, l)
-    vec_pos = [0]
-    while length(vec_pos) < m
-        vec_pos = sort(unique(Int.(ceil.(rand(U, 2*m))))[1:m])
-    end
-    ### Calculate the preliminary distances between loci (we will correct for the distances between terminal loci of adjacent chromosomes below)
-    distances = append!([0], diff(vec_pos))
-    chr_counter = 1
-    for i in 1:m
-        # i = 1000
-        if vec_pos[i] > cumsum(vec_chr_lengths)[chr_counter]
-             ### set the distance between the terminal loci of two adjacent chromosomes
-             ### to some arbitrarily large number
-            distances[i] = ϵ
-            ### Move to the next chromosome if we have not reached the final chromosome yet
-            if chr_counter < length(vec_chr_lengths)
-                chr_counter += 1
-            end
-        end
-        ### Subtract the cummulative chromome length from the commulative position,
-        ### so that the position in each chromosome starts at 1
-        if chr_counter > 1
-            vec_pos[i] -= cumsum(vec_chr_lengths)[chr_counter-1]
-        end
-        ### Populate the chromosome names output vector
-        if vec_chr_names == []
-            append!(vec_chr, [string(chr_counter)])
-        else
-            append!(vec_chr, [vec_chr_names[chr_counter]])
-        end
-    end
-    ### Test plots where we should see k peaks each corresponding to a chromosome terminal
-    # p1 = Plots.plot(distances, title="distances", legend=false)
-    # p2 = Plots.plot(vec_pos, title="positions", legend=false)
-    # Plots.plot(p1, p2, layout=(1,2))
-    return(vec_chr, vec_pos, distances, G)
-end
-
-
-function MEIOSIS(X::BitMatrix, distances::Vector{Int64}, dist_noLD::Int64=10_000)::Vector{Bool}
-    # m = 10_000
-    # X = Bool.(sample([true, false], (2, m)))
-    # ### Sample locations from a uniform distrbution    
-    # U = Distributions.Uniform(1, 100*m)
-    # positions = [0]
-    # while length(positions) < m
-    #     positions = sort(unique(Int.(ceil.(rand(U, 2*m))))[1:m])
-    # end
-    # distances = append!([0], diff(positions))
-    # dist_noLD = 10_000
-    ### Find the number of loci
-    _, m = size(X)
-    ### Random sampling of first locus in  the chromosome
-    vec_idx = zeros(Bool, m)
-    vec_idx[1] = sample([true, false])
-    ### Iterate across the remaining loci and determine if each locus belong to one or the other homologous chromosome
-    for i in 2:m
-        # i = 2
-        p_LD = 1 - minimum([(1/2), (1/2) * (distances[i]/dist_noLD)]) ### probability of linkage (adjusted from 0.5 as a factor of the pairwise distance between loci)
-        linked = rand(Distributions.Binomial(1, p_LD)) == 1
-        if linked
-            vec_idx[i] =  vec_idx[i-1]
-        else
-            vec_idx[i] = !vec_idx[i-1]
-        end
-    end
-    # Plots.plot(vec_idx) ### should show 
-    ### Define the resulting allele
-    vec_gamete = zeros(Bool, m)
-    vec_gamete[  vec_idx] = X[1,   vec_idx] ### homologous chromosome 1
-    vec_gamete[.!vec_idx] = X[2, .!vec_idx] ### homologous chromosome 2
-    return(vec_gamete)
-end
-
-
-function SIMULATE()
-    # n = 50
-    # m = 10_000
-    # l = 1_500_000_000
-    # k = 5
-    # ϵ = Int(1e+15)
-    # vec_chr_lengths = []
-    # # vec_chr_names = ["chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7"]
-    # vec_chr_names = []
-    # dist_noLD = 100_000
-    # o = 1_000
-
-
-    vec_chr, vec_pos, distances, G = BIULD_FOUNDING_GENOMES(n, m, l, k, ϵ, vec_chr_lengths, vec_chr_names)
-
-
-    ### Generate gametes
-    vec_gametetes = zeros(Bool, o, m)
-    for i in 1:o
-        # i = 1
-        g = Bool.(G[:, sample(collect(1:n)), :])
-        vec_gametetes[i, :] = MEIOSIS(g, distances, dist_noLD)
-    end
-
-
-end
-
 function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # file = open(syncx, "r")
@@ -1403,25 +1499,6 @@ function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     return(out)
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function GWAS_MULTIREG(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
     X = hcat(ones(size(X, 1)), Float64.(X))
     # b = X \ Y; ### Slow
@@ -1429,7 +1506,6 @@ function GWAS_MULTIREG(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
     return(b[2:end])
 end
 
-### Proposed new method
 function MODEL_SIMULATE_SIMPLREG(y::Vector{Float64}, n_degrees::Int64=3, n_sim::Int64=100, round_digits::Int64=4)::Vector{Float64}
     # n_degrees = 2
     # n_sim = 100
@@ -1490,6 +1566,9 @@ function GWAS_SIMULREG(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Flo
     vec_lod = -log10.(vec_pval)
     return(vec_b, vec_t, vec_pval, vec_lod)
 end
+
+
+
 
 
 end
