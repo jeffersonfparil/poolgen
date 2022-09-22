@@ -1364,20 +1364,19 @@ function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                     append!(vec_t, t)
                     append!(vec_pval, pval)
                 end
-            # for i in 1:k
-            #     # i = 1
-            #     # append!(vec_b, cor(y, X[:,i]))
-            #     c = HypothesisTests.CorrelationTest(y, X[:,i])
-            #     append!(vec_b, c.r)
-            #     # append!(vec_b, (c.r)*(std(X[:,1])/std(y)))
-            #     append!(vec_t, c.t)
-            #     append!(vec_pval, HypothesisTests.pvalue(c))
-            # end
+                # using HypothesisTests
+                # for i in 1:k
+                #     # i = 1
+                #     # append!(vec_b, cor(y, X[:,i]))
+                #     c = HypothesisTests.CorrelationTest(y, X[:,i])
+                #     append!(vec_b, c.r)
+                #     # append!(vec_b, (c.r)*(std(X[:,1])/std(y)))
+                #     append!(vec_t, c.t)
+                #     append!(vec_pval, HypothesisTests.pvalue(c))
+                # end
+            end
         end
     end
-
-
-    # using HypothesisTests
     
     Plots.histogram(vec_t)
     vec_TLOD = ESTIMATE_LOD(abs.(vec_t))
