@@ -905,7 +905,7 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
 end
 
 ### SIMULATION (using Int64 for the genotype encoding so we can include multi-allelic loci in the future)
-function BUILD_FOUNDING_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, Array{Int64, 3}}
+function BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, Array{Int64, 3}}
     # n = 2                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 2_300_000         ### total genome size
@@ -925,7 +925,9 @@ function BUILD_FOUNDING_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int6
     vec_chr = []
     ### Generate founders with two sets of chromosomes (randomly dsitributed 1's and 0's)
     B = Distributions.Binomial(a-1, 0.5)
-    F = rand(B, 2, n, m)
+    F = zeros(Int64, 2, n, m)
+    F[1, :, :] = rand(B, 1, n, m)
+    F[2, :, :] = abs.((a-1) .- F[1, :, :])
     ### Sample SNP (or loci) locations from a uniform distrbution
     U = Distributions.Uniform(1, l)
     vec_pos = [0]
@@ -1030,7 +1032,7 @@ function SIMULATE(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=
 end
 
 function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)
-    # n = 4                  ### number of founders
+    # n = 1                   ### number of founders
     # m = 10_000              ### number of loci
     # l = 135_000_000         ### total genome length
     # k = 5                   ### number of chromosomes
@@ -1041,11 +1043,8 @@ function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)
     # dist_noLD = 250_000     ### distance at which LD is nil (related to ϵ)
     # o = 1_000               ### total number of simulated individuals
     # t = 100                  ### number of o-sized random mating generations to simulate
-    # vec_chr, vec_pos, vec_dist, F = BUILD_FOUNDING_GENOMES(n, m, l, k, ϵ, a, vec_chr_length, vec_chr_names) 
-    # P = SIMULATE(F, vec_dist, dist_noLD, 10, 1)
-    # P = SIMULATE(P, vec_dist, dist_noLD, 100, 1)
-    # P = SIMULATE(P, vec_dist, dist_noLD, 1_000, 1)
-    # P = SIMULATE(P, vec_dist, dist_noLD, 10_000, 1)
+    # vec_chr, vec_pos, vec_dist, F = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_length, vec_chr_names) 
+    # P = SIMULATE(F, vec_dist, dist_noLD, o, t)
     # n_pairs = 2_000
     ### Calculate LD on the first chromosome
     _, n, m = size(P)
