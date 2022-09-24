@@ -1031,7 +1031,7 @@ function SIMULATE(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=
     return(P)
 end
 
-function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)::Tuple{Vector{Float64}, Vector{Int64}}
+function LD(P::Array{Int64, 3}, chr::String="", window_size::Int64=20_000, n_pairs::Int64=10_000)::Tuple{Vector{Float64}, Vector{Int64}}
     # n = 10                   ### number of biallelic founders
     # m = 10_000              ### number of loci
     # l = 135_000_000         ### total genome length
@@ -1045,11 +1045,17 @@ function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)::Tuple{Vector{Float64}, V
     # t = 10                  ### number of o-sized random mating generations to simulate
     # vec_chr, vec_pos, vec_dist, F = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_length, vec_chr_names) 
     # P = SIMULATE(F, vec_dist, dist_noLD, o, t)
+    # chr = ""
+    # window_size = 2*250_000 
     # n_pairs = 2_000
     ### Calculate LD on the first chromosome in a 2*dist_noLD window
     _, n, m = size(P)
-    vec_idx = collect(1:m   )[vec_chr .== vec_chr[1]]
-    vec_idx = vec_idx[vec_pos[vec_idx] .<= 2*dist_noLD]
+    if chr == ""
+        vec_idx = collect(1:m   )[vec_chr .== vec_chr[1]]
+    else
+        vec_idx = collect(1:m   )[vec_chr .== chr]
+    end
+    vec_idx = vec_idx[vec_pos[vec_idx] .<= window_size]
     min_idx = minimum(vec_idx) ### assumes correctly that the positions are sorted
     max_idx = maximum(vec_idx) ### assumes correctly that the positions are sorted
     mat_pairs = zeros(2, 1)
