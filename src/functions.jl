@@ -1011,7 +1011,7 @@ function SIMULATE(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=
     # a = 2                   ### number of alleles per locus
     # vec_chr_lengths = []    ### chromosome lengths
     # vec_chr_names = []      ### chromosome names 
-    # vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
+    # vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
     # dist_noLD = 10_000     ### distance at which LD is nil (related to ϵ)
     # o = 1_000               ### total number of simulated individuals
     # t = 10
@@ -1103,6 +1103,64 @@ function LD(P::Array{Int64, 3}, chr::String="", window_size::Int64=20_000, n_pai
     # Plots.plot!(f, 0, maximum(vec_dist), label="Fit")
     return(vec_r2, vec_dist)
 end
+
+function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}}
+    # n = 5                ### number of founders
+    # m = 10_000           ### number of loci
+    # l = 20_000           ### total genome length
+    # k = 1                ### number of chromosomes
+    # ϵ = Int(1e+15)       ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                ### number of alleles per locus
+    # vec_chr_lengths = [] ### chromosome lengths
+    # vec_chr_names = []   ### chromosome names 
+    # dist_noLD = 10_000   ### distance at which LD is nil (related to ϵ)
+    # o = 1_000            ### total number of simulated individuals
+    # t = 10               ### number of random mating constant population size generation to simulate
+    # nQTL = 10            ### number of QTL to simulate
+    ### Instatiante founder genome/s
+    vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
+    ### Simulate random mating with constatnt population sizes for t genrations
+    P = SIMULATE(G, vec_dist, dist_noLD, o, t)
+    _, n, m  = size(P)
+    ### Define genotype counts
+    vec_allele_counts_minus_one = maximum(P, dims=[1, 2])[1, 1, :]
+    vec_alleles = unique( vec_allele_counts_minus_one) 
+    n_alleles = length(vec_alleles)
+    m_new = sum(vec_allele_counts_minus_one)
+    X = zeros(Int64, n, m_new)
+    m_new__counter = 1
+    for i in 1:m
+        # i = 1
+        for j in 1:n_alleles
+            X[:, m_new__counter] = sum(P[:, :, i] .== vec_alleles[j], dims=1)[1, :]
+            m_new__counter += 1
+        end
+    end
+
+    freqs = mean(X, dims=1)[1, :] ./ 2
+    
+    QTL_idx = sort(Int.(ceil.(rand(nQTL) .* m)))
+    QTL_effects = rand(nQTL) * 10
+    b = zeros(Float64, m_new)
+    b[QTL_idx] = QTL_effects
+    y = (X * b) .+ rand(n)
+    # @time vec_chr, vec_pos, X, y, b = SIMULATE(5, 100_000, 135_000_000, 5, Int(1e+15), 2, [], [], 500_000, 1_000, 10, 5)
+    # QTL_idx = collect(1:length(b))[b .> 0.0]
+    # n, m = size(X)
+    # 
+    #
+    # _X_ = hcat(ones(n), X, PCA)
+    # _y_ = (y .- mean(y)) ./ std(y)
+    # b_hat = _X_ \ y
+    # p = Plots.scatter(abs.(b_hat), legend=false, markerstrokewidth=0.001, markeralpha=0.4)
+    # for idx in QTL_idx
+    #     Plots.plot!(p, [idx, idx], [0,1], seriestype=:straightline, legend=false)
+    # end
+    # p
+    return(vec_chr, vec_pos, X, y, b)
+end
+
+
 
 
 
