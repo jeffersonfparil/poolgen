@@ -1031,8 +1031,8 @@ function SIMULATE(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=
     return(P)
 end
 
-function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)
-    # n = 1                   ### number of founders
+function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)::Tuple{Vector{Float64}, Vector{Int64}}
+    # n = 10                   ### number of biallelic founders
     # m = 10_000              ### number of loci
     # l = 135_000_000         ### total genome length
     # k = 5                   ### number of chromosomes
@@ -1042,15 +1042,19 @@ function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)
     # vec_chr_names = []      ### chromosome names
     # dist_noLD = 250_000     ### distance at which LD is nil (related to ϵ)
     # o = 1_000               ### total number of simulated individuals
-    # t = 100                  ### number of o-sized random mating generations to simulate
+    # t = 10                  ### number of o-sized random mating generations to simulate
     # vec_chr, vec_pos, vec_dist, F = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_length, vec_chr_names) 
     # P = SIMULATE(F, vec_dist, dist_noLD, o, t)
     # n_pairs = 2_000
-    ### Calculate LD on the first chromosome
+    ### Calculate LD on the first chromosome in a 2*dist_noLD window
     _, n, m = size(P)
+    vec_idx = collect(1:m   )[vec_chr .== vec_chr[1]]
+    vec_idx = vec_idx[vec_pos[vec_idx] .<= 2*dist_noLD]
+    min_idx = minimum(vec_idx) ### assumes correctly that the positions are sorted
+    max_idx = maximum(vec_idx) ### assumes correctly that the positions are sorted
     mat_pairs = zeros(2, 1)
     while size(mat_pairs, 2) < n_pairs
-        mat_pairs = Int.(ceil.(rand(2, 2*n_pairs) .* m))
+        mat_pairs = Int.(ceil.((rand(2, 2*n_pairs) .* (max_idx - min_idx)) .+ min_idx))
         idx = abs.(mat_pairs[1,:] .- mat_pairs[2,:]) .> 0.00
         mat_pairs = mat_pairs[:, idx]
         mat_pairs = mat_pairs[:, 1:n_pairs]
@@ -1087,12 +1091,11 @@ function LD(P::Array{Int64, 3}, n_pairs::Int64=10_000)
         append!(vec_r2, D^2 / (prod(P_alleles_1)*prod(P_alleles_2)))
         append!(vec_dist, abs(diff(vec_pos[idx])[end]))
     end
-    Plots.scatter(vec_dist, vec_r2, legend=false, markerstrokewidth=0.001, markeralpha=0.4)
-
-    using Polynomials
-    f = Polynomials.fit(Float64.(vec_dist), Float64.(vec_r2), 2)
-    Plots.plot!(f, 0, maximum(vec_dist), label="Fit")
-
+    # Plots.scatter(vec_dist, vec_r2, legend=false, markerstrokewidth=0.001, markeralpha=0.4)
+    # using Polynomials
+    # f = Polynomials.fit(Float64.(vec_dist), Float64.(vec_r2), 10)
+    # Plots.plot!(f, 0, maximum(vec_dist), label="Fit")
+    return(vec_r2, vec_dist)
 end
 
 
