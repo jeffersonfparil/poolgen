@@ -1121,6 +1121,8 @@ function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
     vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
     ### Simulate random mating with constatnt population sizes for t genrations
     P = SIMULATE(G, vec_dist, dist_noLD, o, t)
+    # vec_r2, vec_dist = LD(P)
+    # Plots.scatter(vec_dist, vec_r2)
     _, n, m  = size(P)
     ### Define genotype counts
     vec_allele_counts_minus_one = maximum(P, dims=[1, 2])[1, 1, :]
