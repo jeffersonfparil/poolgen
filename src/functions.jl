@@ -1138,31 +1138,98 @@ function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
             m_new__counter += 1
         end
     end
-
-    freqs = mean(X, dims=1)[1, :] ./ 2
-    
     QTL_idx = sort(Int.(ceil.(rand(nQTL) .* m)))
     QTL_effects = rand(nQTL) * 10
     b = zeros(Float64, m_new)
     b[QTL_idx] = QTL_effects
     y = (X * b) .+ rand(n)
-    # @time vec_chr, vec_pos, X, y, b = SIMULATE(5, 100_000, 135_000_000, 5, Int(1e+15), 2, [], [], 500_000, 1_000, 10, 5)
-    # QTL_idx = collect(1:length(b))[b .> 0.0]
-    # n, m = size(X)
-    # 
-    #
-    # _X_ = hcat(ones(n), X, PCA)
-    # _y_ = (y .- mean(y)) ./ std(y)
-    # b_hat = _X_ \ y
-    # p = Plots.scatter(abs.(b_hat), legend=false, markerstrokewidth=0.001, markeralpha=0.4)
-    # for idx in QTL_idx
-    #     Plots.plot!(p, [idx, idx], [0,1], seriestype=:straightline, legend=false)
-    # end
-    # p
     return(vec_chr, vec_pos, X, y, b)
 end
 
+function POOL(vec_chr, vec_pos, X, y, b, npools::Int64=5, out_syncx="", out_phen="")
+    # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5
+    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL)
+    # npools = 5
+    # out_syncx = ""
+    # out_phen = ""
+    ### Output syncx and csv files
+    if (out_syncx=="") | (out_phen=="")
+        id = replace(join(collect(string(time()))[1:12], ""), "."=> "")
+    end
+    if out_syncx==""
+        out_syncx = string("Simulated-", id, ".syncx")
+    end
+    if out_phen==""
+        out_phen = string("Simulated-", id, ".csv")
+    end
+    ### Sort the individuals into npools pools
+    idx = sortperm(y)
+    y = y[idx]
+    X = X[idx, :]
+    n, m = size(X)
+    vec_idx_pools = repeat([Int(floor(n/npools))], npools)
+    add_to_last_pool = n - sum(vec_idx_pools)
+    vec_idx_pools[end] = vec_idx_pools[end] + add_to_last_pool
+    vec_idx_pools = append!([0], cumsum(vec_idx_pools))
 
+    G = zeros(Float64, npools, m)
+    p = zeros(Float64, npools)
+    for i in 1:npools
+        init = vec_idx_pools[i] + 1
+        term = vec_idx_pools[i+1]
+        G[i, :] = mean(X[init:term, :], dims=1) ./ 2
+        p[i] = mean(y[init:term])
+    end
+    ### Write simulated Pool-seq data into a syncx file
+    geno = open(out_syncx, "a")
+    vec_unique_loci = unique(string.(vec_chr, "-", vec_pos))
+    n_unique_loci = length(vec_unique_loci)
+    ### Iterate per locus
+    for i in 1:n_unique_loci
+        # i = 1
+        chr = split(vec_unique_loci[i], "-")[1]
+        pos = parse(Int64, split(vec_unique_loci[i], "-")[2])
+        idx = (vec_chr .== chr) .& (vec_pos .== pos)
+        g_alt = G[:, idx]
+        g_ref = 1 .- g_alt
+        g = hcat(g_ref, g_alt)
+        _, a = size(g)
+        vec_counts_per_pool = repeat([""], npools)
+        ### Iterate per pool per locus
+        for j in 1:npools
+            # j = 1
+            vec_counts = zeros(Int64, 7)
+            ### Iterate per allele per pool per locus
+            d = Int(round(Distributions.rand(Distributions.Exponential(100), 1)[1])) ### simulate the total number of depth
+            for k in 1:a
+                # k = 1
+                vec_counts[k] = Int(round(g[j, k] * d))
+            end
+            vec_counts_per_pool[j] = join(vec_counts, ":")
+        end
+        line = join(append!([chr, pos], vec_counts_per_pool), "\t")
+        write(out_syncx, string(line, "\n"))
+    end
+    close(out_syncx)
+    ### Write simulated phenotype data
+
+
+
+    # QTL_idx = collect(1:length(b))[b .> 0.0]
+    # n, m = size(X)
+    # b_hat = G \ p
+    # p1 = Plots.scatter(abs.(b_hat), legend=false, title="Pool-GWAS")
+    # for qtl in QTL_idx
+    #     Plots.plot!(p1, [qtl, qtl], [0, 1], seriestype=:straightline)
+    # end
+    # b_hat2 = X \ y
+    # p2 = Plots.scatter(abs.(b_hat2), legend=false, title="Indi-GWAS")
+    # for qtl in QTL_idx
+    #     Plots.plot!(p2, [qtl, qtl], [0, 1], seriestype=:straightline)
+    # end
+    # p3 = Plots.plot(p1, p2, layout=(2, 1)) ### Pool-GWAS performs better than Ind-GWAS!!!!
+    
+end
 
 
 
@@ -1406,7 +1473,7 @@ function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plo
     return(p3)
 end
 
-function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], out::String="")::String
+function GWAS_OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # file = open(syncx, "r")
     # seekend(file)
@@ -1543,7 +1610,7 @@ function GWAS_SIMPLREG(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     return(out)
 end
 
-function GWAS_MULTIREG(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
+function GWAS_OLS_MULTIPLE(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
     X = hcat(ones(size(X, 1)), Float64.(X))
     # b = X \ Y; ### Slow
     b = X' * inv(X * X') * y; ### Wayyyy faster! ~12 times faster!
