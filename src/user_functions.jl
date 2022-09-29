@@ -12,7 +12,6 @@ using ProgressMeter
 include("functions.jl")
 using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
 using .functions: PARSE, SAVE, SPLIT, MERGE, CONVERT, PILEUP2SYNCX, FILTER, IMPUTE, GWALPHA
-using .functions: LOAD
 
 function convert(syncx_or_sync::String; out::String="")::String
     # using Distributed
