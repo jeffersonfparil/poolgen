@@ -260,8 +260,8 @@ function simulate(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
     # ### GWAS test
     # using Statistics, Distributions, Plots
     # QTL_idx = collect(1:length(b))[b .> 0.0]
-    # vec_chr_qtl = vec_chr[QTL_idx]
-    # vec_pos_qtl = vec_pos[QTL_idx]
+    # vec_chr_QTL = vec_chr[QTL_idx]
+    # vec_pos_QTL = vec_pos[QTL_idx]
     # q = length(QTL_idx)
     # # n, m = size(X)
     # # b_hat = G \ (p .- mean(p))
@@ -308,13 +308,8 @@ function simulate(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
 
     # ### NEED TO IMPROVE GWAS_PLOT_MANHATTAN TO MODEL COORDINATES PER CHROMOSOME IN A MORE INTUITIVE AND EASILY ACCESSIBLE WAY!!!
 
-    # p1 = GWAS_PLOT_MANHATTAN(vec_chr_gemma, vec_pos_gemma, vec_lod_gemma)
-    # for i in 1:q
-    #     # i = 1
-    #     pos = collect(1:length(vec_chr_gemma))[(vec_chr_gemma .== vec_chr_qtl[i]) .& (vec_pos_gemma .== vec_pos_qtl[i])][1]
-    #     Plots.plot!(p1, [pos, pos], [0, 1], seriestype=:straightline)
-    #     Plots.annotate!(p1, pos, 0, Plots.text(string("β", i, "\n", round(b[QTL_idx[i]])), 0, 7, :bottom))
-    # end
+    # p1, chr_names, pos_init, pos_term,  = GWAS_PLOT_MANHATTAN(vec_chr_gemma, vec_pos_gemma, vec_lod_gemma)
+    # GWAS_PLOT_SIMULATED_QTL!(p1, vec_chr_QTL, vec_pos_QTL, b, chr_names, pos_init, pos_term)
 
 
     # vec_lod_pool_OLS = ESTIMATE_LOD(b_hat)

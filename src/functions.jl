@@ -1570,34 +1570,70 @@ function ESTIMATE_LOD(vec_b::Vector{Float64}, D)::Vector{Float64}
     return(lod)
 end
 
-function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Plots.GRBackend}
-    ### add lengths of all the chromosome to find xlim!!!!
-    names_chr = sort(unique(vec_chr)) 
-    l = 0
-    for chr in names_chr
+function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64}, title::String="")::Tuple{Plots.Plot{Plots.GRBackend}, Vector{String}, Vector{Int64}, Vector{Int64}}
+    # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5; heritability=0.9
+    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
+    # npools = 5
+    # G, p = POOL(X, y, npools)
+    # b_hat = G \ p
+    # vec_lod = ESTIMATE_LOD(b_hat)
+    # title = ""
+    ### Find the cummulative locus coordinates across chromosomes for the whole genome and the total number of loci
+    chr_names = sort(unique(vec_chr))
+    pos_init = [1]
+    pos_term = []
+    for chr in chr_names
         # chr = sort(unique(vec_chr))[1]
         idx = vec_chr .== chr
         pos = vec_pos[idx]
-        l += maximum(pos)
+        if length(pos_term) > 0
+            append!(pos_init, pos_term[end] + 1)
+        end
+        append!(pos_term, (pos_init[end]-1) + maximum(pos))
     end
-
+    l = pos_term[end]
+    ### Plot
     p1 = Plots.scatter([0], [0], xlims=[0, l], ylims=[minimum(vec_lod), maximum(vec_lod)], legend=false, markersize=0, markerstrokewidth=0, title=title)
-    x0 = 0
-    for chr in names_chr
-        # chr = sort(unique(vec_chr))[1]
+    for chr in chr_names
+        # chr = chr_names[1]
         idx = vec_chr .== chr
         pos = vec_pos[idx]
-        x = x0 .+ pos
+        x = (pos_init[chr_names .== chr][end] - 1) .+ pos
         y = vec_lod[idx]
         Plots.scatter!(x, y, legend=false,
                     markerstrokewidth=0.001,
                     markeralpha=0.4)
-        x0 = maximum(x)
     end
     m = length(vec_lod)
     LOD_threshold = -log10(0.05/m)
     Plots.plot!([0,1], [LOD_threshold,LOD_threshold], seriestype=:straightline, legend=false)
-    return(p1)
+    return(p1, chr_names, pos_init, pos_term)
+end
+
+function GWAS_PLOT_SIMULATED_QTL!(p::Plots.Plot{Plots.GRBackend}, vec_chr_QTL::Vector{String}, vec_pos_QTL::Vector{Int64}, b::Vector{Float64}, chr_names::Vector{String}, pos_init::Vector{Int64}, pos_term::Vector{Int64})::Plots.Plot{Plots.GRBackend}
+    # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5; heritability=0.9
+    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
+    # npools = 5
+    # G, p = POOL(X, y, npools)
+    # b_hat = G \ p
+    # vec_lod = ESTIMATE_LOD(b_hat)
+    # p, chr_names, pos_init, pos_term = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
+    # idx = b .!= 0.0
+    # vec_chr_QTL = vec_chr[idx]
+    # vec_pos_QTL = vec_pos[idx]
+    # b = b[idx]
+    ### Append positions of the QTL into the manhattan plot
+    q = length(vec_chr_QTL)
+    for i in 1:q
+        # i = 1
+        chr = vec_chr_QTL[i]
+        pos = vec_pos_QTL[i]
+        idx = chr .== chr_names
+        x = minimum([(pos_init[idx][end] - 1) .+ pos, pos_term[idx][end]])
+        Plots.plot!(p, [x, x], [0, 1], seriestype=:straightline, legend=false)
+        Plots.annotate!(p, x, 0, Plots.text(string("β", i, "\n", round(b[i])), 0, 7, :bottom))
+    end
+    return(p)
 end
 
 function GWAS_PLOT_QQ(vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Plots.GRBackend}
@@ -1615,7 +1651,7 @@ function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plo
     if estimate_empirical_lod
         vec_lod = ESTIMATE_LOD(vec_alpha)
     end
-    p1 = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
+    p1, chr_names, pos_init, pos_term = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
     p2 = GWAS_PLOT_QQ(vec_lod)
     p3 = Plots.plot(p1, p2, layout=(2,1))
     return(p3)
