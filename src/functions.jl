@@ -1000,7 +1000,7 @@ function MEIOSIS(X::Matrix{Int64}, distances::Vector{Int64}, dist_noLD::Int64=10
     return(vec_gamete)
 end
 
-function SIMULATE(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=10_000, o::Int64=10_000, t::Int64=1)::Array{Int64, 3}
+function SIMULATE_GENOMES(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=10_000, o::Int64=10_000, t::Int64=1)::Array{Int64, 3}
     # n = 5                   ### number of founders
     # m = 10_000              ### number of loci
     # l = 20_000       ### total genome length
@@ -1016,7 +1016,7 @@ function SIMULATE(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=
     ### Simulate t genetations of random mating starting from the founders with a constant population size of o per generation
     _, n, m = size(G)
     P = zeros(Int64, 2, o, m)
-    @showprogress for _ in 1:t
+    @showprogress string("Simulating ", t, " generations:") for _ in 1:t
         for i in 1:o
             # i = 1
             g = G[:, sample(collect(1:n)), :]
@@ -1029,22 +1029,22 @@ function SIMULATE(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=
     return(P)
 end
 
-function LD(P::Array{Int64, 3}, chr::String="", window_size::Int64=20_000, n_pairs::Int64=10_000)::Tuple{Vector{Float64}, Vector{Int64}}
-    # n = 10                   ### number of biallelic founders
+function LD(P::Array{Int64, 3}, vec_chr::Vector{String}, vec_pos::Vector{Int64}, chr::String="", window_size::Int64=1_000_000, n_pairs::Int64=10_000)::Tuple{Vector{Float64}, Vector{Int64}}
+    # n = 10                  ### number of biallelic founders
     # m = 10_000              ### number of loci
     # l = 135_000_000         ### total genome length
     # k = 5                   ### number of chromosomes
     # ϵ = Int(1e+15)          ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                   ### number of alleles per locus
-    # vec_chr_length = []    ### chromosome lengths
+    # a = 4                   ### number of alleles per locus
+    # vec_chr_length = []     ### chromosome lengths
     # vec_chr_names = []      ### chromosome names
     # dist_noLD = 250_000     ### distance at which LD is nil (related to ϵ)
     # o = 1_000               ### total number of simulated individuals
     # t = 10                  ### number of o-sized random mating generations to simulate
     # vec_chr, vec_pos, vec_dist, F = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_length, vec_chr_names) 
-    # P = SIMULATE(F, vec_dist, dist_noLD, o, t)
+    # P = SIMULATE_GENOMES(F, vec_dist, dist_noLD, o, t)
     # chr = ""
-    # window_size = 2*250_000 
+    # window_size = 2*dist_noLD
     # n_pairs = 2_000
     ### Calculate LD on the first chromosome in a 2*dist_noLD window
     _, n, m = size(P)
@@ -1065,7 +1065,7 @@ function LD(P::Array{Int64, 3}, chr::String="", window_size::Int64=20_000, n_pai
     end
     vec_r2 = []
     vec_dist = []
-    @showprogress for i in 1:n_pairs
+    for i in 1:n_pairs
         # i = 19
         idx = mat_pairs[:, i]
         P_2_adjacent_loci = P[:, :, idx]
@@ -1077,11 +1077,15 @@ function LD(P::Array{Int64, 3}, chr::String="", window_size::Int64=20_000, n_pai
         alleles_2 = sort(unique(locus_2))
         P_alleles_2 = [sum(a .== locus_2) for a in alleles_2] ./ prod(size(locus_2))
         
-        vec_2_loci_genotypes = [join(P_2_adjacent_loci[1, i, :]) for i in 1:o]
-        append!(vec_2_loci_genotypes, [join(P_2_adjacent_loci[2, i, :]) for i in 1:o])
-        genotypes = sort(unique(vec_2_loci_genotypes))
+        vec_2_loci_genotypes = [join(P_2_adjacent_loci[1, i, :]) for i in 1:n]
+        append!(vec_2_loci_genotypes, [join(P_2_adjacent_loci[2, i, :]) for i in 1:n])
+        genotypes = []
+        for a1 = alleles_1
+            for a2 in alleles_2
+                push!(genotypes, string(a1, a2))
+            end
+        end
         P_2_loci_genotypes = [sum(g .== vec_2_loci_genotypes) for g in genotypes] ./ length(vec_2_loci_genotypes)
-
         vec_D = []
         for g in genotypes
             # g = genotypes[4]
@@ -1091,8 +1095,7 @@ function LD(P::Array{Int64, 3}, chr::String="", window_size::Int64=20_000, n_pai
             P_AB  = P_2_loci_genotypes[genotypes .== g][end]
             append!(vec_D, abs(P_AB - P_AxB))
         end
-        D = mean(vec_D)
-        append!(vec_r2, D^2 / (prod(P_alleles_1)*prod(P_alleles_2)))
+        append!(vec_r2, sqrt(prod(vec_D)) / (prod(P_alleles_1)*prod(P_alleles_2)))
         append!(vec_dist, abs(diff(vec_pos[idx])[end]))
     end
     # Plots.scatter(vec_dist, vec_r2, legend=false, markerstrokewidth=0.001, markeralpha=0.4)
@@ -1102,7 +1105,7 @@ function LD(P::Array{Int64, 3}, chr::String="", window_size::Int64=20_000, n_pai
     return(vec_r2, vec_dist)
 end
 
-function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}}
+function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, LD_chr::String="", LD_n_pairs::Int64=10_000; plot_LD::Bool=true)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}}
     # n = 5                ### number of founders
     # m = 10_000           ### number of loci
     # l = 20_000           ### total genome length
@@ -1115,38 +1118,68 @@ function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
     # o = 1_000            ### total number of simulated individuals
     # t = 10               ### number of random mating constant population size generation to simulate
     # nQTL = 10            ### number of QTL to simulate
+    # heritability = 0.5   ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""          ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000  ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = true       ### plot simulated LD decay
     ### Instatiante founder genome/s
     vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
     ### Simulate random mating with constatnt population sizes for t genrations
-    P = SIMULATE(G, vec_dist, dist_noLD, o, t) ### A 3-dimensional array of Int64 where the largest number, e.g.x, means that we have a macimum of x+1 alleles per locus
-    # vec_r2, vec_dist = LD(P)
-    # Plots.scatter(vec_dist, vec_r2)
+    P = SIMULATE_GENOMES(G, vec_dist, dist_noLD, o, t) ### A 3-dimensional array of Int64 where the largest number, e.g.x, means that we have a macimum of x+1 alleles per locus
     _, n, m  = size(P)
-    ### Define genotype counts
+    ### Assess LD
+    if plot_LD
+        LD_window_size = 2*dist_noLD
+        vec_r2, vec_dist = LD(P, vec_chr, vec_pos, LD_chr, LD_window_size, LD_n_pairs)
+        p = Plots.scatter(vec_dist, vec_r2, legend=false, xlab="Distance (bp)", ylab="r²")
+        time_id = replace(join(collect(string(time()))[1:12], ""), "."=> "")
+        Plots.savefig(p, string("Simulated_genome_LD-", time_id, ".png"))
+    end
+    ### Define genotype counts (fixed alleles/loci are all kept)
     vec_allele_counts_minus_one = maximum(P, dims=[1, 2])[1, 1, :]
-    vec_alleles = unique(vec_allele_counts_minus_one) 
-    n_alleles = length(vec_alleles)
-    m_new = maximum([length(vec_allele_counts_minus_one), sum(vec_allele_counts_minus_one)]) ### The number of alleles is at least the total number of loci - this maximum() expression is to assert that given that some of the simulated loci are fixed at the "0" allele
+    vec_alleles = collect(0:maximum(vec_allele_counts_minus_one)) ### e.g. [0, 1] for biallelic and [0, 1, 2] for triallelic
+    m_new = m + sum(vec_allele_counts_minus_one[vec_allele_counts_minus_one .> 1] .- 1)
     X = zeros(Int64, n, m_new)
-    m_new__counter = 1
+    m_new_counter = 1
     for i in 1:m
         # i = 1
-        for j in 1:n_alleles
-            X[:, m_new__counter] = sum(P[:, :, i] .== vec_alleles[j], dims=1)[1, :]
-            m_new__counter += 1
+        ### We count starting from the second allele, i.e. at index 2 for brevity since we only need n_alleles - 1 degrees of freedom anyway
+        alleles = collect(2: vec_allele_counts_minus_one[i] + 1)
+        ### Skip loci fixed for the first allele, i.e. "0" since we initiate X with zeros
+        if alleles == []
+            m_new_counter += 1
+        else
+            ### Else, iterate across n_alleles - 1 and count
+            for j in alleles
+                X[:, m_new_counter] = sum(P[:, :, i] .== vec_alleles[j], dims=1)[1, :]
+                m_new_counter += 1
+            end
         end
     end
-    QTL_idx = sort(Int.(ceil.(rand(nQTL) .* m)))
-    QTL_effects = rand(nQTL) * 10
+    ### Update loci coordinates
+    vec_chr_updated = []
+    vec_pos_updated = []
+    for i in 1:m
+        append!(vec_chr_updated, repeat([vec_chr[i]], maximum([1, vec_allele_counts_minus_one[i]])))
+        append!(vec_pos_updated, repeat([vec_pos[i]], maximum([1, vec_allele_counts_minus_one[i]])))
+    end
+    ### Simulate QTL effects
+    QTL_idx = sort(Int.(ceil.(rand(nQTL) .* m_new)))
+    QTL_effects = rand(Distributions.Normal(5, 1), nQTL)
     b = zeros(Float64, m_new)
     b[QTL_idx] = QTL_effects
-    y = (X * b) .+ rand(n)
-    return(vec_chr, vec_pos, X, y, b)
+    ### Simulate phenotypes
+    g = X * b
+    V_additive = var(g)
+    V_residual = (V_additive / heritability) - V_additive
+    e = rand(Distributions.Normal(0, sqrt(V_residual)), n)
+    y = g + e
+    return(vec_chr_updated, vec_pos_updated, X, y, b)
 end
 
 function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5)::Tuple{Matrix{Float64}, Vector{Float64}}
-    # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5
-    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL)
+    # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5; heritability=0.9
+    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
     # npools = 5
     ### Sort the individuals into equally-sized npools pools
     idx = sortperm(y)
@@ -1166,191 +1199,188 @@ function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5)::Tuple{Matr
         G[i, :] = mean(X[init:term, :], dims=1) ./ 2
         p[i] = mean(y[init:term])
     end
-    # QTL_idx = collect(1:length(b))[b .> 0.0]
-    # n, m = size(X)
-    # b_hat = G \ p
-    # p1 = Plots.scatter(abs.(b_hat), legend=false, title="Pool-GWAS")
-    # for qtl in QTL_idx
-    #     Plots.plot!(p1, [qtl, qtl], [0, 1], seriestype=:straightline)
-    # end
-    # b_hat2 = X \ y
-    # p2 = Plots.scatter(abs.(b_hat2), legend=false, title="Indi-GWAS")
-    # for qtl in QTL_idx
-    #     Plots.plot!(p2, [qtl, qtl], [0, 1], seriestype=:straightline)
-    # end
-    # p3 = Plots.plot(p1, p2, layout=(2, 1)) ### Pool-GWAS performs better than Ind-GWAS!!!!
     return(G, p)
 end
 
-function EXPORT_SIMULATED_DATA(pool::Bool, vec_chr::Vector{String}, vec_pos::Vector{Int64}, X::Matrix{Int64}, y::Vector{Float64}, out_geno="", out_pheno="")
-    # pool = true
+function EXPORT_SIMULATED_DATA(vec_chr::Vector{String}, vec_pos::Vector{Int64}, X::Matrix{Int64}, y::Vector{Float64}, out_geno="", out_pheno="")::Tuple{String, String, String, String}
+    # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5
+    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL)
+    # out_geno = ""
+    # out_pheno = ""
+    #####################
+    ###               ###
+    ### INDI-SEQ DATA ###
+    ###               ###
+    #####################
+    ### Output syncx and csv files
+    if (out_geno=="") | (out_pheno=="")
+        id = replace(join(collect(string(time()))[1:12], ""), "."=> "")
+    end
+    if out_geno==""
+        out_map = string.("Simulated-", id, ".map")
+        out_bim = string.("Simulated-", id, ".bim")
+        out_ped = string.("Simulated-", id, ".ped")
+    else
+        out_map = out_geno[1]
+        out_bim = out_geno[2]
+        out_ped = out_geno[3]
+    end
+    if out_pheno==""
+        out_fam = string("Simulated-", id, ".fam")
+    else
+        out_fam = out_pheno
+    end
+    n, m = size(X)
+    ################################
+    ###@@@ Map and Bim files @@@####
+    ################################
+    map = open(out_map, "a")
+    bim = open(out_bim, "a")
+    mat_alleles = string.(zeros(Int64, m , 2))
+    alleles = ["A", "T", "C", "G"]
+    chromosomes = unique(vec_chr)
+    chromosomes_idx = collect(1:length(chromosomes))
+    for i in 1:m
+        # i = 1
+        chromosome_code = chromosomes_idx[chromosomes .== vec_chr[i]][1]
+        variant_id = string(vec_chr[i], "-", vec_pos[i])
+        position_in_morgans = "0"
+        base_pair_coordinate = vec_pos[i]
+        allele_1, allele_2 = sample(alleles, 2, replace=false)
+        mat_alleles[i, :] = [allele_1, allele_2]
+        map_line = string(join((chromosome_code,
+                                variant_id,
+                                position_in_morgans,
+                                base_pair_coordinate), "\t"), "\n")
+        bim_line = string(join((chromosome_code,
+                                variant_id,
+                                position_in_morgans,
+                                base_pair_coordinate,
+                                allele_1,
+                                allele_2), "\t"), "\n")
+        write(map, map_line)
+        write(bim, bim_line)
+    end
+    close(map)
+    close(bim)
+    ###############################
+    ###@@@ Fam and Ped files @@@###
+    ###############################
+    fam = open(out_fam, "a")
+    ped = open(out_ped, "a")
+    @showprogress for i in 1:n
+        # i = 1
+        family_id = i
+        within_family_id = i
+        within_family_id_father = 0
+        within_family_id_mother = 0
+        sex_code = 0
+        phenotype_value = y[i]
+        fam_line = string(join((family_id,
+                                within_family_id,
+                                within_family_id_father,
+                                within_family_id_mother,
+                                sex_code,
+                                phenotype_value), "\t"), "\n")
+        biallelic_geno = string.(zeros(Int64, 2, m))
+        idx = X[i, :] .== 0
+        biallelic_geno[:, idx] .= vcat(reshape(mat_alleles[idx, 1], (1, sum(idx))), reshape(mat_alleles[idx, 1], (1, sum(idx)))) ### homozygous for allele 1
+        idx = X[i, :] .== 1
+        biallelic_geno[:, idx] .= vcat(reshape(mat_alleles[idx, 1], (1, sum(idx))), reshape(mat_alleles[idx, 2], (1, sum(idx)))) ### heterozygote (allele 1)
+        idx = X[i, :] .== 2
+        biallelic_geno[:, idx] .= vcat(reshape(mat_alleles[idx, 2], (1, sum(idx))), reshape(mat_alleles[idx, 2], (1, sum(idx)))) ### homozygous for allele 2
+        biallelic_geno = reshape(biallelic_geno, 2*m, :)
+        ped_line = string(join((family_id,
+                                within_family_id,
+                                within_family_id_father,
+                                within_family_id_mother,
+                                sex_code,
+                                phenotype_value,
+                                join(biallelic_geno, "\t")), "\t"), "\n")
+        write(fam, fam_line)
+        write(ped, ped_line)
+    end
+    close(fam)
+    close(ped)
+    # ### test in plink and gemma
+    # wget 'https://s3.amazonaws.com/plink1-assets/plink_linux_x86_64_20220402.zip'
+    # wget 'https://github.com/genetics-statistics/GEMMA/releases/download/v0.98.5/gemma-0.98.5-linux-static-AMD64.gz'
+    # unzip plink_linux_x86_64_20220402.zip; rm plink_linux_x86_64_20220402.zip
+    # gunzip gemma-0.98.5-linux-static-AMD64.gz; mv gemma-0.98.5-linux-static-AMD64 gemma
+    # chmod +x plink
+    # chmod +x gemma
+    # time ./plink --file "Simulated-16644341691" --make-bed --out "Simulated-16644341691"
+    # time ./gemma -bfile "Simulated-16644341691" -lm 1 -o "Simulated-16644341691"
+    return(out_map, out_bim, out_ped, out_fam)
+end
+
+function EXPORT_SIMULATED_DATA(vec_chr::Vector{String}, vec_pos::Vector{Int64}, G::Matrix{Float64}, p::Vector{Float64}, out_geno="", out_pheno="")::Tuple{String, String}
     # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5
     # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL)
     # npools = 5
     # @time X, y = POOL(X, y, npools)
     # out_geno = ""
     # out_pheno = ""
-    extension_geno = ".syncx"
-    extension_pheno = ".csv"
-    if !pool
-        extension_geno = [".map", ".bim", ".ped"]
-        extension_pheno = ".fam"
-    end
-
+    #####################
+    ###               ###
+    ### POOL-SEQ DATA ###
+    ###               ###
+    #####################
     ### Output syncx and csv files
     if (out_geno=="") | (out_pheno=="")
         id = replace(join(collect(string(time()))[1:12], ""), "."=> "")
     end
     if out_geno==""
-        out_geno = string.("Simulated-", id, extension_geno)
+        out_geno = string.("Simulated-", id, ".syncx")
     end
     if out_pheno==""
-        out_pheno = string("Simulated-", id, extension_pheno)
+        out_pheno = string("Simulated-", id, ".csv")
     end
-    n, m = size(X)
-    if pool
-        #####################
-        ###               ###
-        ### POOL-SEQ DATA ###
-        ###               ###
-        #####################
-        ### Write simulated Pool-seq data into a syncx file
-        geno = open(out_geno, "a")
-        vec_unique_loci = unique(string.(vec_chr, "-", vec_pos))
-        n_unique_loci = length(vec_unique_loci)
-        ###@@@ Iterate per locus
-        @showprogress for i in 1:n_unique_loci
-            # i = 1
-            chr = split(vec_unique_loci[i], "-")[1]
-            pos = parse(Int64, split(vec_unique_loci[i], "-")[2])
-            idx = (vec_chr .== chr) .& (vec_pos .== pos)
-            g_alt = X[:, idx]
-            g_ref = 1 .- g_alt
-            g = hcat(g_ref, g_alt)
-            _, a = size(g)
-            vec_counts_per_pool = repeat([""], n)
-            ###@@@ Iterate per pool per locus
-            for j in 1:n
-                # j = 1
-                vec_counts = zeros(Int64, 7)
-                ###@@@ Iterate per allele per pool per locus
-                d = Int(round(Distributions.rand(Distributions.Exponential(100), 1)[1])) ### simulate the total number of depth
-                for k in 1:a
-                    # k = 1
-                    vec_counts[k] = Int(round(g[j, k] * d))
-                end
-                vec_counts_per_pool[j] = join(vec_counts, ":")
+    n, m = size(G)
+    ### Write simulated Pool-seq data into a syncx file
+    geno = open(out_geno, "a")
+    vec_unique_loci = unique(string.(vec_chr, "-", vec_pos))
+    n_unique_loci = length(vec_unique_loci)
+    ###@@@ Iterate per locus
+    @showprogress for i in 1:n_unique_loci
+        # i = 1
+        chr = split(vec_unique_loci[i], "-")[1]
+        pos = parse(Int64, split(vec_unique_loci[i], "-")[2])
+        idx = (vec_chr .== chr) .& (vec_pos .== pos)
+        g_alt = G[:, idx]
+        g_ref = 1 .- g_alt
+        g = hcat(g_ref, g_alt)
+        _, a = size(g)
+        vec_counts_per_pool = repeat([""], n)
+        ###@@@ Iterate per pool per locus
+        for j in 1:n
+            # j = 1
+            vec_counts = zeros(Int64, 7)
+            ###@@@ Iterate per allele per pool per locus
+            d = Int(round(Distributions.rand(Distributions.Exponential(100), 1)[1])) ### simulate the total number of depth
+            for k in 1:a
+                # k = 1
+                vec_counts[k] = Int(round(g[j, k] * d))
             end
-            line = join(append!([chr, pos], vec_counts_per_pool), "\t")
-            write(geno, string(line, "\n"))
+            vec_counts_per_pool[j] = join(vec_counts, ":")
         end
-        close(geno)
-        ### Write simulated phenotype data
-        pheno = open(out_pheno, "a")
-        header = string("Name,Phenotype\n")
-        write(pheno, header)
-        for i in 1:n
-            # i = 1
-            line = string("Pool-", i, ",", y[i], "\n")
-            write(pheno, line)
-        end
-        close(pheno)
-    else
-        #####################
-        ###               ###
-        ### INDI-SEQ DATA ###
-        ###               ###
-        #####################
-        ################################
-        ###@@@ Map and Bim files @@@####
-        ################################
-        map = open(out_geno[1], "a")
-        bim = open(out_geno[2], "a")
-        mat_alleles = string.(zeros(Int64, m , 2))
-        alleles = ["A", "T", "C", "G"]
-        chromosomes = unique(vec_chr)
-        chromosomes_idx = collect(1:length(chromosomes))
-        for i in 1:m
-            # i = 1
-            chromosome_code = chromosomes_idx[chromosomes .== vec_chr[i]][1]
-            variant_id = string(vec_chr[i], "-", vec_pos[i])
-            position_in_morgans = "0"
-            base_pair_coordinate = vec_pos[i]
-            allele_1, allele_2 = sample(alleles, 2, replace=false)
-            mat_alleles[i, :] = [allele_1, allele_2]
-            map_line = string(join((chromosome_code,
-                                    variant_id,
-                                    position_in_morgans,
-                                    base_pair_coordinate), "\t"), "\n")
-            bim_line = string(join((chromosome_code,
-                                    variant_id,
-                                    position_in_morgans,
-                                    base_pair_coordinate,
-                                    allele_1,
-                                    allele_2), "\t"), "\n")
-            write(map, map_line)
-            write(bim, bim_line)
-        end
-        close(map)
-        close(bim)
-        ###############################
-        ###@@@ Fam and Ped files @@@###
-        ###############################
-        fam = open(out_pheno, "a")
-        ped = open(out_geno[3], "a")
-        @showprogress for i in 1:n
-            # i = 1
-            family_id = i
-            within_family_id = i
-            within_family_id_father = 0
-            within_family_id_mother = 0
-            sex_code = 0
-            phenotype_value = y[i]
-            fam_line = string(join((family_id,
-                                    within_family_id,
-                                    within_family_id_father,
-                                    within_family_id_mother,
-                                    sex_code,
-                                    phenotype_value), "\t"), "\n")
-            biallelic_geno = string.(zeros(Int64, 2, m))
-            idx = X[i, :] .== 0
-            biallelic_geno[:, idx] .= vcat(reshape(mat_alleles[idx, 1], (1, sum(idx))), reshape(mat_alleles[idx, 1], (1, sum(idx)))) ### homozygous for allele 1
-            idx = X[i, :] .== 1
-            biallelic_geno[:, idx] .= vcat(reshape(mat_alleles[idx, 1], (1, sum(idx))), reshape(mat_alleles[idx, 2], (1, sum(idx)))) ### heterozygote (allele 1)
-            idx = X[i, :] .== 2
-            biallelic_geno[:, idx] .= vcat(reshape(mat_alleles[idx, 2], (1, sum(idx))), reshape(mat_alleles[idx, 2], (1, sum(idx)))) ### homozygous for allele 2
-            biallelic_geno = reshape(biallelic_geno, 2*m, :)
-            ped_line = string(join((family_id,
-                                    within_family_id,
-                                    within_family_id_father,
-                                    within_family_id_mother,
-                                    sex_code,
-                                    phenotype_value,
-                                    join(biallelic_geno, "\t")), "\t"), "\n")
-            write(fam, fam_line)
-            write(ped, ped_line)
-        end
-        close(fam)
-        close(ped)
-        # ### test in plink and gemma
-        # wget 'https://s3.amazonaws.com/plink1-assets/plink_linux_x86_64_20220402.zip'
-        # wget 'https://github.com/genetics-statistics/GEMMA/releases/download/v0.98.5/gemma-0.98.5-linux-static-AMD64.gz'
-        # unzip plink_linux_x86_64_20220402.zip; rm plink_linux_x86_64_20220402.zip
-        # gunzip gemma-0.98.5-linux-static-AMD64.gz; mv gemma-0.98.5-linux-static-AMD64 gemma
-        # chmod +x plink
-        # chmod +x gemma
-        # time ./plink --file "Simulated-16644341691" --make-bed --out "Simulated-16644341691"
-        # time ./gemma -bfile "Simulated-16644341691" -lm 1 -o "Simulated-16644341691"
+        line = join(append!([chr, pos], vec_counts_per_pool), "\t")
+        write(geno, string(line, "\n"))
     end
-    return(out_geno..., out_pheno)
+    close(geno)
+    ### Write simulated phenotype data
+    pheno = open(out_pheno, "a")
+    header = string("Name,Phenotype\n")
+    write(pheno, header)
+    for i in 1:n
+        # i = 1
+        line = string("Pool-", i, ",", p[i], "\n")
+        write(pheno, line)
+    end
+    close(pheno)
+
+    return(out_geno, out_pheno)
 end
-
-# n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5
-# @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL)
-# npools = 5
-# G, p = POOL(X, y, npools)
-# syncx, csv = EXPORT_SIMULATED_DATA(true, vec_chr, vec_pos, G, p)
-
 
 ### GWAS AND GP
 function REMOVE_COLLINEAR_ALLELES_AND_LOCI(X::Matrix{Float64}, vec_idx::Vector{Float64}; cor_threshold::Float64=0.90)::Tuple{Matrix{Float64}, Vector{Float64}}

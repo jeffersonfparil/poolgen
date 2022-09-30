@@ -12,7 +12,13 @@ using ProgressMeter
 include("functions.jl")
 using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
 using .functions: PARSE, SAVE, SPLIT, MERGE, CONVERT, PILEUP2SYNCX, FILTER, IMPUTE, GWALPHA
+using .functions: GWAS_PLOT_MANHATTAN, ESTIMATE_LOD
+using .functions: SIMULATE, POOL, EXPORT_SIMULATED_DATA
 
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+###########
+### I/O ###
+###########
 function convert(syncx_or_sync::String; out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -223,6 +229,103 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     return(out)
 end
 
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+##################
+### SIMULATION ###
+##################
+function simulate(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5; plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}
+    # n = 5                ### number of founders
+    # m = 100_000          ### number of loci
+    # l = 135_000_000      ### total genome length
+    # k = 5                ### number of chromosomes
+    # ϵ = Int(1e+15)       ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                ### number of alleles per locus
+    # vec_chr_lengths = [] ### chromosome lengths
+    # vec_chr_names = []   ### chromosome names 
+    # dist_noLD = 500_000  ### distance at which LD is nil (related to ϵ)
+    # o = 1_000            ### total number of simulated individuals
+    # t = 10               ### number of random mating constant population size generation to simulate
+    # nQTL = 10            ### number of QTL to simulate
+    # heritability = 0.5   ### narrow(broad)-sense heritability as only additive effects are simulated
+    # npools = 5           ### number of pools
+    # plot_LD = true       ### plot simulated LD decay
+    @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, plot_LD=plot_LD)
+    G, p = POOL(X, y, npools)
+    map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p)
+    return(map, bim, ped, fam, syncx, csv)
+    # ################################################################################
+    # ################################################################################
+    # ################################################################################
+    # ### GWAS test
+    # using Statistics, Distributions, Plots
+    # QTL_idx = collect(1:length(b))[b .> 0.0]
+    # vec_chr_qtl = vec_chr[QTL_idx]
+    # vec_pos_qtl = vec_pos[QTL_idx]
+    # q = length(QTL_idx)
+    # # n, m = size(X)
+    # # b_hat = G \ (p .- mean(p))
+    # # p1 = Plots.scatter(abs.(b_hat), legend=false, xlab="Position", ylab="|Estimated effect|", title="Pool-GWAS", markerstrokewidth=0.001, markeralpha=0.1)
+    # # for i in 1:q
+    # #     qtl = QTL_idx[i]
+    # #     Plots.plot!(p1, [qtl, qtl], [0, 1], seriestype=:straightline)
+    # #     Plots.annotate!(p1, qtl, 0, Plots.text(string("β", i, "\n", round(b[qtl])), 0, 7, :bottom))
+    # # end
+    # # b_hat2 = X \ (y .- mean(y))
+    # # p2 = Plots.scatter(abs.(b_hat2), legend=false, xlab="Position", ylab="|Estimated effect|", title="Indi-GWAS", markerstrokewidth=0.001, markeralpha=0.1)
+    # # for i in 1:q
+    # #     qtl = QTL_idx[i]
+    # #     Plots.plot!(p2, [qtl, qtl], [0, 1], seriestype=:straightline)
+    # #     Plots.annotate!(p2, qtl, 0, Plots.text(string("β", i, "\n", round(b[qtl])), 0, 7, :bottom))
+    # # end
+    # # p3 = Plots.plot(p1, p2, layout=(2, 1)) ### Pool-GWAS performs better than Ind-GWAS!!!!
+
+    # ### Pause julia
+    # ### Ctrl+z
+    # ### test in plink and gemma
+    # # wget 'https://s3.amazonaws.com/plink1-assets/plink_linux_x86_64_20220402.zip'
+    # # wget 'https://github.com/genetics-statistics/GEMMA/releases/download/v0.98.5/gemma-0.98.5-linux-static-AMD64.gz'
+    # # unzip plink_linux_x86_64_20220402.zip; rm plink_linux_x86_64_20220402.zip
+    # # gunzip gemma-0.98.5-linux-static-AMD64.gz; mv gemma-0.98.5-linux-static-AMD64 gemma
+    # # chmod +x plink
+    # # chmod +x gemma
+    # # name=$(ls | grep ".fam$" | head -n1 | cut -d '.' -f1)
+    # # time ./plink --file "$name" --make-bed --out "$name"
+    # # time ./gemma -bfile "$name" -lm 1 -o "$name"
+
+    # ### Resume julia
+    # ### fg
+    # using CSV, DataFrames
+    # cd("output")
+    # fname = readdir()[match.(Regex(".assoc.txt"), readdir()) .!= nothing][1]
+    # file = open(fname, "r")
+    # data = CSV.read(file, DataFrames.DataFrame)
+    # close(file)
+
+    # vec_chr_gemma = string.(data.chr)
+    # vec_pos_gemma = data.ps
+    # vec_lod_gemma = -log10.(data.p_wald)
+
+    # ### NEED TO IMPROVE GWAS_PLOT_MANHATTAN TO MODEL COORDINATES PER CHROMOSOME IN A MORE INTUITIVE AND EASILY ACCESSIBLE WAY!!!
+
+    # p1 = GWAS_PLOT_MANHATTAN(vec_chr_gemma, vec_pos_gemma, vec_lod_gemma)
+    # for i in 1:q
+    #     # i = 1
+    #     pos = collect(1:length(vec_chr_gemma))[(vec_chr_gemma .== vec_chr_qtl[i]) .& (vec_pos_gemma .== vec_pos_qtl[i])][1]
+    #     Plots.plot!(p1, [pos, pos], [0, 1], seriestype=:straightline)
+    #     Plots.annotate!(p1, pos, 0, Plots.text(string("β", i, "\n", round(b[QTL_idx[i]])), 0, 7, :bottom))
+    # end
+
+
+    # vec_lod_pool_OLS = ESTIMATE_LOD(b_hat)
+
+
+end
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#############################
+### QUANTITATIVE GENETICS ###
+#############################
 function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -264,5 +367,12 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
     MERGE(filenames_out, out)
     return(out)
 end
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+###########################
+### POPULATION GENETICS ###
+###########################
+
+
 
 end
