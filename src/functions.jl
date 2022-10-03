@@ -1506,9 +1506,10 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     return(out)
 end
 
-function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, df::Int64=1, covariate::String=["XTX", "COR"][2])::Matrix{Float64}
+function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95, df::Int64=1, covariate::String=["XTX", "COR"][2])::Matrix{Float64}
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # nloci = 1_000
+    # θ = 0.95 ### maximum correlation between alleles/locus (Pearson's product moment correlation)
     # df = 1
     ### Extract allele frequencies
     ### Include nloci where the default is zero corresponding to all loci
@@ -1534,14 +1535,30 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, df::Int64=1, cova
         end
     end
     ### Remove fixed alleles, and collinear alleles
-    vec_row_means = mean(X.cou, dims=2)[:, 1]
-    idx1 = vec_row_means .!= 0.0
     vec_row_vars  = var(X.cou, dims=2)[:, 1]
-    idx2 = vec_row_vars .!= 0.0
-    G = X.cou[idx1 .& idx2, :]
-    max_cor = maximum(triu(abs.(cor(G')), 1), dims=2)[:,1]
-    idx3 = max_cor .< 0.90
-    G = G[idx3, :]
+    idx1 = vec_row_vars .!= 0.0
+    G = X.cou[idx1, :]
+    p, n = size(G)
+    ### Iteratively calculate the correlations between alleles across loci which should be more efficient as we are testing and breaking if the correlation is greater than or equal to θ
+    idx2 = zeros(Bool, p)
+    idx2[end] = true
+    for i in 1:(p-1)
+        test_θ = true
+        for j in (i+1):p
+            # i = 1; j = 10
+            if abs(cor(G[i, :], G[j, :])) <= θ
+                test_θ *= true
+            else
+                test_θ *= false
+                break
+            end
+        end
+        if test_θ
+            idx2[i] = true
+        end
+    end
+
+    G = G[idx2, :]
     p, n = size(G)
     if covariate == "XTX"
         ### (1) X'*X/n covariate
