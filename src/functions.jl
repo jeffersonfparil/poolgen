@@ -787,8 +787,7 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
                 end
             end
             Z = MultivariateStats.projection(MultivariateStats.fit(PCA, repeat(D, inner=(7,1)); maxoutdim=1))
-            # X = hcat(X, Z)
-            X = hcat(X, X .* Z)
+            X = hcat(X, (X .!= 0) .* Z) ### multiply Z by (X .!= 0) so we get rid of covariate effects when X_ij is zero
         end
 
         for j in collect(1:p)[idx_pools]
