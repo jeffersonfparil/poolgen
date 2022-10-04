@@ -755,17 +755,30 @@ end
 
 ### IMPUTE
 function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true)::Window
-    n, p = size(window.cou)
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_4.syncx"
+    # file = open(syncx, "r")
+    # model = "OLS"
+    # distance = true
+    # window = []
+    # for i in 1:100
+    #     locus = PARSE(SyncxLine(i, readline(file)))
+    #     i = position(file)
+    #     push!(window, locus)
+    # end
+    # window = PARSE(Array{LocusAlleleCounts}(window))
+    # model = ["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
+    # distance = true
+    # close(file)
+    _, p = size(window.cou)
     ### Find the indices of pools with missing data.
     ### These will be used independently and iteratively as our response variables
     idx_pools = sum(ismissing.(window.cou), dims=1)[1,:] .> 0
     ### If we have at least one pool with no missing data, then we proceed with imputation
-    if sum(.!idx_pools) >= 1
+    if (sum(.!idx_pools) >= 1) & (sum(idx_pools) >= 1)
         ### Explanatory variables
         X = Int.(window.cou[:, .!idx_pools])
-
          ### Distance covariate (only add if the window is within a single chromosome)
-         if distance & (length(unique(window.chr))==1)
+         if (distance) & (length(unique(window.chr))==1) & (model != "Mean")
             m = length(window.pos)
             D = zeros(Int, m, m)
             for i in 1:m
@@ -775,7 +788,7 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
             end
             Z = MultivariateStats.projection(MultivariateStats.fit(PCA, repeat(D, inner=(7,1)); maxoutdim=1))
             # X = hcat(X, Z)
-            X = hcat(X, X[:,1] .* Z[:,1])
+            X = hcat(X, X .* Z)
         end
 
         for j in collect(1:p)[idx_pools]
@@ -818,7 +831,7 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
             ### Impute
             if !ismissing(β)
                 X_valid = X[idx_loci, :]
-                y_imputed = round.(hcat(ones(sum(idx_loci)), X_valid) * β)
+                y_imputed = ceil.(hcat(ones(sum(idx_loci)), X_valid) * β)
                 ni = length(y_imputed)
                 for i in 1:ni
                     ### For when the predicted counts are too high for Int64 to handle
@@ -845,9 +858,7 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
 end
 
 function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String
-    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_1.syncx"
-    # # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_2.syncx"
-    # # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_4.syncx"
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # file = open(syncx, "r")
     # seekend(file)
     # threads = 4
