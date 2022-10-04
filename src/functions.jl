@@ -818,7 +818,21 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
             ### Impute
             if !ismissing(β)
                 X_valid = X[idx_loci, :]
-                y_imputed = Int.(round.(hcat(ones(sum(idx_loci)), X_valid) * β))
+                y_imputed = round.(hcat(ones(sum(idx_loci)), X_valid) * β)
+                ni = length(y_imputed)
+                y_max = maximum(y_train)
+                y_min = minimum(y_train)
+                for i in 1:ni
+                    y_imputed[i] =  try
+                                        Int64(y_imputed[i])
+                                    catch
+                                        if y_imputed[i] < 0
+                                            Int64(y_min)
+                                        else
+                                            Int64(y_max)
+                                        end
+                                    end
+                end
                 y_imputed[y_imputed .< 0] .= 0 ### collapse negative counts to zero (negative imputations are only a problem on OLS)
                 # y_imputed .-= minimum(y_imputed)
                 ### use the average imputed value
@@ -1574,7 +1588,7 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95,
     return(C)
 end
 
-function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], out::String="")::String
+function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], covariate_df::Int64=1, out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # file = open(syncx, "r")
     # seekend(file)
@@ -1613,7 +1627,11 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
         end
     end
     seek(file, init)
-
+    ### Prepare covariate
+    if covariate != ""
+        C = GENERATE_COVARIATE(syncx, 1_000, 0.95, df, covariate)
+    end
+    ### Regress
     vec_chr = []
     vec_pos = []
     vec_allele = []
