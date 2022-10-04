@@ -820,17 +820,12 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
                 X_valid = X[idx_loci, :]
                 y_imputed = round.(hcat(ones(sum(idx_loci)), X_valid) * β)
                 ni = length(y_imputed)
-                y_max = maximum(y_train)
-                y_min = minimum(y_train)
                 for i in 1:ni
+                    ### For when the predicted counts are too high for Int64 to handle
                     y_imputed[i] =  try
                                         Int64(y_imputed[i])
                                     catch
-                                        if y_imputed[i] < 0
-                                            Int64(y_min)
-                                        else
-                                            Int64(y_max)
-                                        end
+                                        Int64(maximum(y_train))
                                     end
                 end
                 y_imputed[y_imputed .< 0] .= 0 ### collapse negative counts to zero (negative imputations are only a problem on OLS)
