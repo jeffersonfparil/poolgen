@@ -753,188 +753,18 @@ function FILTER(GENOTYPE::Window, epsilon::Float64=1e-10)::Tuple{Matrix{Float64}
     return(X, vec_idx)
 end
 
-### IMPUTE
-function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true)::Window
-    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_4.syncx"
-    # file = open(syncx, "r")
-    # model = "OLS"
-    # distance = true
-    # window = []
-    # for i in 1:100
-    #     locus = PARSE(SyncxLine(i, readline(file)))
-    #     i = position(file)
-    #     push!(window, locus)
-    # end
-    # window = PARSE(Array{LocusAlleleCounts}(window))
-    # model = ["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
-    # distance = true
-    # close(file)
-    _, p = size(window.cou)
-    ### Find the indices of pools with missing data.
-    ### These will be used independently and iteratively as our response variables
-    idx_pools = sum(ismissing.(window.cou), dims=1)[1,:] .> 0
-    ### If we have at least one pool with no missing data, then we proceed with imputation
-    if (sum(.!idx_pools) >= 1) & (sum(idx_pools) >= 1)
-        ### Explanatory variables
-        X = Int.(window.cou[:, .!idx_pools])
-         ### Distance covariate (only add if the window is within a single chromosome)
-         if (distance) & (length(unique(window.chr))==1) & (model != "Mean")
-            m = length(window.pos)
-            D = zeros(Int, m, m)
-            for i in 1:m
-                for j in 1:m
-                    D[i,j] = abs(window.pos[i] - window.pos[j])
-                end
-            end
-            Z = MultivariateStats.projection(MultivariateStats.fit(PCA, repeat(D, inner=(7,1)); maxoutdim=1))
-            X = hcat(X, (X .!= 0) .* Z) ### multiply Z by (X .!= 0) so we get rid of covariate effects when X_ij is zero
-        end
-
-        for j in collect(1:p)[idx_pools]
-            # j = collect(1:p)[idx_pools][1]
-            y = window.cou[:, j]
-            idx_loci = ismissing.(y)
-            y_train = Int.(y[.!idx_loci])
-            X_train = X[.!idx_loci, :]
-            nf, pf = size(X_train)
-           
-            ### Train models
-            if model == "Mean"
-                β = append!([0.0], repeat([1/pf], pf))
-            elseif model == "OLS"
-                β = try
-                    hcat(ones(nf), X_train) \ y_train
-                catch
-                    try
-                        LinearAlgebra.pinv(hcat(ones(nf), X_train)'*hcat(ones(nf), X_train)) * (hcat(ones(nf), X_train)'*y_train)
-                    catch
-                        missing
-                    end
-                end
-            elseif (model == "RR") | (model == "LASSO") | (model == "GLMNET")
-                model=="RR" ? alpha1=0 : model=="LASSO" ? alpha1=1 : alpha1=0.5
-                β = try
-                    try
-                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-7)) # equivalend to mod.path.betas[:, argmin(mod)]
-                    catch
-                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-3)) # equivalend to mod.path.betas[:, argmin(mod)]
-                    end
-                catch
-                    β = missing
-                end
-            else
-                println("Sorry ", model, " model is not implemented.")
-                return(1)
-            end
-
-            ### Impute
-            if !ismissing(β)
-                X_valid = X[idx_loci, :]
-                y_imputed = ceil.(hcat(ones(sum(idx_loci)), X_valid) * β)
-                ni = length(y_imputed)
-                for i in 1:ni
-                    ### For when the predicted counts are too high for Int64 to handle
-                    y_imputed[i] =  try
-                                        Int64(y_imputed[i])
-                                    catch
-                                        Int64(maximum(y_train))
-                                    end
-                end
-                y_imputed[y_imputed .< 0] .= 0 ### collapse negative counts to zero (negative imputations are only a problem on OLS)
-                # y_imputed .-= minimum(y_imputed)
-                ### use the average imputed value
-                window.imp[idx_loci, j] .+= 1
-                y_imputed_mean = append!([], ((window.cou[idx_loci, j] .* window.imp[idx_loci, j]) .+ y_imputed) ./ (window.imp[idx_loci, j] .+ 1))
-                y_imputed_mean[ismissing.(y_imputed_mean)] = y_imputed
-                window.cou[idx_loci, j] = Int.(round.(y_imputed_mean))
-            end
-        end
-    else
-        ### If don't have a single pool with no missing data, then we return the input window without imputing
-        nothing
-    end
-    return(window)
-end
-
-function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String
-    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
-    # file = open(syncx, "r")
-    # seekend(file)
-    # threads = 4
-    # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
-    # close(file)
-    # init = vec_positions[2] # init = 0
-    # term = vec_positions[3] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
-    # window_size = 100
-    # model = "OLS"
-    # distance = true
-    # out = ""
-    ### Output syncx
-    if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-IMPUTED.syncx")
-    end
-    ### Open syncx file
-    file = open(syncx, "r")
-    ### Set position to the next line if the current position is a truncated line
-    if (init>0)
-        seek(file, init-1)
-        line = readline(file)
-        if line != ""
-            init = position(file)
-        end
-    end
-    seek(file, init)
-    ### Impute
-    i = init
-    j = 0
-    window = []
-    while (i < term) & (!eof(file))
-        if window == []
-            while (j < window_size) & (i < term) & (!eof(file))
-                j += 1
-                locus = PARSE(SyncxLine(j, readline(file)))
-                i = position(file)
-                push!(window, locus)
-            end
-            window = PARSE(Array{LocusAlleleCounts}(window))
-            IMPUTE!(window, model, distance)
-            SAVE(EXTRACT(window, 1), out)
-        end
-        if !eof(file)
-            j += 1
-            line = SyncxLine(j, readline(file))
-            i = position(file)
-            locus = try
-                        PARSE(line)
-                    catch
-                        break
-                    end
-            SLIDE!(window, locus)
-            SAVE(EXTRACT(window, 1), out)
-            IMPUTE!(window, model, distance)
-        end
-    end
-    if !eof(file)
-        SAVE(EXTRACT(window, 2:window_size), out)
-    else
-        SAVE(window, out)
-    end
-    close(file)
-    return(out)
-end
-
 ### SIMULATION (using Int64 for the genotype encoding so we can include multi-allelic loci in the future)
-function BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, Array{Int64, 3}}
+function BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=([0]), vec_chr_names::Vector{String}=[""])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, Array{Int64, 3}}
     # n = 2                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 2_300_000         ### total genome size
     # k = 7                 ### number of chromosomes
     # ϵ = Int(1e+15)        ### an arbitrarily large Int64 number to indicate no LD, i.e. the distance between the termini of 2 adjacent chromosomes is infinitely large LD-wise but we don;t want to use Inf as it is not Int64
     # a = 2                 ### number of alleles per locus (biallelic or a=2 by default)
-    # vec_chr_lengths = []  ### optional vector of chromosome lengths
-    # vec_chr_names = []    ### optional vector of chromosome names
+    # vec_chr_lengths = [0] ### optional vector of chromosome lengths
+    # vec_chr_names = [""]  ### optional vector of chromosome names
     ### Define lengths of each chromosome
-    if vec_chr_lengths == []
+    if vec_chr_lengths == [0]
         vec_chr_lengths = repeat([Int(floor(l / k))], k)
         if sum(vec_chr_lengths)  < l
             vec_chr_lengths[end] = vec_chr_lengths[end] + (l - sum(vec_chr_lengths))
@@ -971,7 +801,7 @@ function BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n::Int64, m::Int64, l::Int64, k::In
             vec_pos[i] -= cumsum(vec_chr_lengths)[chr_counter-1]
         end
         ### Populate the chromosome names output vector
-        if vec_chr_names == []
+        if vec_chr_names == [""]
             append!(vec_chr, [string(chr_counter)])
         else
             append!(vec_chr, [vec_chr_names[chr_counter]])
@@ -1124,23 +954,23 @@ function LD(P::Array{Int64, 3}, vec_chr::Vector{String}, vec_pos::Vector{Int64},
     return(vec_r2, vec_dist)
 end
 
-function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, LD_chr::String="", LD_n_pairs::Int64=10_000; plot_LD::Bool=true)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}}
-    # n = 5                ### number of founders
-    # m = 10_000           ### number of loci
-    # l = 20_000           ### total genome length
-    # k = 1                ### number of chromosomes
-    # ϵ = Int(1e+15)       ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                ### number of alleles per locus
-    # vec_chr_lengths = [] ### chromosome lengths
-    # vec_chr_names = []   ### chromosome names 
-    # dist_noLD = 10_000   ### distance at which LD is nil (related to ϵ)
-    # o = 1_000            ### total number of simulated individuals
-    # t = 10               ### number of random mating constant population size generation to simulate
-    # nQTL = 10            ### number of QTL to simulate
-    # heritability = 0.5   ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""          ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000  ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = true       ### plot simulated LD decay
+function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}}
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = true        ### simulated LD decay
     ### Instatiante founder genome/s
     vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
     ### Simulate random mating with constatnt population sizes for t genrations
@@ -1376,10 +1206,10 @@ function EXPORT_SIMULATED_DATA(vec_chr::Vector{String}, vec_pos::Vector{Int64}, 
             # j = 1
             vec_counts = zeros(Int64, 7)
             ###@@@ Iterate per allele per pool per locus
-            d = Int(round(Distributions.rand(Distributions.Exponential(100), 1)[1])) ### simulate the total number of depth
+            d = Int(ceil(Distributions.rand(Distributions.Exponential(100), 1)[1])) ### simulate the total number of depth
             for k in 1:a
                 # k = 1
-                vec_counts[k] = Int(round(g[j, k] * d))
+                vec_counts[k] = Int(ceil(g[j, k] * d))
             end
             vec_counts_per_pool[j] = join(vec_counts, ":")
         end
@@ -1541,8 +1371,14 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95,
         step = Int(round(m / nloci))
         file = open(syncx, "r")
         loci = []
-        for i in 1:step:m
-            push!(loci, PARSE(SyncxLine(1, readline(file))))
+        idx_lines = collect(1:step:m); counter = 1
+        for i in 1:m
+            if (i == idx_lines[counter])
+                push!(loci, PARSE(SyncxLine(1, readline(file))))
+                counter = minimum([nloci, counter + 1])
+            else
+                continue
+            end
         end
         close(file)
         X = PARSE(convert(Vector{LocusAlleleCounts}, loci))
@@ -1585,6 +1421,14 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95,
     elseif covariate == "COR"
         ### (2) Pearson's product-moment correlation
         C = cor(G)
+    elseif covariate == "DIST"
+        m = length(window.pos)
+        C = zeros(Int, m, m)
+        for i in 1:m
+            for j in 1:m
+                C[i,j] = abs(window.pos[i] - window.pos[j])
+            end
+        end
     end
     ### Use the PCs if the we're asking for columns (i.e. df) less than the number of columns in C
     if (df < n)
@@ -1592,6 +1436,170 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95,
     end
     return(C)
 end
+
+function INVERSE(A)::Matrix{Float64}
+    try
+        inv(A)
+    catch
+        pinv(A)
+    end
+end
+
+function OLS(X, y, _method_::String=["CANONICAL", "MULTIALGORITHMIC", "N<<P"][1])::Vector{Float64}
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # _method_ = "N<<P
+    # @time β̂ = OLS(X, y, _method_)
+    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    if _method_ == "CANONICAL"
+        β = INVERSE(X' * X) * (X' * y)
+    elseif _method_ == "MULTIALGORITHMIC"
+        β = X \ y
+    elseif _method_ == "N<<P"
+        β = X' * INVERSE(X * X') * y
+    else
+        println("Sorry. Invalid OLS method.")
+        return(1)
+    end
+    return(β)
+end
+
+function MM(X, y, Z, R, D, _method_::String=["CANONICAL", "N<<P"][2])::Tuple{Vector{Float64}, Vector{Float64}}
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 5
+    # @time X, y = POOL(_X, _y, npools)
+    # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    # @time Z = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
+	# σ2e = 1.0                           ### homoscedastic error variance
+    # σ2u = 2.0                           ### homoscedastic random effects variance
+    # R = diagm(repeat([σ2e], npools))    ### error variance-covariance matrix
+    # D = diagm(repeat([σ2u], npools))    ### random effects variance-covariance matrix
+    # _method_ = "N<<P"
+    # @time β̂, μ̂ = MM(X, y, Z, R, D, "N<<P")
+    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
+    V = (Z * D * Z') + R
+	VI = INVERSE(V)
+	### Mixed model equations
+	###@@@ Fixed effects:
+    if _method_ == "CANONICAL"
+        ### More resource-intensive than X<<P
+        β̂ = INVERSE(X' * VI * X) * (X' * VI * y)
+    elseif _method_ == "N<<P"
+        β̂ = (X' * VI) * INVERSE(X * X' * VI) * y
+    else
+        println("Sorry. Invalid OLS method.")
+        return(1)
+    end
+	###@@@ Random effects:
+    μ̂ = (D * Z' * VI) * (y - (X*β̂))
+    return(β̂, μ̂)
+end
+
+function OPTIMIZE_MM(parameters::Vector{Float64}, X, y, Z, D=[0], _method_::String=["CANONICAL", "N<<P"][2], _method_optim_::String=["ML", "REML"][1])
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 5
+    # @time X, y = POOL(_X, _y, npools)
+    # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    # @time Z = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
+    # parameters = [1.0, 1.0]
+    # _method_ = "N<<P"
+    # _method_optim_ = "ML"
+    # D = [0]
+    # @time ll = OPTIMIZE_MM(parameters, X, y, Z, D, _method_, _method_optim_)
+    ### Homoscedastic error and random effect variances
+    σ2e = parameters[1] # variance of the error effects (assuming homoscedasticity)
+	σ2u = parameters[2] # variance of the other random effects (assuming homoscedasticity)
+	n = length(y)		# number of individual samples
+	l = size(X, 2)		# number of fixed effects
+	nz, pz = size(Z)
+    ### Random effects variance-covariance matrix (can accept a non-spherical D)
+    if D == [0]
+        D = diagm(repeat([σ2u], npools))
+    end
+    ### Error variance-covariance matrix
+    R = diagm(repeat([σ2e], npools))
+    ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
+    V = (Z * D * Z') + R
+    β̂, μ̂ = MM(X, y, Z, R, D, _method_)
+    ### Calculation negative log-likelihoods of variance parameters
+    if _method_optim_ == "ML"
+        ### The negative log-likelihood function y given σ2e and σ2u
+        μy = (X * β̂)
+        neg_log_lik = 0.5 * ( log(abs(det(V))) + ((y - μy)' * INVERSE(V) * (y - μy)) + (n*log(2*pi)) )
+    elseif _method_optim_ == "REML"
+        if nz == pz
+            ### NOTE: Z MUST BE SQUARE!
+            M = try
+                    INVERSE(LinearAlgebra.cholesky(σ2u*Z + R)) ### Cholesky decomposition
+                catch
+                    INVERSE(LinearAlgebra.lu(σ2u*Z + R).L) ### LU decomposition
+                end
+            y_new = M' * y
+            intercept_new = sum(M', dims=2)
+            V_new = M' * V * M
+            n = length(y_new)
+            ### Negative log-likelihood of σ2e and σ2u given X, y, and Z
+            neg_log_lik = 0.5 * ( log(abs(det(V_new))) .+ ((y_new - intercept_new)' * INVERSE(V_new) * (y_new - intercept_new)) .+ (n*log(2*pi)) )[1,1]
+        else
+            println(string("Sorry, REML is not a valid for a non-square Z matrix."))
+            return(2)
+        end
+    else
+        println(string("Sorry. ", _method_optim_, " is not a valid method of estimating the variances of the random effects effects. Please pick ML or REML."))
+        return(1)
+    end
+    return(neg_log_lik)
+end
+
+
 
 function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], covariate_df::Int64=1, out::String="")::String
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
@@ -1734,9 +1742,6 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
 
     return(out)
 end
-
-
-
 
 function GWAS_OLS_MULTIPLE(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
     X = hcat(ones(size(X, 1)), Float64.(X))
@@ -1934,6 +1939,176 @@ function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plo
     p2 = GWAS_PLOT_QQ(vec_lod)
     p3 = Plots.plot(p1, p2, layout=(2,1))
     return(p3)
+end
+
+### IMPUTE
+function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true)::Window
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_4.syncx"
+    # file = open(syncx, "r")
+    # model = "OLS"
+    # distance = true
+    # window = []
+    # for i in 1:100
+    #     locus = PARSE(SyncxLine(i, readline(file)))
+    #     i = position(file)
+    #     push!(window, locus)
+    # end
+    # window = PARSE(Array{LocusAlleleCounts}(window))
+    # model = ["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
+    # distance = true
+    # close(file)
+    _, p = size(window.cou)
+    ### Find the indices of pools with missing data.
+    ### These will be used independently and iteratively as our response variables
+    idx_pools = sum(ismissing.(window.cou), dims=1)[1,:] .> 0
+    ### If we have at least one pool with no missing data, then we proceed with imputation
+    if (sum(.!idx_pools) >= 1) & (sum(idx_pools) >= 1)
+        ### Explanatory variables
+        X = Int.(window.cou[:, .!idx_pools])
+         ### Distance covariate (only add if the window is within a single chromosome)
+         if (distance) & (length(unique(window.chr))==1) & (model != "Mean")
+            m = length(window.pos)
+            D = zeros(Int, m, m)
+            for i in 1:m
+                for j in 1:m
+                    D[i,j] = abs(window.pos[i] - window.pos[j])
+                end
+            end
+            Z = MultivariateStats.projection(MultivariateStats.fit(PCA, repeat(D, inner=(7,1)); maxoutdim=1))
+            X = hcat(X, (X .!= 0) .* Z) ### multiply Z by (X .!= 0) so we get rid of covariate effects when X_ij is zero
+        end
+
+        for j in collect(1:p)[idx_pools]
+            # j = collect(1:p)[idx_pools][1]
+            y = window.cou[:, j]
+            idx_loci = ismissing.(y)
+            y_train = Int.(y[.!idx_loci])
+            X_train = X[.!idx_loci, :]
+            nf, pf = size(X_train)
+           
+            ### Train models
+            if model == "Mean"
+                β = append!([0.0], repeat([1/pf], pf))
+            elseif model == "OLS"
+                β = try
+                    hcat(ones(nf), X_train) \ y_train
+                catch
+                    try
+                        LinearAlgebra.pinv(hcat(ones(nf), X_train)'*hcat(ones(nf), X_train)) * (hcat(ones(nf), X_train)'*y_train)
+                    catch
+                        missing
+                    end
+                end
+            elseif (model == "RR") | (model == "LASSO") | (model == "GLMNET")
+                model=="RR" ? alpha1=0 : model=="LASSO" ? alpha1=1 : alpha1=0.5
+                β = try
+                    try
+                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-7)) # equivalend to mod.path.betas[:, argmin(mod)]
+                    catch
+                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-3)) # equivalend to mod.path.betas[:, argmin(mod)]
+                    end
+                catch
+                    β = missing
+                end
+            else
+                println("Sorry ", model, " model is not implemented.")
+                return(1)
+            end
+
+            ### Impute
+            if !ismissing(β)
+                X_valid = X[idx_loci, :]
+                y_imputed = ceil.(hcat(ones(sum(idx_loci)), X_valid) * β)
+                ni = length(y_imputed)
+                for i in 1:ni
+                    ### For when the predicted counts are too high for Int64 to handle
+                    y_imputed[i] =  try
+                                        Int64(y_imputed[i])
+                                    catch
+                                        Int64(maximum(y_train))
+                                    end
+                end
+                y_imputed[y_imputed .< 0] .= 0 ### collapse negative counts to zero (negative imputations are only a problem on OLS)
+                # y_imputed .-= minimum(y_imputed)
+                ### use the average imputed value
+                window.imp[idx_loci, j] .+= 1
+                y_imputed_mean = append!([], ((window.cou[idx_loci, j] .* window.imp[idx_loci, j]) .+ y_imputed) ./ (window.imp[idx_loci, j] .+ 1))
+                y_imputed_mean[ismissing.(y_imputed_mean)] = y_imputed
+                window.cou[idx_loci, j] = Int.(round.(y_imputed_mean))
+            end
+        end
+    else
+        ### If don't have a single pool with no missing data, then we return the input window without imputing
+        nothing
+    end
+    return(window)
+end
+
+function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String
+    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
+    # close(file)
+    # init = vec_positions[2] # init = 0
+    # term = vec_positions[3] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
+    # window_size = 100
+    # model = "OLS"
+    # distance = true
+    # out = ""
+    ### Output syncx
+    if out==""
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-IMPUTED.syncx")
+    end
+    ### Open syncx file
+    file = open(syncx, "r")
+    ### Set position to the next line if the current position is a truncated line
+    if (init>0)
+        seek(file, init-1)
+        line = readline(file)
+        if line != ""
+            init = position(file)
+        end
+    end
+    seek(file, init)
+    ### Impute
+    i = init
+    j = 0
+    window = []
+    while (i < term) & (!eof(file))
+        if window == []
+            while (j < window_size) & (i < term) & (!eof(file))
+                j += 1
+                locus = PARSE(SyncxLine(j, readline(file)))
+                i = position(file)
+                push!(window, locus)
+            end
+            window = PARSE(Array{LocusAlleleCounts}(window))
+            IMPUTE!(window, model, distance)
+            SAVE(EXTRACT(window, 1), out)
+        end
+        if !eof(file)
+            j += 1
+            line = SyncxLine(j, readline(file))
+            i = position(file)
+            locus = try
+                        PARSE(line)
+                    catch
+                        break
+                    end
+            SLIDE!(window, locus)
+            SAVE(EXTRACT(window, 1), out)
+            IMPUTE!(window, model, distance)
+        end
+    end
+    if !eof(file)
+        SAVE(EXTRACT(window, 2:window_size), out)
+    else
+        SAVE(window, out)
+    end
+    close(file)
+    return(out)
 end
 
 end

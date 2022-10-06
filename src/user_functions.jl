@@ -233,23 +233,24 @@ end
 ##################
 ### SIMULATION ###
 ##################
-function simulate(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths=[], vec_chr_names=[], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5; plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}
-    # n = 5                ### number of founders
-    # m = 100_000          ### number of loci
-    # l = 135_000_000      ### total genome length
-    # k = 5                ### number of chromosomes
-    # ϵ = Int(1e+15)       ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                ### number of alleles per locus
-    # vec_chr_lengths = [] ### chromosome lengths
-    # vec_chr_names = []   ### chromosome names 
-    # dist_noLD = 500_000  ### distance at which LD is nil (related to ϵ)
-    # o = 1_000            ### total number of simulated individuals
-    # t = 10               ### number of random mating constant population size generation to simulate
-    # nQTL = 10            ### number of QTL to simulate
-    # heritability = 0.5   ### narrow(broad)-sense heritability as only additive effects are simulated
-    # npools = 5           ### number of pools
-    # plot_LD = true       ### plot simulated LD decay
-    @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, plot_LD=plot_LD)
+function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = true        ### simulated LD decay
+    @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, plot_LD)
     G, p = POOL(X, y, npools)
     map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
     syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p)
