@@ -1445,7 +1445,7 @@ function INVERSE(A)::Matrix{Float64}
     end
 end
 
-function OLS(X, y, _method_::String=["CANONICAL", "MULTIALGORITHMIC", "N<<P"][1])::Vector{Float64}
+function OLS(X, y, _method_::String=["CANONICAL", "MULTIALGORITHMIC", "N<<P"][3])::Vector{Float64}
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1463,7 +1463,8 @@ function OLS(X, y, _method_::String=["CANONICAL", "MULTIALGORITHMIC", "N<<P"][1]
     # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
     # plot_LD = false       ### simulate# plot simulated LD decay
     # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # _method_ = "N<<P
+    # X = hcat(ones(o), X)
+    # _method_ = "MULTIALGORITHMIC"
     # @time β̂ = OLS(X, y, _method_)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
     if _method_ == "CANONICAL"
@@ -1479,7 +1480,50 @@ function OLS(X, y, _method_::String=["CANONICAL", "MULTIALGORITHMIC", "N<<P"][1]
     return(β)
 end
 
-function MM(X, y, Z, R, D, _method_::String=["CANONICAL", "N<<P"][2])::Tuple{Vector{Float64}, Vector{Float64}}
+function GLMNET(X, y, alpha::Float64=1.0)
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 5
+    # @time X, y = POOL(_X, _y, npools)
+    # X = hcat(ones(npools), X)
+    # alpha = 1.0
+    # β̂ = GLMNET(X, y, alpha)
+    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    ### Elastic net regularisation, where ridge if alpha=0.0, and LASSO if alpha=1.0
+    n, _ = size(X)
+    ### Remove inercept because we want the intercept to be unpenalised and to do that we let GLMNet.glmnetcv to automatically fit the intercept
+    if X[:,1] == repeat([1], n)
+        X = X[:,2:end]
+    end
+    ### GLMNet fit where if there isn't enough variation to fit the predictors which inhibits cross-validation to estimate mean loss, we resort to simply identifying the lambda which maximised the R2, i.e. dev_ratio
+    β̂ = try
+            cv = GLMNet.glmnetcv(X, y, intercept=true, alpha=alpha, tol=1e-7)
+            idx = argmin(cv.meanloss)
+            append!([cv.path.a0[idx]], cv.path.betas[:, idx])
+        catch
+            path = GLMNet.glmnet(X, y, intercept=true, alpha=alpha, tol=1e-7)
+            idx = argmax(path.dev_ratio)
+            append!([path.a0[idx]], path.betas[:, idx])
+        end
+    return(β̂)
+end
+
+function MM(X, y, Z, D, R, _method_::String=["CANONICAL", "N<<P"][2])::Tuple{Vector{Float64}, Vector{Float64}}
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1500,14 +1544,40 @@ function MM(X, y, Z, R, D, _method_::String=["CANONICAL", "N<<P"][2])::Tuple{Vec
     # npools = 5
     # @time X, y = POOL(_X, _y, npools)
     # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # @time Z = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
-	# σ2e = 1.0                           ### homoscedastic error variance
-    # σ2u = 2.0                           ### homoscedastic random effects variance
-    # R = diagm(repeat([σ2e], npools))    ### error variance-covariance matrix
-    # D = diagm(repeat([σ2u], npools))    ### random effects variance-covariance matrix
+    # @time K = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
+    # X = hcat(ones(npools), X)
+    # ### GBLUP: y = Xβ + g + ϵ,
+    # ###     where g = Zμ = μ,
+    # ###         where Z = I(nxn), and (μ==g)~MVN(0, D),
+    # ###             where D = σ2u * K
+    # ###                 where K ≈ (X'X)/n
+    # ###     and ϵ~MVN(0, R)
+    # ###         where R = σ2e * I
+    # ### SNP effects are fixed and we're controlling for random genotype effects.
+    # Z = diagm(repeat([1.0], npools))    
+    # σ2u = 2.0                           ### random effects variance
+	# σ2e = 1.0                           ### error variance
+    # D = σ2u * K                         ### random effects variance-covariance matrix
+    # R = diagm(repeat([σ2e], npools))    ### homoscedastic error variance-covariance matrix
     # _method_ = "N<<P"
-    # @time β̂, μ̂ = MM(X, y, Z, R, D, "N<<P")
+    # @time β̂, μ̂ = MM(X, y, Z, D, R, _method_)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    # ### RR-BLUP: y = Xβ + Zμ + ϵ,
+    # ###     where Z are the SNPs,
+    # ###     and μ~MVN(0, D),
+    # ###         where D = σ2u * I
+    # ###     and ϵ~MVN(0, R)
+    # ###         where R = σ2e * I
+    # ### Kinship effects are fixed and we're interested in random SNP effects with spherical variance.
+    # Z = X[:, 2:end]                     ### SNPs with random effects
+    # X = hcat(X[:,1], K)                 ### Intercept and kinship with fixed effects
+    # σ2u = 2.0                           ### random effects variance
+	# σ2e = 1.0                           ### error variance
+    # D = diagm(repeat([σ2u], m))         ### homoscedastic random SNP effects variance-covariance matrix
+    # R = diagm(repeat([σ2e], npools))    ### homoscedastic error variance-covariance matrix
+    # _method_ = "N<<P"
+    # @time β̂, μ̂ = MM(X, y, Z, D, R, _method_)
+    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
     V = (Z * D * Z') + R
 	VI = INVERSE(V)
@@ -1527,7 +1597,7 @@ function MM(X, y, Z, R, D, _method_::String=["CANONICAL", "N<<P"][2])::Tuple{Vec
     return(β̂, μ̂)
 end
 
-function OPTIMIZE_MM(parameters::Vector{Float64}, X, y, Z, D=[0], _method_::String=["CANONICAL", "N<<P"][2], _method_optim_::String=["ML", "REML"][1])
+function OPTIMIZE_MM(parameters::Vector{Float64}, X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1])
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1548,33 +1618,59 @@ function OPTIMIZE_MM(parameters::Vector{Float64}, X, y, Z, D=[0], _method_::Stri
     # npools = 5
     # @time X, y = POOL(_X, _y, npools)
     # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # @time Z = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
-    # parameters = [1.0, 1.0]
-    # _method_ = "N<<P"
-    # _method_optim_ = "ML"
-    # D = [0]
-    # @time ll = OPTIMIZE_MM(parameters, X, y, Z, D, _method_, _method_optim_)
+    # K = zeros(2,2)
+    # X = hcat(ones(npools), X)
+    # ### GBLUP: y = Xβ + g + ϵ,
+    # ###     where g = Zμ = μ,
+    # ###         where Z = I(nxn), and (μ==g)~MVN(0, D),
+    # ###             where D = σ2u * K
+    # ###                 where K ≈ (X'X)/n
+    # ###     and ϵ~MVN(0, R)
+    # ###         where R = σ2e * I
+    # ### SNP effects are fixed and we're controlling for random genotype effects.
+    # Z = diagm(repeat([1.0], npools))
+    # K = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
+    # MM_method = "N<<P"
+    # _method_ = "ML"
+    # parameters = [2.0, 1.0]
+    # @time ll = OPTIMIZE_MM(parameters, X, y, Z, K, MM_method, _method_)
+    # ### RR-BLUP: y = Xβ + Zμ + ϵ, (NOTE: CANNOT BE USED WITH REML SINCE Z IS NOT SQUARE!)
+    # ###     where Z are the SNPs,
+    # ###     and μ~MVN(0, D),
+    # ###         where D = σ2u * I
+    # ###     and ϵ~MVN(0, R)
+    # ###         where R = σ2e * I
+    # ### Kinship effects are fixed and we're interested in random SNP effects with spherical variance.
+    # Z = X[:, 2:end]                     ### SNPs with random effects
+    # X = hcat(X[:,1], K)                 ### Intercept and kinship with fixed effects
+    # K = zeros(2, 2)
+    # MM_method = "N<<P"
+    # _method_ = "ML"
+    # parameters = [2.0, 1.0]
+    # @time ll = OPTIMIZE_MM(parameters, X, y, Z, K, MM_method, _method_)
     ### Homoscedastic error and random effect variances
-    σ2e = parameters[1] # variance of the error effects (assuming homoscedasticity)
-	σ2u = parameters[2] # variance of the other random effects (assuming homoscedasticity)
+	σ2u = parameters[1] # variance of the other random effects (assuming homoscedasticity)
+    σ2e = parameters[2] # variance of the error effects (assuming homoscedasticity)
 	n = length(y)		# number of individual samples
 	l = size(X, 2)		# number of fixed effects
 	nz, pz = size(Z)
-    ### Random effects variance-covariance matrix (can accept a non-spherical D)
-    if D == [0]
-        D = diagm(repeat([σ2u], npools))
+    ### Random effects variance-covariance matrix (homoscedastic)
+    if K == zeros(2, 2)
+        D = diagm(repeat([σ2u], pz))
+    else
+        D = σ2u .* K
     end
-    ### Error variance-covariance matrix
+    ### Error variance-covariance matrix (homoscedastic)
     R = diagm(repeat([σ2e], npools))
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
     V = (Z * D * Z') + R
-    β̂, μ̂ = MM(X, y, Z, R, D, _method_)
+    β̂, μ̂ = MM(X, y, Z, D, R, MM_method)
     ### Calculation negative log-likelihoods of variance parameters
-    if _method_optim_ == "ML"
+    if _method_ == "ML"
         ### The negative log-likelihood function y given σ2e and σ2u
         μy = (X * β̂)
         neg_log_lik = 0.5 * ( log(abs(det(V))) + ((y - μy)' * INVERSE(V) * (y - μy)) + (n*log(2*pi)) )
-    elseif _method_optim_ == "REML"
+    elseif _method_ == "REML"
         if nz == pz
             ### NOTE: Z MUST BE SQUARE!
             M = try
@@ -1589,15 +1685,50 @@ function OPTIMIZE_MM(parameters::Vector{Float64}, X, y, Z, D=[0], _method_::Stri
             ### Negative log-likelihood of σ2e and σ2u given X, y, and Z
             neg_log_lik = 0.5 * ( log(abs(det(V_new))) .+ ((y_new - intercept_new)' * INVERSE(V_new) * (y_new - intercept_new)) .+ (n*log(2*pi)) )[1,1]
         else
-            println(string("Sorry, REML is not a valid for a non-square Z matrix."))
+            if K == zeros(2, 2)
+                println("Sorry, REML cannot be used with random SNP effects (e.g. RR-BLUP). Try GBLUP where the SNP effects are fixed.")
+            else
+                println("Sorry, REML is not a valid for a non-square Z matrix.")
+            end
             return(2)
         end
     else
-        println(string("Sorry. ", _method_optim_, " is not a valid method of estimating the variances of the random effects effects. Please pick ML or REML."))
+        println(string("Sorry. ", _method_, " is not a valid method of estimating the variances of the random effects effects. Please pick ML or REML."))
         return(1)
     end
     return(neg_log_lik)
 end
+
+# n = 5                 ### number of founders
+# m = 10_000            ### number of loci
+# l = 135_000_000       ### total genome length
+# k = 5                 ### number of chromosomes
+# ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+# a = 2                 ### number of alleles per locus
+# vec_chr_lengths = [0] ### chromosome lengths
+# vec_chr_names = [""]  ### chromosome names 
+# dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+# o = 100               ### total number of simulated individuals
+# t = 10                ### number of random mating constant population size generation to simulate
+# nQTL = 10             ### number of QTL to simulate
+# heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+# LD_chr = ""           ### chromosome to calculate LD decay from
+# LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+# plot_LD = false       ### simulate# plot simulated LD decay
+# @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+# npools = 5
+# @time X, y = POOL(_X, _y, npools)
+# @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+# K = zeros(2,2)
+# X = hcat(ones(npools), X)
+# Z = diagm(repeat([1.0], npools))
+
+# using Optim
+# lower = [1e-10, 1e-10]
+# upper = [100, 100]
+# initial = [1.0, 1.0]
+# inner_optimizer = GradientDescent()
+# result = Optim.optimize(params->OPTIMIZE_MM(params, X, y, Z, K), lower, upper, initial, Fminbox(inner_optimizer))
 
 
 
