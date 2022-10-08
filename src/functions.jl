@@ -735,11 +735,20 @@ function FILTER(GENOTYPE::Window, epsilon::Float64=1e-10)::Tuple{Matrix{Float64}
     X = Float64.(GENOTYPE.cou')
     ### Keep only p-1 alleles per locus where p is the number of polymorphic alleles in a locus
     _X = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
+    n, m = size(_X)
     vec_idx = []
-    for j in axes(_X, 2)
+    for j in 1:m
         x = _X[:, j]
-        idx_nonzeros = collect(1:7)[x .!= 0]
-        idx = (j-1)*7 .+ idx_nonzeros[x[idx_nonzeros] .!= minimum(x[idx_nonzeros])]
+        idx = x .!= 0
+        idx_allele = collect(1:7)[idx]
+        x = x[idx_allele]
+        if sum(x .== minimum(x)) > 1
+            saved_min_allele = idx_allele[x .== minimum(x)][2:end]
+        else
+            saved_min_allele = []
+        end
+        idx = (j-1)*7 .+ idx_allele[x .!= minimum(x)]
+        append!(idx, saved_min_allele)
         append!(vec_idx, idx)
     end
     X = X[:, vec_idx]
@@ -1699,7 +1708,7 @@ function NLL_MM(θ::Vector{Float64}, X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_
     return(neg_log_lik)
 end
 
-function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1])::Tuple{Vector{Float64}, Vector{Float64}}
+function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1])::Tuple{Vector{Float64}, Vector{Float64}}
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1720,6 +1729,12 @@ function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CA
     # npools = 5
     # @time X, y = POOL(_X, _y, npools)
     # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    # G = LOAD(syncx, false)
+    # X, idx = FILTER(G)
+    # vec_chr = repeat(G.chr, inner=7)[idx]
+    # vec_pos = repeat(G.pos, inner=7)[idx]
+    # ϕ = LOAD(csv, ",", true, 1, [2])
+    # y = Float64.(ϕ.phe)[:,1]
     # @time C = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
     # X = hcat(ones(npools), X)
     # ### GBLUP: y = Xβ + g + ϵ,
@@ -1734,7 +1749,8 @@ function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CA
     # K = C   
     # MM_method = "N<<P"
     # _method_ = "ML"
-    # @time β̂, μ̂ = OPTIM_MM(X, y, Z, K, MM_method, _method_)
+    # inner_optimizer = LBFGS()
+    # @time β̂, μ̂ = OPTIM_MM(X, y, Z, K, MM_method, _method_, inner_optimizer)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
     # ### RR-BLUP: y = Xβ + Zμ + ϵ,
     # ###     where Z are the SNPs,
@@ -1748,30 +1764,14 @@ function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CA
     # K = zeros(2,2)
     # MM_method = "N<<P"
     # _method_ = "ML"
-    # @time β̂, μ̂ = OPTIM_MM(X, y, Z, K, MM_method, _method_)
+    # inner_optimizer = LBFGS()
+    # @time β̂, μ̂ = OPTIM_MM(X, y, Z, K, MM_method, _method_, inner_optimizer)
     # p2 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
     ### Find the optimum β̂ and μ̂
-    lower_limits = [1e-10, 1e-10]
-    upper_limits = [1e+10, 1e+10]
-    initial_values = [1.0, 1.0]
-    inner_optimizer = "NONE"
-    @time θ = Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values)
-    # @time θ = Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values)
-    # inner_optimizer = NelderMead()
-    # @time θ = Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
-    # @time θ = Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
-    # inner_optimizer = SimulatedAnnealing()
-    # @time θ = Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
-    # @time θ = Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
-    # inner_optimizer = GradientDescent()
-    # @time θ = Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
-    # @time θ = Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
-    # θ = try
-    #     Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
-    # catch ### lower limits of 1e-20 to 1e-6 causes beta dist parameter values to shrink to zero somehow - so we're setting lower limits to 1e-5 instead
-    #     lower_limits = [1e-5, 1e-5, 1e-5, 1e-5]
-    #     Optim.optimize(params->NLL_MM(params, X, y, Z, K), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
-    # end
+    lower_limits = [1e-5, 1e-5]
+    upper_limits = [1e+5, 1e+5]
+    initial_values = lower_limits .+ ((upper_limits - lower_limits) ./ 2)
+    θ = Optim.optimize(parameters->NLL_MM(parameters, X, y, Z, K, MM_method, _method_), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
     σ2u = θ.minimizer[1] # variance of the other random effects (assuming homoscedasticity)
     σ2e = θ.minimizer[2] # variance of the error effects (assuming homoscedasticity)
 	n = length(y)		# number of individual samples
