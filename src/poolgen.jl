@@ -1,7 +1,7 @@
 module poolgen
 
 include("user_functions.jl")
-using .user_functions: pileup2syncx, filter, impute
+using .user_functions: pileup2syncx, filter, impute, gwalpha
 
 ### Documentation
 """

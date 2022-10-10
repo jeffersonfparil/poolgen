@@ -1708,7 +1708,7 @@ function NLL_MM(θ::Vector{Float64}, X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_
     return(neg_log_lik)
 end
 
-function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1])::Tuple{Vector{Float64}, Vector{Float64}}
+function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}}
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1749,9 +1749,10 @@ function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CA
     # K = C   
     # MM_method = "N<<P"
     # _method_ = "ML"
+    # optim_trace = true
     # inner_optimizer = LBFGS()
-    # @time β̂, μ̂ = OPTIM_MM(X, y, Z, K, MM_method, _method_, inner_optimizer)
-    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    # @time β̂, μ̂ = OPTIM_MM(X, y, Z, K, MM_method, _method_, inner_optimizer, optim_trace)
+    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂[2:end]), title="Estimated", legend=false, markerstrokewidth=0.001, markeralpha=0.4);; Plots.plot(p1, p2, layout=(2,1))
     # ### RR-BLUP: y = Xβ + Zμ + ϵ,
     # ###     where Z are the SNPs,
     # ###     and μ~MVN(0, D),
@@ -1765,13 +1766,25 @@ function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CA
     # MM_method = "N<<P"
     # _method_ = "ML"
     # inner_optimizer = LBFGS()
-    # @time β̂, μ̂ = OPTIM_MM(X, y, Z, K, MM_method, _method_, inner_optimizer)
-    # p2 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    # optim_trace = true
+    # @time β̂, μ̂ = OPTIM_MM(X, y, Z, K, MM_method, _method_, inner_optimizer, optim_trace)
+    # p2 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false, markerstrokewidth=0.001, markeralpha=0.4);; Plots.plot(p1, p2, layout=(2,1))
     ### Find the optimum β̂ and μ̂
     lower_limits = [1e-5, 1e-5]
     upper_limits = [1e+5, 1e+5]
-    initial_values = lower_limits .+ ((upper_limits - lower_limits) ./ 2)
-    θ = Optim.optimize(parameters->NLL_MM(parameters, X, y, Z, K, MM_method, _method_), lower_limits, upper_limits, initial_values, Fminbox(inner_optimizer))
+    initial_values = [1.0, 1.0]
+    θ = Optim.optimize(parameters->NLL_MM(parameters, X, y, Z, K, MM_method, _method_),
+                       lower_limits,
+                       upper_limits,
+                       initial_values,
+                       Fminbox(inner_optimizer),
+                       Optim.Options(f_tol = 1e-20,
+                                     g_tol = 1e-10,
+                                     iterations = 1_000,
+                                     store_trace = false,
+                                     show_trace = optim_trace,
+                                     show_every=1, 
+                                     time_limit=NaN))
     σ2u = θ.minimizer[1] # variance of the other random effects (assuming homoscedasticity)
     σ2e = θ.minimizer[2] # variance of the error effects (assuming homoscedasticity)
 	n = length(y)		# number of individual samples
@@ -1788,17 +1801,51 @@ function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CA
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
     V = (Z * D * Z') + R
     β̂, μ̂ = MM(X, y, Z, D, R, MM_method)
+    ### Output messages
+    @show θ
+    if (θ.f_converged) | (θ.g_converged)
+        println("CONVERGED! 😄")
+    else
+        println("DID NOT CONVERGE! 😭")
+    end
     return(β̂, μ̂)
 end
 
-
-
-
-
-
-
-
 function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], covariate_df::Int64=1, out::String="")::String
+    n = 5                 ### number of founders
+    m = 10_000            ### number of loci
+    l = 135_000_000       ### total genome length
+    k = 5                 ### number of chromosomes
+    ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    a = 2                 ### number of alleles per locus
+    vec_chr_lengths = [0] ### chromosome lengths
+    vec_chr_names = [""]  ### chromosome names 
+    dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    o = 100               ### total number of simulated individuals
+    t = 10                ### number of random mating constant population size generation to simulate
+    nQTL = 10             ### number of QTL to simulate
+    heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    LD_chr = ""           ### chromosome to calculate LD decay from
+    LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    plot_LD = false       ### simulate# plot simulated LD decay
+    @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    npools = 5
+    @time X, y = POOL(_X, _y, npools)
+    @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    file = open(syncx, "r")
+    seekend(file)
+    threads = 4
+    vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
+    close(file)
+    init = vec_positions[1] # init = 0
+    term = vec_positions[end] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
+    maf = 0.001
+    delimiter = ","
+    header = true
+    id_col = 1
+    phenotype_col = 2
+    missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    out = ""
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # file = open(syncx, "r")
     # seekend(file)
@@ -1939,6 +1986,15 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
 
     return(out)
 end
+
+
+
+
+
+
+
+
+
 
 function GWAS_OLS_MULTIPLE(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
     X = hcat(ones(size(X, 1)), Float64.(X))
