@@ -1454,7 +1454,8 @@ function INVERSE(A)::Matrix{Float64}
     end
 end
 
-function OLS(X, y, _method_::String=["CANONICAL", "MULTIALGORITHMIC", "N<<P"][3])::Vector{Float64}
+function OLS(X, y, _method_::String)::Vector{Float64}
+    ### OLS using various methods and only outputting the effect estimates
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1473,20 +1474,51 @@ function OLS(X, y, _method_::String=["CANONICAL", "MULTIALGORITHMIC", "N<<P"][3]
     # plot_LD = false       ### simulate# plot simulated LD decay
     # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
     # X = hcat(ones(o), X)
-    # _method_ = "MULTIALGORITHMIC"
+    # _method_ = ["CANONICAL", "MULTIALGORITHMIC", "N<<P"][3]
     # @time β̂ = OLS(X, y, _method_)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
     if _method_ == "CANONICAL"
-        β = INVERSE(X' * X) * (X' * y)
+        β̂ = INVERSE(X' * X) * (X' * y)
     elseif _method_ == "MULTIALGORITHMIC"
-        β = X \ y
+        β̂ = X \ y
     elseif _method_ == "N<<P"
-        β = X' * INVERSE(X * X') * y
+        β̂ = X' * INVERSE(X * X') * y
     else
         println("Sorry. Invalid OLS method.")
         return(1)
     end
-    return(β)
+    return(β̂)
+end
+
+function OLS(X, y)::Tuple{Vector{Float64}, Matrix{Float64}, Float64}
+    ### Canonical OLS outputting estimates of the effects and variances
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # X = hcat(ones(o), X)
+    # @time β̂ = OLS(X, y)
+    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    n, p = size(X)
+    V = INVERSE(X' * X)
+    β̂ = V * (X' * y)
+    ε̂ = y - (X * β̂)
+    σϵ̂ = (ε̂' * ε̂) / (n-p)
+    Vβ̂ = σϵ̂ * V
+    return(β̂, Vβ̂, σϵ̂)
 end
 
 function GLMNET(X, y, alpha::Float64=1.0)
@@ -1812,41 +1844,26 @@ function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CA
 end
 
 function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], covariate_df::Int64=1, out::String="")::String
-    n = 5                 ### number of founders
-    m = 10_000            ### number of loci
-    l = 135_000_000       ### total genome length
-    k = 5                 ### number of chromosomes
-    ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    a = 2                 ### number of alleles per locus
-    vec_chr_lengths = [0] ### chromosome lengths
-    vec_chr_names = [""]  ### chromosome names 
-    dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    o = 100               ### total number of simulated individuals
-    t = 10                ### number of random mating constant population size generation to simulate
-    nQTL = 10             ### number of QTL to simulate
-    heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    LD_chr = ""           ### chromosome to calculate LD decay from
-    LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    plot_LD = false       ### simulate# plot simulated LD decay
-    @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    npools = 5
-    @time X, y = POOL(_X, _y, npools)
-    @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    file = open(syncx, "r")
-    seekend(file)
-    threads = 4
-    vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
-    close(file)
-    init = vec_positions[1] # init = 0
-    term = vec_positions[end] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
-    maf = 0.001
-    delimiter = ","
-    header = true
-    id_col = 1
-    phenotype_col = 2
-    missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    out = ""
-    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 5
+    # @time X, y = POOL(_X, _y, npools)
+    # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
     # file = open(syncx, "r")
     # seekend(file)
     # threads = 4
@@ -1855,22 +1872,42 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # init = vec_positions[1] # init = 0
     # term = vec_positions[end] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
     # maf = 0.001
-    # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.csv"
     # delimiter = ","
     # header = true
-    # id_col = 3 ### pool IDs
-    # phenotype_col = 9 ### survival rate
+    # id_col = 1
+    # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # covariate = "COR"
+    # covariate_df = 1
     # out = ""
-    ### Standard normalise phenotype data so that we can force the intercept at zero and have
+    # tsv = OLS_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, covariate_df, out)
+    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(-log10.(vec_pval), title="Estimated", legend=false, markerstrokewidth=0.001, markeralpha=0.4);; Plots.plot(p1, p2, layout=(2,1))
+    # # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
+    # # file = open(syncx, "r")
+    # # seekend(file)
+    # # threads = 4
+    # # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
+    # # close(file)
+    # # init = vec_positions[1] # init = 0
+    # # term = vec_positions[end] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
+    # # maf = 0.001
+    # # phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.csv"
+    # # delimiter = ","
+    # # header = true
+    # # id_col = 3 ### pool IDs
+    # # phenotype_col = 9 ### survival rate
+    # # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # # covariate = "COR"
+    # # covariate_df = 1
+    # # out = ""
     ### Output syncx
     if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWASIMPLEREG.tsv")
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-OLS_ITERATIVE.tsv")
     end
     file_out = open(out, "a")
     ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
-    P = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = P.phe[:,1]
+    ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
+    y = ϕ.phe[:,1]
     y = (y .- mean(y)) ./ std(y)
     n = length(y)
     ### Open syncx file
@@ -1886,24 +1923,27 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     seek(file, init)
     ### Prepare covariate
     if covariate != ""
-        C = GENERATE_COVARIATE(syncx, 1_000, 0.95, df, covariate)
+        ρ = GENERATE_COVARIATE(syncx, 1_000, 0.95, covariate_df, covariate)
     end
     ### Regress
-    vec_chr = []
-    vec_pos = []
-    vec_allele = []
-    vec_b = []
-    vec_σb = []
-    vec_t = []
-    vec_pval = []
+    # vec_chr = []
+    # vec_pos = []
+    # vec_allele = []
+    # vec_β̂ = []
+    # vec_σβ̂ = []
+    # vec_t = []
+    # vec_pval = []
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     i = init
     while (i < term) & (!eof(file))
+        # @show position(file)
         locus = PARSE([PARSE(SyncxLine(i, readline(file)))])
         i = position(file)
         X = locus.cou ./ sum(locus.cou, dims=1)
         X = X'
-        if  (minimum(X[X .!= 0.0]) .>= maf) & (maximum(X[X .!= 0.0]) .<= (1 - maf))
+        ### Continue if allele frequences are larger that the minimum allele frequence (and vice-versa for 1-maf); and if the locus is polymorphic
+        if (minimum(X[X .!= 0.0]) .>= maf) & (maximum(X[X .!= 0.0]) .<= (1 - maf)) & (sum(var(X, dims=1)) > 0.0)
+            ### Keep p-1 alleles where p is the number of polymorphic alleles
             idx = collect(1:7)[(var(X, dims=1) .> 0.0)[1, :]]
             freqs = mean(X[:, idx], dims=1)[1,:]
             idx = idx[freqs .!= maximum(freqs)]
@@ -1912,78 +1952,45 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
             a = vec_alleles[idx]
             # Remove completey correlated alleles
             if k > 1
-                C = LinearAlgebra.triu(cor(X), 1)
-                idx = .!(maximum(C, dims=1) .≈ 1.0)[1, :]
+                A = LinearAlgebra.triu(cor(X), 1)
+                idx = .!(maximum(A, dims=1) .≈ 1.0)[1, :]
                 X = X[:, idx]
                 a = a[idx]
             end
             n, k = size(X)
             for i in 1:k
-                x = X[:,i]
-                V =try
-                    inv(x' * x)
-                catch
-                    pinv(x' * x)
+                x = reshape(X[:,i], (n, 1))
+                p = 1 ### the number of parameters to estimate which is equal to 1 since we're not including an intercept as we centered y
+                ### Prepend the covariate
+                if covariate != ""
+                    x = hcat(ρ, x)
+                    _, p = size(x)
                 end
-                b = V * X' * y
-                ε = y - (X * b)
-                Vε = (ε' * ε) / (n-k)
-                if ((Vε < 0.0) | (Vε == Inf)) == false
-                    Vb = Vε * V
-                    Vb = Vb .- minimum(Vb)
-                    σb = []
-                    for j in 1:k
+                ### OLS using the canonical method and outputting the estimates of the effects and variances
+                β̂, Vβ̂, σϵ̂ = OLS(x, y)
+                ### Test if we have reasonable residual variance estimate then proceed to output
+                if ((σϵ̂ < 0.0) | (σϵ̂ == Inf)) == false
+                    σβ̂ = []
+                    for j in 1:p
                         # j = 1
-                        append!(σb, sqrt(Vb[j,j]))
+                        append!(σβ̂, sqrt(Vβ̂[j,j]))
                     end
-                    # ### Correcting for the likelihood orrank correlation with small number of pools
-                    # b = b .* (1 - (((n^2 - 1) / (2*n^2))^n))
-                    t = b ./ σb
+                    t = β̂ ./ σβ̂
                     pval = Distributions.ccdf(Distributions.Chisq(k), t.^2)
-                    append!(vec_chr, repeat(locus.chr, inner=length(a)))
-                    append!(vec_pos, repeat(locus.pos, inner=length(a)))
-                    append!(vec_allele, a)
-                    append!(vec_b, b)
-                    append!(vec_σb, σb)
-                    append!(vec_t, t)
-                    append!(vec_pval, pval)
+                    line = join([locus.chr[1], locus.pos[1], a[end], β̂[end], σβ̂[end], pval[end]], "\t")
+                    write(file_out, string(line, "\n"))
+                    # append!(vec_chr, repeat(locus.chr, inner=length(a)))
+                    # append!(vec_pos, repeat(locus.pos, inner=length(a)))
+                    # append!(vec_allele, a)
+                    # append!(vec_β̂, β̂[end])
+                    # append!(vec_σβ̂, σβ̂[end])
+                    # append!(vec_t, t[end])
+                    # append!(vec_pval, pval[end])
                 end
-                # using HypothesisTests
-                # for i in 1:k
-                #     # i = 1
-                #     # append!(vec_b, cor(y, X[:,i]))
-                #     c = HypothesisTests.CorrelationTest(y, X[:,i])
-                #     append!(vec_b, c.r)
-                #     # append!(vec_b, (c.r)*(std(X[:,1])/std(y)))
-                #     append!(vec_t, c.t)
-                #     append!(vec_pval, HypothesisTests.pvalue(c))
-                # end
             end
         end
     end
-    
-    Plots.histogram(vec_t)
-    vec_TLOD = ESTIMATE_LOD(abs.(vec_t))
-    GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_TLOD)
-    GWAS_PLOT_QQ(vec_TLOD)
-
-    vec_NLOD = ESTIMATE_LOD(Float64.(vec_b), Distributions.Normal)
-    GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_NLOD)
-    GWAS_PLOT_QQ(vec_NLOD)
-
-    vec_ELOD = ESTIMATE_LOD((vec_b), Distributions.Exponential)
-    GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_ELOD)
-    GWAS_PLOT_QQ(vec_ELOD)
-
-    vec_lod = ESTIMATE_LOD(Float64.(vec_b))
-    # vec_lod = ESTIMATE_LOD(abs.(vec_b))
-    # vec_lod = -log10.(Float64.(vec_pval))
-    vec_lod[isnan.(vec_lod)] .= 0.0
-    vec_lod[vec_lod .== Inf] .= maximum(vec_lod[vec_lod .!= Inf])
-    vec_pval = 10 .^(-vec_lod)
-    GWAS_PLOT_MANHATTAN(String.(vec_chr), Int64.(vec_pos), vec_lod)
-    GWAS_PLOT_QQ(vec_lod)
-
+    close(file_out)
     return(out)
 end
 
@@ -2244,10 +2251,10 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
                 β = append!([0.0], repeat([1/pf], pf))
             elseif model == "OLS"
                 β = try
-                    hcat(ones(nf), X_train) \ y_train
+                    OLS(hcat(ones(nf), X_train), y_train, "MULTIALGORITHMIC")
                 catch
                     try
-                        LinearAlgebra.pinv(hcat(ones(nf), X_train)'*hcat(ones(nf), X_train)) * (hcat(ones(nf), X_train)'*y_train)
+                        OLS(hcat(ones(nf), X_train), y_train, "CANONICAL")
                     catch
                         missing
                     end

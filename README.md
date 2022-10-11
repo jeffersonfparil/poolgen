@@ -18,8 +18,11 @@ Quantitative and population genetics analyses using pool sequencing data
 - [X] pileup filtering: pileup to pileup and pileup to syncx
 - [X] syncx filtering
 - [X] imputation pileup-to-syncx
-- [ ] iterative genome-wide association analysis (per locus)
-- [ ] genomic prediction modeling and cross-validation
+- [X] simple genotype and phenotype simulation framework (with LD)
+- [ ] iterative genome-wide association analysis (GWAS)
+- [ ] genomic prediction modeling (GP)
+- [ ] GWAS plotting
+- [ ] GP cross-validation and plotting
 
 ## File formats
 
