@@ -483,8 +483,9 @@ function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::I
     return(PARSE(convert(Vector{Phenotype}, lines), header_line[phenotype_cols]))
 end
 
-function LOAD_OUT(tsv_gwalpha::String, include_all_sites::Bool=false)::Tuple{Vector{String}, Vector{Int64}, Vector{String}, Vector{Float64}, Vector{Float64}}
+function LOAD_OUT(tsv_gwalpha::String, include_all_sites::Bool)::Tuple{Vector{String}, Vector{Int64}, Vector{String}, Vector{Float64}, Vector{Float64}}
     # tsv_gwalpha = "/home/jeffersonfparil/Documents/poolgen/test/test_3-GWAlpha-maf_0.001.tsv"
+    # include_all_sites = false
     file = open(tsv_gwalpha, "r")
     vec_chr = []
     vec_pos = []
@@ -503,6 +504,29 @@ function LOAD_OUT(tsv_gwalpha::String, include_all_sites::Bool=false)::Tuple{Vec
     end
     close(file)
     return(vec_chr, vec_pos, vec_allele, vec_freq, vec_alpha)
+end
+
+function LOAD_OUT(tsv::String)::Tuple{Vector{String}, Vector{Int64}, Vector{String}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
+    # tsv = "/home/jeffersonfparil/Documents/poolgen/test/test_5-output.tsv"
+    # @time vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_Vbeta, vec_pval = LOAD_OUT(tsv)
+    file = open(tsv, "r")
+    vec_chr = []
+    vec_pos = []
+    vec_allele = []
+    vec_freq = []
+    vec_beta = []
+    vec_pval = []
+    while !eof(file)
+        line = split(readline(file), "\t")
+        push!(vec_chr, line[1])
+        push!(vec_pos, parse(Int, line[2]))
+        push!(vec_allele, line[3])
+        push!(vec_freq, parse(Float64, line[4]))
+        push!(vec_beta, parse(Float64, line[5]))
+        push!(vec_pval, parse(Float64, line[6]))
+    end
+    close(file)
+    return(vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval)
 end
 
 function LOAD_PY(py_phenotype::String)::Tuple{String, Float64, Float64, Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}}
@@ -1866,7 +1890,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
     # file = open(syncx, "r")
     # seekend(file)
-    # threads = 4
+    # threads = 1
     # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
     # close(file)
     # init = vec_positions[1] # init = 0
@@ -1881,6 +1905,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # covariate_df = 1
     # out = ""
     # tsv = OLS_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, covariate_df, out)
+    # vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval = LOAD_OUT(tsv)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(-log10.(vec_pval), title="Estimated", legend=false, markerstrokewidth=0.001, markeralpha=0.4);; Plots.plot(p1, p2, layout=(2,1))
     # # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
     # # file = open(syncx, "r")
@@ -1900,7 +1925,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # # covariate = "COR"
     # # covariate_df = 1
     # # out = ""
-    ### Output syncx
+    ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-OLS_ITERATIVE.tsv")
     end
@@ -1934,11 +1959,11 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # vec_t = []
     # vec_pval = []
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
-    i = init
-    while (i < term) & (!eof(file))
+    pos = init
+    while (pos < term) & (!eof(file))
         # @show position(file)
-        locus = PARSE([PARSE(SyncxLine(i, readline(file)))])
-        i = position(file)
+        locus = PARSE([PARSE(SyncxLine(pos, readline(file)))])
+        pos = position(file)
         X = locus.cou ./ sum(locus.cou, dims=1)
         X = X'
         ### Continue if allele frequences are larger that the minimum allele frequence (and vice-versa for 1-maf); and if the locus is polymorphic
@@ -1977,10 +2002,15 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                     end
                     t = β̂ ./ σβ̂
                     pval = Distributions.ccdf(Distributions.Chisq(k), t.^2)
-                    line = join([locus.chr[1], locus.pos[1], a[end], β̂[end], σβ̂[end], pval[end]], "\t")
+                    line = join([locus.chr[1],
+                                 locus.pos[1],
+                                 a[end],
+                                 mean(x[:,end]),
+                                 β̂[end],
+                                 pval[end]], "\t")
                     write(file_out, string(line, "\n"))
-                    # append!(vec_chr, repeat(locus.chr, inner=length(a)))
-                    # append!(vec_pos, repeat(locus.pos, inner=length(a)))
+                    # append!(vec_chr, locus.chr[1])
+                    # append!(vec_pos, locus.pos[1])
                     # append!(vec_allele, a)
                     # append!(vec_β̂, β̂[end])
                     # append!(vec_σβ̂, σβ̂[end])
@@ -1990,11 +2020,177 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
             end
         end
     end
+    close(file)
     close(file_out)
     return(out)
 end
 
+function COR_BOOTSTRAP(ρ, x, y)::Tuple{Int64, Int64}
+    # n = 5
+    # x = rand(n)
+    # y = rand(n)
+    # ρ = cor(x, y)
+    n = length(x)
+    niter = minimum([100, Int64(n*(n-1)/2)])
+    vec_ρ = []
+    for i in 1:niter
+        x_rand = sample(x, n; replace=false)
+        y_rand = sample(y, n; replace=false)
+        append!(vec_ρ, cor(x_rand, y_rand))
+    end
+    positive_cases = sum(abs.(vec_ρ) .>= abs(ρ))
+    return(positive_cases, niter)
+end
 
+function COR_BOOTPVAL(ρ::Float64, x::Vector{Float64}, y::Vector{Float64}, nburnin::Int64=10_000, δ::Float64=1e-10, maxiter::Int64=1_000)::Vector{Float64}
+    # n = 5
+    # x = rand(n)
+    # y = x * 10
+    # ρ = cor(x, y)
+    # nburnin = 10_000
+    # δ = 1e-10
+    # maxiter = 1_000
+    pval = [0.50]
+    positive_cases = 0
+    total_cases = 0
+    ### Burn-in steps
+    for i in 1:nburnin
+        _p, _t = COR_BOOTSTRAP(cor(x,y), x, y)
+        positive_cases += _p
+        total_cases += _t
+        append!(pval, positive_cases / total_cases)
+    end
+    ### Bootstrap until convergence or maximum number of iterations is reached
+    iter = 0
+    pval_prev, pval_curr = pval[(end-1):end]
+    while (mean(diff(pval[(end-10):end])) >= δ) | (iter >= maxiter)
+        iter += 1
+        _p, _t = COR_BOOTSTRAP(ρ, x, y)
+        positive_cases += _p
+        total_cases += _t
+        append!(pval, positive_cases / total_cases)
+        pval_prev, pval_curr = pval[(end-1):end]
+    end
+    ### Output
+    return(pval)
+end
+
+function COR_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], nburnin::Int64=1_000, δ::Float64=1e-10, maxiter::Int64=1_000, out::String="")::String
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 5
+    # @time X, y = POOL(_X, _y, npools)
+    # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    # file = open(syncx, "r")
+    # seekend(file)
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
+    # close(file)
+    # init = vec_positions[1] # init = 0
+    # term = vec_positions[end] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
+    # maf = 0.001
+    # delimiter = ","
+    # header = true
+    # id_col = 1
+    # phenotype_col = 2
+    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # out = ""
+    # nburnin = 1_000
+    # δ = 1e-10
+    # maxiter = 1_000
+    # @time tsv = COR_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, nburnin, δ, maxiter, out)
+    # vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval = LOAD_OUT(tsv)
+    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(-log10.(vec_pval), title="Estimated", legend=false, markerstrokewidth=0.001, markeralpha=0.4);; Plots.plot(p1, p2, layout=(2,1))
+    ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
+    if out==""
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-COR_ITERATIVE.tsv")
+    end
+    file_out = open(out, "a")
+    ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
+    ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
+    y = ϕ.phe[:,1]
+    y = (y .- mean(y)) ./ std(y)
+    n = length(y)
+    ### Open syncx file
+    file = open(syncx, "r")
+    ### Set position to the next line if the current position is a truncated line
+    if (init>0)
+        seek(file, init-1)
+        line = readline(file)
+        if line != ""
+            init = position(file)
+        end
+    end
+    seek(file, init)
+    ### Correlate
+    # vec_chr = []
+    # vec_pos = []
+    # vec_allele = []
+    # vec_ρ = []
+    # vec_pval = []
+    vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
+    pos = init
+    while (pos < term) & (!eof(file))
+        # @show position(file)
+        locus = PARSE([PARSE(SyncxLine(pos, readline(file)))])
+        pos = position(file)
+        X = locus.cou ./ sum(locus.cou, dims=1)
+        X = X'
+        ### Continue if allele frequences are larger that the minimum allele frequence (and vice-versa for 1-maf); and if the locus is polymorphic
+        if (minimum(X[X .!= 0.0]) .>= maf) & (maximum(X[X .!= 0.0]) .<= (1 - maf)) & (sum(var(X, dims=1)) > 0.0)
+            ### Keep p-1 alleles where p is the number of polymorphic alleles
+            idx = collect(1:7)[(var(X, dims=1) .> 0.0)[1, :]]
+            freqs = mean(X[:, idx], dims=1)[1,:]
+            idx = idx[freqs .!= maximum(freqs)]
+            X = X[:, idx]
+            n, k = size(X)
+            a = vec_alleles[idx]
+            # Remove completey correlated alleles
+            if k > 1
+                A = LinearAlgebra.triu(cor(X), 1)
+                idx = .!(maximum(A, dims=1) .≈ 1.0)[1, :]
+                X = X[:, idx]
+                a = a[idx]
+            end
+            n, k = size(X)
+            for i in 1:k
+                x = X[:,i]
+                ρ = cor(x, y)[1]
+                pval = COR_BOOTPVAL(ρ, x, y, nburnin, δ, maxiter)[end]
+                line = join([locus.chr[1],
+                                 locus.pos[1],
+                                 a[end],
+                                 mean(x[:,end]),
+                                 ρ,
+                                 pval], "\t")
+                write(file_out, string(line, "\n"))
+                # append!(vec_chr, locus.chr[1])
+                # append!(vec_pos, locus.pos[1])
+                # append!(vec_allele, a)
+                # append!(vec_ρ, ρ)
+                # append!(vec_pval, pval)
+            end
+        end
+    end
+    close(file)
+    close(file_out)
+    return(out)
+end
 
 
 
