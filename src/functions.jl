@@ -1501,6 +1501,9 @@ function OLS(X, y, _method_::String)::Vector{Float64}
     # _method_ = ["CANONICAL", "MULTIALGORITHMIC", "N<<P"][3]
     # @time β̂ = OLS(X, y, _method_)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    if isa(X, Vector)
+        X = reshape(X, (length(X), 1))
+    end
     if _method_ == "CANONICAL"
         β̂ = INVERSE(X' * X) * (X' * y)
     elseif _method_ == "MULTIALGORITHMIC"
@@ -2025,28 +2028,42 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     return(out)
 end
 
-function COR_BOOTSTRAP(ρ, x, y)::Tuple{Int64, Int64}
+function BOOTSTRAP(ρ, x, y, F::Function, F_params="")::Tuple{Int64, Int64}
     # n = 5
     # x = rand(n)
+    # # x = rand(n, 1)
     # y = rand(n)
-    # ρ = cor(x, y)
+    # F = cor
+    # F_params = ""
+    # # F = OLS
+    # # F_params = "CANONICAL"
+    # ρ = F(x, y, F_params)
     n = length(x)
     niter = minimum([100, Int64(n*(n-1)/2)])
     vec_ρ = []
     for i in 1:niter
         x_rand = sample(x, n; replace=false)
         y_rand = sample(y, n; replace=false)
-        append!(vec_ρ, cor(x_rand, y_rand))
+        if F_params != ""
+            if isa(F_params, Vector)
+                append!(vec_ρ, F(x_rand, y_rand, F_params...))
+            else
+                append!(vec_ρ, F(x_rand, y_rand, F_params))
+            end
+        else
+            append!(vec_ρ, F(x_rand, y_rand))
+        end
     end
     positive_cases = sum(abs.(vec_ρ) .>= abs(ρ))
     return(positive_cases, niter)
 end
 
-function COR_BOOTPVAL(ρ::Float64, x::Vector{Float64}, y::Vector{Float64}, nburnin::Int64=10_000, δ::Float64=1e-10, maxiter::Int64=1_000)::Vector{Float64}
+function BOOTSTRAP_PVAL(ρ, x, y, F::Function, F_params="", nburnin::Int64=10_000, δ::Float64=1e-10, maxiter::Int64=1_000)::Vector{Float64}
     # n = 5
     # x = rand(n)
     # y = x * 10
-    # ρ = cor(x, y)
+    # F = cor
+    # ρ = F(x, y)
     # nburnin = 10_000
     # δ = 1e-10
     # maxiter = 1_000
@@ -2055,7 +2072,7 @@ function COR_BOOTPVAL(ρ::Float64, x::Vector{Float64}, y::Vector{Float64}, nburn
     total_cases = 0
     ### Burn-in steps
     for i in 1:nburnin
-        _p, _t = COR_BOOTSTRAP(cor(x,y), x, y)
+        _p, _t = BOOTSTRAP(ρ, x, y, F, F_params)
         positive_cases += _p
         total_cases += _t
         append!(pval, positive_cases / total_cases)
@@ -2065,7 +2082,7 @@ function COR_BOOTPVAL(ρ::Float64, x::Vector{Float64}, y::Vector{Float64}, nburn
     pval_prev, pval_curr = pval[(end-1):end]
     while (mean(diff(pval[(end-10):end])) >= δ) | (iter >= maxiter)
         iter += 1
-        _p, _t = COR_BOOTSTRAP(ρ, x, y)
+        _p, _t = BOOTSTRAP(ρ, x, y, F, F_params)
         positive_cases += _p
         total_cases += _t
         append!(pval, positive_cases / total_cases)
@@ -2075,7 +2092,7 @@ function COR_BOOTPVAL(ρ::Float64, x::Vector{Float64}, y::Vector{Float64}, nburn
     return(pval)
 end
 
-function COR_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], nburnin::Int64=1_000, δ::Float64=1e-10, maxiter::Int64=1_000, out::String="")::String
+function BOO_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], F::Function=OLS, F_params="", nburnin::Int64=1_000, δ::Float64=1e-10, maxiter::Int64=1_000, out::String="")::String
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -2092,10 +2109,10 @@ function COR_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # LD_chr = ""           ### chromosome to calculate LD decay from
     # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
     # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # @time _vec_chr, _vec_pos, _X, _y, _β = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
     # npools = 5
     # @time X, y = POOL(_X, _y, npools)
-    # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    # @time syncx, phenotype = EXPORT_SIMULATED_DATA(_vec_chr, _vec_pos, X, y)
     # file = open(syncx, "r")
     # seekend(file)
     # threads = 4
@@ -2109,13 +2126,17 @@ function COR_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # id_col = 1
     # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # # F = cor
+    # F = OLS
+    # # F_params=""
+    # F_params="CANONICAL"
     # out = ""
-    # nburnin = 1_000
+    # nburnin = 10_000
     # δ = 1e-10
     # maxiter = 1_000
-    # @time tsv = COR_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, nburnin, δ, maxiter, out)
+    # @time tsv = BOO_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, F, F_params, nburnin, δ, maxiter, out)
     # vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval = LOAD_OUT(tsv)
-    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(-log10.(vec_pval), title="Estimated", legend=false, markerstrokewidth=0.001, markeralpha=0.4);; Plots.plot(p1, p2, layout=(2,1))
+    # p1 = Plots.scatter(_β, tiyetle="True", legend=false);; p2 = Plots.scatter(-log10.(vec_pval), title="Estimated", legend=false, markerstrokewidth=0.001, markeralpha=0.4);; Plots.plot(p1, p2, layout=(2,1))
     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-COR_ITERATIVE.tsv")
@@ -2169,9 +2190,18 @@ function COR_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
             end
             n, k = size(X)
             for i in 1:k
-                x = X[:,i]
-                ρ = cor(x, y)[1]
-                pval = COR_BOOTPVAL(ρ, x, y, nburnin, δ, maxiter)[end]
+                # i = 1
+                x = X[:,i:i]
+                if F_params != ""
+                    if isa(F_params, Vector)
+                        ρ = F(x, y, F_params...)[1]
+                    else
+                        ρ = F(x, y, F_params)[1]
+                    end
+                else
+                    ρ = F(x, y)[1]
+                end
+                pval = BOOTSTRAP_PVAL(ρ, x, y, F, F_params, nburnin, δ, maxiter)[end]
                 line = join([locus.chr[1],
                                  locus.pos[1],
                                  a[end],
