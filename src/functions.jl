@@ -1470,7 +1470,7 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95,
     return(C)
 end
 
-function INVERSE(A)::Matrix{Float64}
+function INVERSE(A::Array{T})::Matrix{Float64} where T <: Number
     try
         inv(A)
     catch
@@ -1478,7 +1478,7 @@ function INVERSE(A)::Matrix{Float64}
     end
 end
 
-function OLS(X, y, _method_::String)::Vector{Float64}
+function OLS(X::Array{T}, y::Array{T}, _method_::String)::Vector{Float64} where T <: Number
     ### OLS using various methods and only outputting the effect estimates
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
@@ -1517,7 +1517,7 @@ function OLS(X, y, _method_::String)::Vector{Float64}
     return(β̂)
 end
 
-function OLS(X, y)::Tuple{Vector{Float64}, Matrix{Float64}, Float64}
+function OLS(X::Array{T}, y::Array{T})::Tuple{Vector{Float64}, Matrix{Float64}, Float64} where T <: Number
     ### Canonical OLS outputting estimates of the effects and variances
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
@@ -1537,7 +1537,7 @@ function OLS(X, y)::Tuple{Vector{Float64}, Matrix{Float64}, Float64}
     # plot_LD = false       ### simulate# plot simulated LD decay
     # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
     # X = hcat(ones(o), X)
-    # @time β̂ = OLS(X, y)
+    # @time β̂, Vβ̂, σϵ̂ = OLS(X, y)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
     n, p = size(X)
     V = INVERSE(X' * X)
@@ -1548,7 +1548,7 @@ function OLS(X, y)::Tuple{Vector{Float64}, Matrix{Float64}, Float64}
     return(β̂, Vβ̂, σϵ̂)
 end
 
-function GLMNET(X, y, alpha::Float64=1.0)
+function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0) where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1591,7 +1591,7 @@ function GLMNET(X, y, alpha::Float64=1.0)
     return(β̂)
 end
 
-function MM(X, y, Z, D, R, _method_::String=["CANONICAL", "N<<P"][2])::Tuple{Vector{Float64}, Vector{Float64}}
+function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Array{T}, R::Array{T}, _method_::String=["CANONICAL", "N<<P"][2])::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1665,7 +1665,7 @@ function MM(X, y, Z, D, R, _method_::String=["CANONICAL", "N<<P"][2])::Tuple{Vec
     return(β̂, μ̂)
 end
 
-function NLL_MM(θ::Vector{Float64}, X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1])::Float64
+function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1])::Float64 where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1767,7 +1767,7 @@ function NLL_MM(θ::Vector{Float64}, X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_
     return(neg_log_lik)
 end
 
-function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}}
+function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}=zeros(2,2), MM_method::String=["CANONICAL", "N<<P"][2], _method_::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1868,6 +1868,70 @@ function OPTIM_MM(X, y, Z, K::Matrix{Float64}=zeros(2,2), MM_method::String=["CA
         println("DID NOT CONVERGE! 😭")
     end
     return(β̂, μ̂)
+end
+
+function BOOTSTRAP(ρ, x::Array{T}, y::Array{T}, F::Function, F_params="")::Tuple{Int64, Int64} where T <: Number
+    # n = 5
+    # x = rand(n)
+    # # x = rand(n, 1)
+    # y = rand(n)
+    # F = cor
+    # F_params = ""
+    # # F = OLS
+    # # F_params = "CANONICAL"
+    # ρ = F(x, y, F_params)
+    n = length(x)
+    niter = minimum([100, Int64(n*(n-1)/2)])
+    vec_ρ = []
+    for i in 1:niter
+        x_rand = sample(x, n; replace=false)
+        y_rand = sample(y, n; replace=false)
+        if F_params != ""
+            if isa(F_params, Vector)
+                append!(vec_ρ, F(x_rand, y_rand, F_params...))
+            else
+                append!(vec_ρ, F(x_rand, y_rand, F_params))
+            end
+        else
+            append!(vec_ρ, F(x_rand, y_rand))
+        end
+    end
+    positive_cases = sum(abs.(vec_ρ) .>= abs(ρ))
+    return(positive_cases, niter)
+end
+
+function BOOTSTRAP_PVAL(ρ, x::Array{T}, y::Array{T}, F::Function, F_params="", nburnin::Int64=10_000, δ::Float64=1e-10, maxiter::Int64=1_000)::Vector{Float64} where T <: Number
+    # n = 5
+    # x = rand(n)
+    # y = x * 10
+    # F = cor
+    # ρ = F(x, y)
+    # nburnin = 10_000
+    # δ = 1e-10
+    # maxiter = 1_000
+    pval = [0.50]
+    positive_cases = 0
+    total_cases = 0
+    ### Burn-in steps
+    for i in 1:nburnin
+        _p, _t = BOOTSTRAP(ρ, x, y, F, F_params)
+        positive_cases += _p
+        total_cases += _t
+        append!(pval, positive_cases / total_cases)
+    end
+    ### Bootstrap until convergence or maximum number of iterations is reached
+    iter = 0
+    pval_prev, pval_curr = pval[(end-1):end]
+    while (mean(diff(pval[(end-10):end])) >= δ) | (iter >= maxiter)
+        iter += 1
+        _p, _t = BOOTSTRAP(ρ, x, y, F, F_params)
+        positive_cases += _p
+        total_cases += _t
+        append!(pval, positive_cases / total_cases)
+        pval_prev, pval_curr = pval[(end-1):end]
+    end
+    ### Output
+    return(pval)
 end
 
 function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], covariate_df::Int64=1, out::String="")::String
@@ -2028,70 +2092,6 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     return(out)
 end
 
-function BOOTSTRAP(ρ, x, y, F::Function, F_params="")::Tuple{Int64, Int64}
-    # n = 5
-    # x = rand(n)
-    # # x = rand(n, 1)
-    # y = rand(n)
-    # F = cor
-    # F_params = ""
-    # # F = OLS
-    # # F_params = "CANONICAL"
-    # ρ = F(x, y, F_params)
-    n = length(x)
-    niter = minimum([100, Int64(n*(n-1)/2)])
-    vec_ρ = []
-    for i in 1:niter
-        x_rand = sample(x, n; replace=false)
-        y_rand = sample(y, n; replace=false)
-        if F_params != ""
-            if isa(F_params, Vector)
-                append!(vec_ρ, F(x_rand, y_rand, F_params...))
-            else
-                append!(vec_ρ, F(x_rand, y_rand, F_params))
-            end
-        else
-            append!(vec_ρ, F(x_rand, y_rand))
-        end
-    end
-    positive_cases = sum(abs.(vec_ρ) .>= abs(ρ))
-    return(positive_cases, niter)
-end
-
-function BOOTSTRAP_PVAL(ρ, x, y, F::Function, F_params="", nburnin::Int64=10_000, δ::Float64=1e-10, maxiter::Int64=1_000)::Vector{Float64}
-    # n = 5
-    # x = rand(n)
-    # y = x * 10
-    # F = cor
-    # ρ = F(x, y)
-    # nburnin = 10_000
-    # δ = 1e-10
-    # maxiter = 1_000
-    pval = [0.50]
-    positive_cases = 0
-    total_cases = 0
-    ### Burn-in steps
-    for i in 1:nburnin
-        _p, _t = BOOTSTRAP(ρ, x, y, F, F_params)
-        positive_cases += _p
-        total_cases += _t
-        append!(pval, positive_cases / total_cases)
-    end
-    ### Bootstrap until convergence or maximum number of iterations is reached
-    iter = 0
-    pval_prev, pval_curr = pval[(end-1):end]
-    while (mean(diff(pval[(end-10):end])) >= δ) | (iter >= maxiter)
-        iter += 1
-        _p, _t = BOOTSTRAP(ρ, x, y, F, F_params)
-        positive_cases += _p
-        total_cases += _t
-        append!(pval, positive_cases / total_cases)
-        pval_prev, pval_curr = pval[(end-1):end]
-    end
-    ### Output
-    return(pval)
-end
-
 function BOO_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], F::Function=OLS, F_params="", nburnin::Int64=1_000, δ::Float64=1e-10, maxiter::Int64=1_000, out::String="")::String
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
@@ -2224,78 +2224,6 @@ end
 
 
 
-
-
-
-
-
-function GWAS_OLS_MULTIPLE(y::Vector{Float64}, X::Matrix{Float64})::Vector{Float64}
-    X = hcat(ones(size(X, 1)), Float64.(X))
-    # b = X \ Y; ### Slow
-    b = X' * inv(X * X') * y; ### Wayyyy faster! ~12 times faster!
-    return(b[2:end])
-end
-
-function MODEL_SIMULATE_SIMPLREG(y::Vector{Float64}, n_degrees::Int64=3, n_sim::Int64=100, round_digits::Int64=4)::Vector{Float64}
-    # n_degrees = 2
-    # n_sim = 100
-    n = length(y)
-    k = 1 + n_degrees
-    P = ones(n)
-    for i in 1:n_degrees
-        P = hcat(P, collect(1:n).^i)
-    end
-    b = inv(P' * P) * P' * y
-    # e = y .- (P*b)
-    # Ve = (e' * e) ./ (n-k)
-    # Vb = Ve .* inv(P' * P)
-    P_sim = ones(n_sim)
-    for i in 1:n_degrees
-        P_sim = hcat(P_sim, collect(range(1, n, length=100)).^i)
-    end
-    y_sim = round.(P_sim * b, digits=round_digits)
-    return(y_sim)
-end
-
-function GWAS_SIMULREG(y::Vector{Float64}, X::Matrix{Float64})::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}}
-    _, m = size(X)
-    y_sim = MODEL_SIMULATE_SIMPLREG(y)
-    n = length(y_sim)
-    k = 2
-    vec_b = []
-    vec_t = []
-    vec_pval = []
-    @time for j in 1:m
-        # j = 37417
-        # j = 103647
-        x = X[:, j]
-        x_sim = MODEL_SIMULATE_SIMPLREG(x)
-        if var(x_sim) != 0.0
-            X_sim = hcat(ones(length(x_sim)), x_sim)
-            b = inv(X_sim' * X_sim) * X_sim' * y_sim
-            e = y_sim .- (X_sim*b)
-            Ve = (e' * e) ./ (n-k)
-            Vb = Ve .* inv(X_sim' * X_sim)
-            sb = sqrt.([Vb[1,1], Vb[k,1k]])
-            t = b ./ sb
-            pval = Distributions.ccdf(Distributions.Chisq(k-1), t.^2)
-        else
-            b = [0.0, 0.0]
-            t = [0.0, 0.0]
-            pval = [1.0, 1.0]
-        end
-        # p1 = Plots.plot(y, legend=false)
-        # p2 = Plots.plot(x, legend=false)
-        # p3 = Plots.plot(y_sim, legend=false)
-        # p4 = Plots.plot(x_sim, legend=false)
-        # Plots.plot(p1, p2, p3, p4, layout=(2,2))
-        append!(vec_b, b[k])
-        append!(vec_t, t[k])
-        append!(vec_pval, pval[k])
-    end
-    vec_lod = -log10.(vec_pval)
-    return(vec_b, vec_t, vec_pval, vec_lod)
-end
 
 ### HYPOTHESIS TESTING
 function BEST_FITTING_DISTRIBUTION(vec_b::Vector{Float64})
