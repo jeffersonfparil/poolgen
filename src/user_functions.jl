@@ -14,6 +14,7 @@ using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
 using .functions: PARSE, SAVE, SPLIT, MERGE, CONVERT, PILEUP2SYNCX, FILTER, IMPUTE, GWALPHA
 using .functions: GWAS_PLOT_MANHATTAN, ESTIMATE_LOD
 using .functions: SIMULATE, POOL, EXPORT_SIMULATED_DATA
+using .functions: CV_OLS_MULTIVAR
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ###########

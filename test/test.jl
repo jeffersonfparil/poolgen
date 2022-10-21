@@ -8,7 +8,7 @@ if githubci
     Pkg.add(url="https://github.com/jeffersonfparil/poolgen.git")
     @everywhere using poolgen
 else
-    @everywhere include("/home/jeffersonfparil/Documents/poolgen/src/poolgen.jl")
+    @everywhere include("/data-weedomics-2/poolgen/src/poolgen.jl")
 end
 
 println("##########################################")
