@@ -3053,14 +3053,14 @@ function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64,
             pheno_training = string(syncx, "-CV-rep_", i, "-fold_", j, "-TRAINING.csv")
             syncx_validate = string(syncx, "-CV-rep_", i, "-fold_", j, "-VALIDATE.syncx")
             pheno_validate = string(syncx, "-CV-rep_", i, "-fold_", j, "-VALIDATE.csv")
-            out = string(syncx, "-CV-rep_", i, "-fold_", j, "-OLS_MUTIVAR.tsv")
+            tsv = string(syncx, "-CV-rep_", i, "-fold_", j, "-OLS_MUTIVAR.tsv")
 
             SAVE(Window(χ.chr, χ.pos, χ.ref, χ.cou[:, idx_training], zeros(1,1)),  syncx_training)
             SAVE(Phenotype(ϕ.iid[idx_training], [ϕ.tid[1]], ϕ.phe[idx_training, 1:1]), pheno_training, delimiter, ["id", ϕ.tid[1]])
             SAVE(Window(χ.chr, χ.pos, χ.ref, χ.cou[:, idx_validate], zeros(1,1)),  syncx_validate)
             SAVE(Phenotype(ϕ.iid[idx_validate], [ϕ.tid[1]], ϕ.phe[idx_validate, 1:1]), pheno_validate, delimiter, ["id", ϕ.tid[1]])
 
-            tsv = OLS_MULTIVAR(syncx_training, maf, pheno_training, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
+            tsv = OLS_MULTIVAR(syncx_training, maf, pheno_training, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, tsv)
             ŷ = PREDICT(tsv, syncx_validate)
             correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y[idx_validate], ŷ, y[idx_training])
             [correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p]
