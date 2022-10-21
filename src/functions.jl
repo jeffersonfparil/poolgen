@@ -3016,22 +3016,24 @@ function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64,
     vec_RRMSE = []
     vec_RMSLE = []
     vec_p = []
-    for i in 1:nrep
-        # i = 1
-        println("############################################")
-        println(string("Time: ", Dates.format(now(), "Y-U-d"), " | UTC: ", Dates.format(now(), "HH:MM:SS")))
-        println(string("Replication ", i, " of ", nrep))
+    # for i in 1:nrep
+    #     # i = 1
+    #     println("############################################")
+    #     println(string("Time: ", Dates.format(now(), "Y-U-d"), " | UTC: ", Dates.format(now(), "HH:MM:SS")))
+    #     println(string("Replication ", i, " of ", nrep))
         ### Parallel execution
-        @time vec_vec_metrics = @sync @showprogress @distributed (hcat) for j in 1:nfold
-            # j= 1
-            idx_training = mat_idx_rand[:, i] .!= j
-            idx_validate = mat_idx_rand[:, i] .== j
+        @time vec_vec_metrics = @sync @showprogress @distributed (hcat) for i in 1:(nreps*nfold)
+            # i = 1
+            rep = Int(ceil(i/nrep))
+            fold = mod(i, nrep)
+            idx_training = mat_idx_rand[:, rep] .!= fold
+            idx_validate = mat_idx_rand[:, rep] .== fold
 
-            syncx_training = string(syncx, "-CV-rep_", i, "-fold_", j, "-TRAINING.syncx")
-            pheno_training = string(syncx, "-CV-rep_", i, "-fold_", j, "-TRAINING.csv")
-            syncx_validate = string(syncx, "-CV-rep_", i, "-fold_", j, "-VALIDATE.syncx")
-            pheno_validate = string(syncx, "-CV-rep_", i, "-fold_", j, "-VALIDATE.csv")
-            tsv = string(syncx, "-CV-rep_", i, "-fold_", j, "-OLS_MULTIVAR.tsv")
+            syncx_training = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-TRAINING.syncx")
+            pheno_training = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-TRAINING.csv")
+            syncx_validate = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-VALIDATE.syncx")
+            pheno_validate = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-VALIDATE.csv")
+            tsv = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-OLS_MULTIVAR.tsv")
 
             SAVE(Window(χ.chr, χ.pos, χ.ref, χ.cou[:, idx_training], zeros(1,1)),  syncx_training)
             SAVE(Phenotype(ϕ.iid[idx_training], [ϕ.tid[1]], ϕ.phe[idx_training, 1:1]), pheno_training, delimiter, ["id", ϕ.tid[1]])
@@ -3041,7 +3043,7 @@ function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64,
             tsv = OLS_MULTIVAR(syncx_training, maf, pheno_training, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, tsv)
             ŷ = PREDICT(tsv, syncx_validate)
             correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y[idx_validate], ŷ, y[idx_training])
-            [i, j, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p]
+            [rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p]
         end
         ### Consolidate metrics
         for j in 1:size(vec_vec_metrics,2)
@@ -3062,7 +3064,7 @@ function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64,
             append!(vec_RMSLE, RMSLE)
             push!(vec_p, p)
         end
-    end
+    # end
     ### Output
     file_out = open(out, "a")
     line = string(join(["rep", "fold", "correlation_pearson", "correlation_spearman", "correlation_kendall", "R2", "R2_adj", "MAE", "MBE", "RAE", "MSE", "RMSE", "RRMSE", "RMSLE"], "\t"), "\n")
