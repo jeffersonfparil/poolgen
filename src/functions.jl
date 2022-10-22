@@ -2975,9 +2975,17 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
     # # FE_method = ["CANONICAL", "N<<P"][2]
-    # model  = poolgen.user_functions.functions.OLS_MULTIVAR
-    # params = ["N<<P"]
-    # # params = [1.0]
+    # # model  = poolgen.user_functions.functions.OLS_MULTIVAR; params = ["N<<P"]
+    # # model  = poolgen.user_functions.functions.ELA_MULTIVAR; params = [1.0]
+    # # #########################
+    # using Optim
+    # _covariate = ["", "XTX", "COR"][2]
+    # _model = ["GBLUP", "RRBLUP"][1]
+    # _method = ["ML", "REML"][1]
+    # _FE_method = ["CANONICAL", "N<<P"][2]
+    # _inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1]
+    # _optim_trace = false
+    # model = poolgen.user_functions.functions.LMM_MULTIVAR; params = [_covariate, _model, _method, _FE_method, _inner_optimizer, _optim_trace]
     # out = ""
     # # poolgen.user_functions.functions.CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
     # poolgen.user_functions.functions.CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, model, params, out)
