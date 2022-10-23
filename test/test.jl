@@ -105,22 +105,27 @@ distance=true
                     out="")
 
 println("##########################################")
-println("Test GP workflow")
+println("GP")
 println("##########################################")
-# @time poolgen.pileup2syncx("test/test_2.pileup",
-@time poolgen.pileup2syncx("test/test_1.pileup",
-                           out="test/test_GP_workflow-01_RAW.syncx")
-@time poolgen.filter("test/test_GP_workflow-01_RAW.syncx",
-                     maximum_missing_fraction=0.50,
-                     alpha1=0.01,
-                     maf=0.0,
-                     alpha2=0.50,
-                     minimum_coverage=1,
-                     out="test/test_GP_workflow-02_FILTERED.syncx")
-@time poolgen.impute("test/test_GP_workflow-02_FILTERED.syncx",
-                    window_size=100,
-                    model="OLS",
-                    distance=true,
-                    out="test/test_GP_workflow-03_IMPUTED.syncx")
+nfold = 10
+nrep = 3
+model = ["OLS", "ELASTIC-NET", "LMM"][1]
+syncx = "test/Simulated-16663168544.syncx"
+maf = 0.001
+phenotype = "test/Simulated-16663168544.csv"
+delimiter = ","
+header = true
+id_col = 1
+phenotype_col = 2
+missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+FE_method = ["CANONICAL", "N<<P"][2]
+alpha = 1.0
+covariate = ["", "XTX", "COR"][2]
+MM_model = ["GBLUP", "RRBLUP"][1]
+MM_method = ["ML", "REML"][1]
+inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
+optim_trace = false
+out = ""
+@time poolgen.genomic_prediction_CV(nfold=nfold, nrep=nrep, model=model, syncx=syncx, maf=maf, phenotype=phenotype, delimiter=delimiter, header=header, id_col=id_col, phenotype_col=phenotype_col, missing_strings=missing_strings, FE_method=FE_method, alpha=alpha, covariate=covariate, MM_model=MM_model, MM_method=MM_method, inner_optimizer=inner_optimizer, optim_trace=optim_trace, out=out)
 
 

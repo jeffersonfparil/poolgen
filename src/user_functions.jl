@@ -14,7 +14,6 @@ using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
 using .functions: PARSE, SAVE, SPLIT, MERGE, CONVERT, PILEUP2SYNCX, FILTER, IMPUTE, GWALPHA
 using .functions: GWAS_PLOT_MANHATTAN, ESTIMATE_LOD
 using .functions: SIMULATE, POOL, EXPORT_SIMULATED_DATA
-# using .functions: CV_OLS_MULTIVAR
 using .functions: OLS_MULTIVAR, ELA_MULTIVAR, LMM_MULTIVAR
 using .functions: CV_MULTIVAR
 
@@ -306,8 +305,8 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
     return(out)
 end
 
-function genomic_prediction(;model::String=["OLS", "ELASTIC-NET", "MM"][1], syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")
-    # model = ["OLS", "ELASTIC-NET", "MM"][1]
+function genomic_prediction(;model::String=["OLS", "ELASTIC-NET", "LMM"][1], syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")
+    # model = ["OLS", "ELASTIC-NET", "LMM"][1]
     # syncx = "../test/test_5.syncx"
     # maf = 0.001
     # phenotype = "../test/test_5.csv"
@@ -324,13 +323,13 @@ function genomic_prediction(;model::String=["OLS", "ELASTIC-NET", "MM"][1], sync
     # inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
     # optim_trace = false
     # out = ""
-    # tsv = genomic_prediction(model=model, syncx=syncx, maf=maf, phenotype=phenotype, delimiter=delimiter, header=header, id_col=id_col, phenotype_col=phenotype_col, missing_strings=missing_strings, FE_method=FE_method, alpha=alpha, covariate=covariate, MM_model=MM_model, MM_method=MM_method, inner_optimizer=inner_optimizer, optim_trace=optim_trace, out=out)
+    # out = genomic_prediction(model=model, syncx=syncx, maf=maf, phenotype=phenotype, delimiter=delimiter, header=header, id_col=id_col, phenotype_col=phenotype_col, missing_strings=missing_strings, FE_method=FE_method, alpha=alpha, covariate=covariate, MM_model=MM_model, MM_method=MM_method, inner_optimizer=inner_optimizer, optim_trace=optim_trace, out=out)
     ### Fit
     if model == "OLS"
         tsv = OLS_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
     elseif model == "ELASTIC-NET"
         tsv = ELA_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, alpha, out)
-    elseif model == "MM"
+    elseif model == "LMM"
         ### Define the inner optimiser of the mixed model
         if inner_optimizer == "LBFGS"
             inner_optimizer = LBFGS()
@@ -349,10 +348,73 @@ function genomic_prediction(;model::String=["OLS", "ELASTIC-NET", "MM"][1], sync
         println("Please select from: ")
         println("\t- 'OLS': ordinary least squares")
         println("\t- 'ELASTIC-NET': elastic-net penalised regression regression")
-        println("\t- 'MM': linear mixed model.")
+        println("\t- 'LMM': linear mixed model.")
     end
     return(out)
 end
+
+function genomic_prediction_CV(;nfold::Int64, nrep::Int64, model::String=["OLS", "ELASTIC-NET", "LMM"][1], syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")
+    # nfold = 10
+    # nrep = 3
+    # model = ["OLS", "ELASTIC-NET", "LMM"][1]
+    # syncx = "../test/test_5.syncx"
+    # maf = 0.001
+    # phenotype = "../test/test_5.csv"
+    # delimiter = ","
+    # header = true
+    # id_col = 1
+    # phenotype_col = 2
+    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    # alpha = 1.0
+    # covariate = ["", "XTX", "COR"][2]
+    # MM_model = ["GBLUP", "RRBLUP"][1]
+    # MM_method = ["ML", "REML"][1]
+    # inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
+    # optim_trace = false
+    # out = ""
+    # out = poolgen.genomic_prediction_CV(nfold=nfold, nrep=nrep, model=model, syncx=syncx, maf=maf, phenotype=phenotype, delimiter=delimiter, header=header, id_col=id_col, phenotype_col=phenotype_col, missing_strings=missing_strings, FE_method=FE_method, alpha=alpha, covariate=covariate, MM_model=MM_model, MM_method=MM_method, inner_optimizer=inner_optimizer, optim_trace=optim_trace, out=out)
+    ### Fit
+    if model == "OLS"
+        params=[FE_method]
+        out = CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
+                          OLS_MULTIVAR,
+                          params,
+                          out)
+    elseif model == "ELASTIC-NET"
+        params=[alpha]
+        out = CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
+                          ELA_MULTIVAR,
+                          params,
+                          out)
+    elseif model == "LMM"
+        ### Define the inner optimiser of the mixed model
+        if inner_optimizer == "LBFGS"
+            inner_optimizer = LBFGS()
+        elseif inner_optimizer == "BFGS"
+            inner_optimizer = BFGS()
+        elseif inner_optimizer == "SimulatedAnnealing"
+            inner_optimizer = SimulatedAnnealing()
+        elseif inner_optimizer == "GradientDescent"
+            inner_optimizer = GradientDescent()
+        elseif inner_optimizer == "NelderMead"
+            inner_optimizer = NelderMead()
+        end
+        params=[MM_model, MM_method, FE_method, inner_optimizer, optim_trace]
+        out = CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
+                          LMM_MULTIVAR,
+                          params,
+                          out)
+    else
+        println(string("Sorry the genomic prodection model: ", model, " is not implemented."))
+        println("Please select from: ")
+        println("\t- 'OLS': ordinary least squares")
+        println("\t- 'ELASTIC-NET': elastic-net penalised regression regression")
+        println("\t- 'LMM': linear mixed model.")
+    end
+    return(out)
+end
+
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ###########################

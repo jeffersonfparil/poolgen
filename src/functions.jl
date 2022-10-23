@@ -2554,7 +2554,7 @@ function OLS_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     # @time tsv = OLS_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-OLS_MUTIVAR.tsv")
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-OLS_MULTIVAR.tsv")
     end
     ### Load genotype data
     χ = LOAD(syncx, false)
@@ -2622,7 +2622,7 @@ function ELA_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     # @time tsv = ELA_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, alpha, out)
     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-ELA_MUTIVAR_alpha_", round(alpha, digits=2),".tsv")
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-ELA_MULTIVAR_alpha_", round(alpha, digits=2),".tsv")
     end
     ### Load genotype data
     χ = LOAD(syncx, false)
@@ -2697,7 +2697,7 @@ function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     # vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval = LOAD_OUT(tsv)
     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-LMM_MUTIVAR_", method,".tsv")
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-LMM_MULTIVAR_", method,".tsv")
     end
     ### Load genotype data
     χ = LOAD(syncx, false)
@@ -2933,7 +2933,7 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{
 end
 
 # function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], out::String="")::String
-function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function="OLS_MULTIVAR", params=["N<<P"], out::String="")::String
+function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], out::String="")::String
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -3005,6 +3005,11 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     ### Check is we have the same number of individuals in the genotype and phenotype data
     @assert n == length(y) "Genotype and phenotype data mismatch!"
     ### Divide the observations into nfold partitions
+    if (n/nfold) < 5
+        println(string("Sorry, there is not enough observations to perform ", nfold, "-fold cross validation"))
+        println(string("with at least 5 observations in each set,"))
+        println(string("i.e. you have at most ", Int(ceil(n/nfold)), " observations per set."))
+    end
     vec_fld = repeat(collect(1:nfold), inner=Int(floor(n/nfold)))
     if length(vec_fld) < n
         append!(vec_fld, repeat([nfold], n-length(vec_fld)))
