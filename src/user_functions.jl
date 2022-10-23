@@ -258,67 +258,6 @@ function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15),
     map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
     syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p)
     return(map, bim, ped, fam, syncx, csv)
-    # ################################################################################
-    # ################################################################################
-    # ################################################################################
-    # ### GWAS test
-    # using Statistics, Distributions, Plots
-    # QTL_idx = collect(1:length(b))[b .> 0.0]
-    # vec_chr_QTL = vec_chr[QTL_idx]
-    # vec_pos_QTL = vec_pos[QTL_idx]
-    # q = length(QTL_idx)
-    # # n, m = size(X)
-    # # b_hat = G \ (p .- mean(p))
-    # # p1 = Plots.scatter(abs.(b_hat), legend=false, xlab="Position", ylab="|Estimated effect|", title="Pool-GWAS", markerstrokewidth=0.001, markeralpha=0.1)
-    # # for i in 1:q
-    # #     qtl = QTL_idx[i]
-    # #     Plots.plot!(p1, [qtl, qtl], [0, 1], seriestype=:straightline)
-    # #     Plots.annotate!(p1, qtl, 0, Plots.text(string("β", i, "\n", round(b[qtl])), 0, 7, :bottom))
-    # # end
-    # # b_hat2 = X \ (y .- mean(y))
-    # # p2 = Plots.scatter(abs.(b_hat2), legend=false, xlab="Position", ylab="|Estimated effect|", title="Indi-GWAS", markerstrokewidth=0.001, markeralpha=0.1)
-    # # for i in 1:q
-    # #     qtl = QTL_idx[i]
-    # #     Plots.plot!(p2, [qtl, qtl], [0, 1], seriestype=:straightline)
-    # #     Plots.annotate!(p2, qtl, 0, Plots.text(string("β", i, "\n", round(b[qtl])), 0, 7, :bottom))
-    # # end
-    # # p3 = Plots.plot(p1, p2, layout=(2, 1)) ### Pool-GWAS performs better than Ind-GWAS!!!!
-
-    # ### Pause julia
-    # ### Ctrl+z
-    # ### test in plink and gemma
-    # # wget 'https://s3.amazonaws.com/plink1-assets/plink_linux_x86_64_20220402.zip'
-    # # wget 'https://github.com/genetics-statistics/GEMMA/releases/download/v0.98.5/gemma-0.98.5-linux-static-AMD64.gz'
-    # # unzip plink_linux_x86_64_20220402.zip; rm plink_linux_x86_64_20220402.zip
-    # # gunzip gemma-0.98.5-linux-static-AMD64.gz; mv gemma-0.98.5-linux-static-AMD64 gemma
-    # # chmod +x plink
-    # # chmod +x gemma
-    # # name=$(ls | grep ".fam$" | head -n1 | cut -d '.' -f1)
-    # # time ./plink --file "$name" --make-bed --out "$name"
-    # # time ./gemma -bfile "$name" -lm 1 -o "$name"
-
-    # ### Resume julia
-    # ### fg
-    # using CSV, DataFrames
-    # cd("output")
-    # fname = readdir()[match.(Regex(".assoc.txt"), readdir()) .!= nothing][1]
-    # file = open(fname, "r")
-    # data = CSV.read(file, DataFrames.DataFrame)
-    # close(file)
-
-    # vec_chr_gemma = string.(data.chr)
-    # vec_pos_gemma = data.ps
-    # vec_lod_gemma = -log10.(data.p_wald)
-
-    # ### NEED TO IMPROVE GWAS_PLOT_MANHATTAN TO MODEL COORDINATES PER CHROMOSOME IN A MORE INTUITIVE AND EASILY ACCESSIBLE WAY!!!
-
-    # p1, chr_names, pos_init, pos_term,  = GWAS_PLOT_MANHATTAN(vec_chr_gemma, vec_pos_gemma, vec_lod_gemma)
-    # GWAS_PLOT_SIMULATED_QTL!(p1, vec_chr_QTL, vec_pos_QTL, b, chr_names, pos_init, pos_term)
-
-
-    # vec_lod_pool_OLS = ESTIMATE_LOD(b_hat)
-
-
 end
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -364,6 +303,54 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
     end
     ### Merge the chunks
     MERGE(filenames_out, out)
+    return(out)
+end
+
+function genomic_prediction(;model::String=["OLS", "ELASTIC-NET", "MM"][1], syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")
+    # model = ["OLS", "ELASTIC-NET", "MM"][1]
+    # syncx = "../test/test_5.syncx"
+    # maf = 0.001
+    # phenotype = "../test/test_5.csv"
+    # delimiter = ","
+    # header = true
+    # id_col = 1
+    # phenotype_col = 2
+    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    # alpha = 1.0
+    # covariate = ["", "XTX", "COR"][2]
+    # MM_model = ["GBLUP", "RRBLUP"][1]
+    # MM_method = ["ML", "REML"][1]
+    # inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
+    # optim_trace = false
+    # out = ""
+    # tsv = genomic_prediction(model=model, syncx=syncx, maf=maf, phenotype=phenotype, delimiter=delimiter, header=header, id_col=id_col, phenotype_col=phenotype_col, missing_strings=missing_strings, FE_method=FE_method, alpha=alpha, covariate=covariate, MM_model=MM_model, MM_method=MM_method, inner_optimizer=inner_optimizer, optim_trace=optim_trace, out=out)
+    ### Fit
+    if model == "OLS"
+        tsv = OLS_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
+    elseif model == "ELASTIC-NET"
+        tsv = ELA_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, alpha, out)
+    elseif model == "MM"
+        ### Define the inner optimiser of the mixed model
+        if inner_optimizer == "LBFGS"
+            inner_optimizer = LBFGS()
+        elseif inner_optimizer == "BFGS"
+            inner_optimizer = BFGS()
+        elseif inner_optimizer == "SimulatedAnnealing"
+            inner_optimizer = SimulatedAnnealing()
+        elseif inner_optimizer == "GradientDescent"
+            inner_optimizer = GradientDescent()
+        elseif inner_optimizer == "NelderMead"
+            inner_optimizer = NelderMead()
+        end
+        out = LMM_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, MM_model, MM_method, FE_method, inner_optimizer, optim_trace, out)
+    else
+        println(string("Sorry the genomic prodection model: ", model, " is not implemented."))
+        println("Please select from: ")
+        println("\t- 'OLS': ordinary least squares")
+        println("\t- 'ELASTIC-NET': elastic-net penalised regression regression")
+        println("\t- 'MM': linear mixed model.")
+    end
     return(out)
 end
 
