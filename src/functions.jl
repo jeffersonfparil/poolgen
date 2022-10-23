@@ -2933,7 +2933,7 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{
 end
 
 # function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], out::String="")::String
-function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], out::String="")::String
+function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], out::String="", save_plots::Bool=false)::String
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -2964,6 +2964,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
     # FE_method = ["CANONICAL", "N<<P"][2]
     # out = ""
+    # save_plots = false
     # cv_tsv = CV_OLS_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
     # ###########################
     # nfold = 10
@@ -2976,6 +2977,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     # id_col = 1
     # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # save_plots = false
     # # FE_method = ["CANONICAL", "N<<P"][2]
     # # model  = poolgen.user_functions.functions.OLS_MULTIVAR; params = ["N<<P"]
     # # model  = poolgen.user_functions.functions.ELA_MULTIVAR; params = [1.0]
@@ -3103,6 +3105,11 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         write(file_out, line)
     end
     close(file_out)
+    if save_plots
+        for i in 1:length(vec_p)
+            Plots.savefig(vec_p[i], string("test-", i, ".png"))
+        end
+    end
     return(out)
 end
 
