@@ -2659,7 +2659,7 @@ function ELA_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     return(out)
 end
 
-function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], model::String=["GBLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false, out::String="")::String
+function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], model::String=["GBLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -2691,7 +2691,7 @@ function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     # model = "RRBLUP"
     # method = "ML"
     # FE_method = "N<<P"
-    # inner_optimizer = LBFGS()
+    # inner_optimizer = "LBFGS"
     # optim_trace = true
     # out = ""
     # @time tsv = LMM_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, model, method, FE_method, inner_optimizer, optim_trace, out)
@@ -2732,6 +2732,18 @@ function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     else
         println(string("Sorry ", model, " is not implemented."))
         println("Please choose from 'GBLUP' and 'RRBLUP'.")
+    end
+    ### Define the inner optimiser
+    if inner_optimizer == "LBFGS"
+        inner_optimizer = Optim.LBFGS()
+    elseif inner_optimizer == "BFGS"
+        inner_optimizer = Optim.BFGS()
+    elseif inner_optimizer == "SimulatedAnnealing"
+        inner_optimizer = Optim.SimulatedAnnealing()
+    elseif inner_optimizer == "GradientDescent"
+        inner_optimizer = Optim.GradientDescent()
+    elseif inner_optimizer == "NelderMead"
+        inner_optimizer = Optim.NelderMead()
     end
     ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
     σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
@@ -2979,20 +2991,18 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     # id_col = 1
     # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    # save_plots = false
-    # save_predictions = false
     # # model  = OLS_MULTIVAR; params = ["N<<P"]
     # # model  = poolgen.user_functions.functions.ELA_MULTIVAR; params = [1.0]
     # # #########################
-    # using Optim
     # _covariate = ["", "XTX", "COR"][2]
     # _model = ["GBLUP", "RRBLUP"][1]
     # _method = ["ML", "REML"][1]
     # _FE_method = ["CANONICAL", "N<<P"][2]
-    # _inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1]
+    # _inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
     # _optim_trace = false
-    # model = poolgen.user_functions.functions.LMM_MULTIVAR; params = [_covariate, _model, _method, _FE_method, _inner_optimizer, _optim_trace]
+    # model = LMM_MULTIVAR; params = [_covariate, _model, _method, _FE_method, _inner_optimizer, _optim_trace]
     # save_plots = false
+    # save_predictions = false
     # out = ""
     # # poolgen.user_functions.functions.CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
     # poolgen.user_functions.functions.CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, model, params, out)

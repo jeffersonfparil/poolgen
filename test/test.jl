@@ -109,7 +109,7 @@ println("GP")
 println("##########################################")
 nfold = 2
 nrep = 3
-model = ["OLS", "ELASTIC-NET", "LMM"][1]
+model = ["OLS", "ELASTIC-NET", "LMM"][3]
 syncx = "test/Simulated-16663168544.syncx"
 maf = 0.001
 phenotype = "test/Simulated-16663168544.csv"
