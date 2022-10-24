@@ -3012,6 +3012,16 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         println(string("Sorry, there is not enough observations to perform ", nfold, "-fold cross validation"))
         println(string("with at least 5 observations in each set,"))
         println(string("i.e. you have at most ", Int(ceil(n/nfold)), " observations per set."))
+        println("Trying to set a lower number of folds.")
+        while ((n/nfold) < 5) | (nfold > 1)
+            nfold = nfold - 1
+        end
+        if nfold == 1
+            println("Sorry you dataset is too small. Exiting now.")
+            exit()
+        else
+            println(string("Set the number of folds to ", nfold, "."))
+        end
     end
     vec_fld = repeat(collect(1:nfold), inner=Int(floor(n/nfold)))
     if length(vec_fld) < n
