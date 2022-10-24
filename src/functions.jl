@@ -17,6 +17,7 @@ using Optim
 using StatsBase
 using Dates
 using Plots
+Plots.default(show=false)
 
 include("structs.jl")
 using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype
@@ -2925,7 +2926,6 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{
     limits = [minimum(x)-δ, maximum(x)+δ]
     p = Plots.scatter(y, ŷ, xlabel="True", ylab="Predicted", xlims=limits, ylims=limits, legend=false, markerstrokewidth=0.001, markeralpha=0.4, title="");
     Plots.plot!(p, [0,1], [0 ,1], seriestype=:straightline, linecolor=:gray, legend=false);
-    Plots.plot!(p, size=(700, 700));
     ### Output metrics and plot
     return(correlation_pearson, correlation_spearman, correlation_kendall,
            R2, R2_adj,
@@ -2935,7 +2935,7 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{
 end
 
 # function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], out::String="")::String
-function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], save_plots::Bool=false, out::String="")::String
+function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -2980,6 +2980,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
     # save_plots = false
+    # save_predictions = false
     # # model  = OLS_MULTIVAR; params = ["N<<P"]
     # # model  = poolgen.user_functions.functions.ELA_MULTIVAR; params = [1.0]
     # # #########################
@@ -3049,6 +3050,9 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     vec_RMSE = []
     vec_RRMSE = []
     vec_RMSLE = []
+    if save_predictions
+       vec_predictions = []
+    end
     ### Parallel execution
     vec_vec_metrics = @sync @showprogress @distributed (hcat) for i in 1:(nrep*nfold)
         # i = 1
@@ -3085,15 +3089,27 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         rm(tsv)
         ### Calculate prediction metrics
         correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y[idx_validate], ŷ, y[idx_training])
+        ### Save plots and/or predictions?
         if save_plots
-            Plots.savefig(p, string(out, "-", i, ".svg"))
+            Plots.plot!(p, size=[700, 700]);
+            Plots.savefig(p, string(out, "-", i, ".svg"));
+        end
+        if save_predictions
+            _out_pred = string(out, "-predictions-rep_", rep, "-fold_", fold, ".tsv") ### Only used if we want to save all the predictions
+            _file_pred = open(_out_pred, "a")
+            for k in 1:length(ŷ)
+                write(_file_pred, string(join([rep, fold, ŷ[k], y[idx_validate][k]], "\t"), "\n"))
+            end
+            close(_file_pred)
+        else
+            _out_pred = ""
         end
         ### Vectorise for hcat-ing
-        [rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE]
+        [rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, _out_pred]
     end
     ### Consolidate metrics
     for j in 1:size(vec_vec_metrics,2)
-        rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE = vec_vec_metrics[:, j]
+        rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, _out_pred = vec_vec_metrics[:, j]
         append!(vec_rep, rep)
         append!(vec_fold, fold)
         append!(vec_correlation_pearson, correlation_pearson)
@@ -3108,13 +3124,22 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         append!(vec_RMSE, RMSE)
         append!(vec_RRMSE, RRMSE)
         append!(vec_RMSLE, RMSLE)
+        if save_predictions
+            push!(vec_predictions, _out_pred)
+        end
     end
     ### Output
+    if save_predictions
+        out_pred = string(out, "-predictions.tsv")
+        vec_predictions = string.(vec_predictions)
+        sort!(vec_predictions)
+        MERGE(vec_predictions, out_pred)
+    end
     file_out = open(out, "a")
     line = string(join(["rep", "fold", "correlation_pearson", "correlation_spearman", "correlation_kendall", "R2", "R2_adj", "MAE", "MBE", "RAE", "MSE", "RMSE", "RRMSE", "RMSLE"], "\t"), "\n")
     write(file_out, line)
     for i in 1:length(vec_rep)
-        line = string(join([Int(vec_rep[i]), Int(vec_fold[i])], ","), ",", join([vec_correlation_pearson[i], vec_correlation_spearman[i], vec_correlation_kendall[i], vec_R2[i], vec_R2_adj[i], vec_MAE[i], vec_MBE[i], vec_RAE[i], vec_MSE[i], vec_RMSE[i], vec_RRMSE[i], vec_RMSLE[i]], "\t"), "\n")
+        line = string(join([Int(vec_rep[i]), Int(vec_fold[i])], "\t"), "\t", join([vec_correlation_pearson[i], vec_correlation_spearman[i], vec_correlation_kendall[i], vec_R2[i], vec_R2_adj[i], vec_MAE[i], vec_MBE[i], vec_RAE[i], vec_MSE[i], vec_RMSE[i], vec_RRMSE[i], vec_RMSLE[i]], "\t"), "\n")
         write(file_out, line)
     end
     close(file_out)

@@ -353,7 +353,7 @@ function genomic_prediction(;model::String=["OLS", "ELASTIC", "LMM"][1], syncx::
     return(out)
 end
 
-function genomic_prediction_CV(;nfold::Int64, nrep::Int64, model::String=["OLS", "ELASTIC", "LMM"][1], syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, out::String="")
+function genomic_prediction_CV(;nfold::Int64, nrep::Int64, model::String=["OLS", "ELASTIC", "LMM"][1], syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=1, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")
     # nfold = 10
     # nrep = 3
     # model = ["OLS", "ELASTIC", "LMM"][1]
@@ -373,6 +373,7 @@ function genomic_prediction_CV(;nfold::Int64, nrep::Int64, model::String=["OLS",
     # inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
     # optim_trace = false
     # save_plots = false
+    # save_predictions = false
     # out = ""
     # out = poolgen.genomic_prediction_CV(nfold=nfold, nrep=nrep, model=model, syncx=syncx, maf=maf, phenotype=phenotype, delimiter=delimiter, header=header, id_col=id_col, phenotype_col=phenotype_col, missing_strings=missing_strings, FE_method=FE_method, alpha=alpha, covariate=covariate, MM_model=MM_model, MM_method=MM_method, inner_optimizer=inner_optimizer, optim_trace=optim_trace, out=out)
     ### Fit
@@ -382,6 +383,7 @@ function genomic_prediction_CV(;nfold::Int64, nrep::Int64, model::String=["OLS",
                           OLS_MULTIVAR,
                           params,
                           save_plots,
+                          save_predictions,
                           out)
     elseif model == "ELASTIC"
         params=[alpha]
@@ -389,6 +391,7 @@ function genomic_prediction_CV(;nfold::Int64, nrep::Int64, model::String=["OLS",
                           ELA_MULTIVAR,
                           params,
                           save_plots,
+                          save_predictions,
                           out)
     elseif model == "LMM"
         ### Define the inner optimiser of the mixed model
@@ -408,6 +411,7 @@ function genomic_prediction_CV(;nfold::Int64, nrep::Int64, model::String=["OLS",
                           LMM_MULTIVAR,
                           params,
                           save_plots,
+                          save_predictions,
                           out)
     else
         println(string("Sorry the genomic prodection model: ", model, " is not implemented."))
