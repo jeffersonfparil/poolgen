@@ -2923,7 +2923,7 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{
     x = vcat(y, ŷ)
     δ = std(x) / sqrt(length(x))
     limits = [minimum(x)-δ, maximum(x)+δ]
-    p = Plots.scatter(y, ŷ, xlims=limits, ylims=limits, legend=false, markerstrokewidth=0.001, markeralpha=0.4, title="")
+    p = Plots.scatter(y, ŷ, xlabel="True", ylab="Predicted", xlims=limits, ylims=limits, legend=false, markerstrokewidth=0.001, markeralpha=0.4, title="")
     Plots.plot!(p, [0,1], [0 ,1], seriestype=:straightline, linecolor=:gray, legend=false)
     ### Output metrics and plot
     return(correlation_pearson, correlation_spearman, correlation_kendall,
@@ -2970,17 +2970,16 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     # ###########################
     # nfold = 10
     # nrep = 3
-    # syncx = "Simulated-16663168544.syncx"
+    # syncx = "../test/Simulated-16663168544.syncx"
     # maf = 0.0001
-    # phenotype = "Simulated-16663168544.csv"
+    # phenotype = "../test/Simulated-16663168544.csv"
     # delimiter = ","
     # header = true
     # id_col = 1
     # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
     # save_plots = false
-    # # FE_method = ["CANONICAL", "N<<P"][2]
-    # # model  = poolgen.user_functions.functions.OLS_MULTIVAR; params = ["N<<P"]
+    # # model  = OLS_MULTIVAR; params = ["N<<P"]
     # # model  = poolgen.user_functions.functions.ELA_MULTIVAR; params = [1.0]
     # # #########################
     # using Optim
@@ -3049,7 +3048,6 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     vec_RMSE = []
     vec_RRMSE = []
     vec_RMSLE = []
-    vec_p = []
     ### Parallel execution
     vec_vec_metrics = @sync @showprogress @distributed (hcat) for i in 1:(nrep*nfold)
         # i = 1
@@ -3086,12 +3084,15 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         rm(tsv)
         ### Calculate prediction metrics
         correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y[idx_validate], ŷ, y[idx_training])
+        if save_plots
+            Plots.savefig(p, string(out, "-", i, ".svg"))
+        end
         ### Vectorise for hcat-ing
-        [rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p]
+        [rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE]
     end
     ### Consolidate metrics
     for j in 1:size(vec_vec_metrics,2)
-        rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = vec_vec_metrics[:, j]
+        rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE = vec_vec_metrics[:, j]
         append!(vec_rep, rep)
         append!(vec_fold, fold)
         append!(vec_correlation_pearson, correlation_pearson)
@@ -3106,7 +3107,6 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         append!(vec_RMSE, RMSE)
         append!(vec_RRMSE, RRMSE)
         append!(vec_RMSLE, RMSLE)
-        push!(vec_p, p)
     end
     ### Output
     file_out = open(out, "a")
@@ -3117,11 +3117,6 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         write(file_out, line)
     end
     close(file_out)
-    if save_plots
-        for i in 1:length(vec_p)
-            Plots.savefig(vec_p[i], string(out, "-", i, ".png"))
-        end
-    end
     return(out)
 end
 
