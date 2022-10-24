@@ -2821,7 +2821,7 @@ function PREDICT(tsv::String, syncx_validate::String)::Vector{Float64}
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     for i in 1:p
         # i = 1
-        @show i
+        # @show i
         idx_chr = χ.chr[i] .== vec_chr
         idx_pos = χ.pos[i] .== vec_pos
         if (sum(idx_chr)>0) & (sum(idx_pos)>0)
