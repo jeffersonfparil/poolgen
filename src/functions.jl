@@ -2933,7 +2933,7 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{
 end
 
 # function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], out::String="")::String
-function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], out::String="", save_plots::Bool=false)::String
+function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], save_plots::Bool=false, out::String="")::String
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -2990,6 +2990,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     # _inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1]
     # _optim_trace = false
     # model = poolgen.user_functions.functions.LMM_MULTIVAR; params = [_covariate, _model, _method, _FE_method, _inner_optimizer, _optim_trace]
+    # save_plots = false
     # out = ""
     # # poolgen.user_functions.functions.CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
     # poolgen.user_functions.functions.CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, model, params, out)
@@ -3107,7 +3108,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     close(file_out)
     if save_plots
         for i in 1:length(vec_p)
-            Plots.savefig(vec_p[i], string("test-", i, ".png"))
+            Plots.savefig(vec_p[i], string(out, "-", i, ".png"))
         end
     end
     return(out)
