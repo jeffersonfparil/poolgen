@@ -2821,10 +2821,11 @@ function PREDICT(tsv::String, syncx_validate::String)::Vector{Float64}
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     for i in 1:p
         # i = 1
+        @show i
         idx_chr = χ.chr[i] .== vec_chr
         idx_pos = χ.pos[i] .== vec_pos
         if (sum(idx_chr)>0) & (sum(idx_pos)>0)
-            idx_ale = vec_ale[idx_chr .& idx_pos] .== vec_alleles
+            idx_ale = [sum(vec_ale[idx_chr .& idx_pos] .== x)>0 for x in vec_alleles]
             append!(idx, collect(((7*(i-1))+1):(7*i))[idx_ale])
         end            
     end
