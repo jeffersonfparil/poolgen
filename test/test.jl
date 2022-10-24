@@ -105,27 +105,99 @@ distance=true
                     out="")
 
 println("##########################################")
+println("Simulation")
+println("##########################################")
+n = 5                   ### number of founders
+m = 1000                ### number of loci
+l = 135_000_000         ### total genome length
+k = 5                   ### number of chromosomes
+ϵ = Int(1e+15)          ### some arbitrarily large number to signify the distance at which LD is nil
+a = 2                   ### number of alleles per locus
+vec_chr_lengths = [0]   ### chromosome lengths
+vec_chr_names = [""]    ### chromosome names 
+dist_noLD = 500_000     ### distance at which LD is nil (related to ϵ)
+o = 1_000               ### total number of simulated individuals
+t = 10                  ### number of random mating constant population size generation to simulate
+nQTL = 10               ### number of QTL to simulate
+heritability = 0.5      ### narrow(broad)-sense heritability as only additive effects are simulated
+LD_chr = ""             ### chromosome to calculate LD decay from
+LD_n_pairs = 10_000     ### number of randomly sampled pairs of loci to calculate LD
+plot_LD = false         ### simulate# plot simulated LD decay
+npools = 50
+@time map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n,
+                                                        m=m,
+                                                        l=l,
+                                                        k=k,
+                                                        ϵ=ϵ,
+                                                        a=a,
+                                                        vec_chr_lengths=vec_chr_lengths,
+                                                        vec_chr_names=vec_chr_names,
+                                                        dist_noLD=dist_noLD,
+                                                        o=o,
+                                                        t=t,
+                                                        nQTL=nQTL,
+                                                        heritability=heritability,
+                                                        npools=npools,
+                                                        LD_chr=LD_chr,
+                                                        LD_n_pairs=LD_n_pairs,
+                                                        plot_LD=plot_LD)
+
+println("##########################################")
 println("GP")
 println("##########################################")
-nfold = 2
-nrep = 3
-model = ["OLS", "ELASTIC-NET", "LMM"][3]
-syncx = "test/Simulated-16663168544.syncx"
+vec_models = ["OLS", "ELASTIC", "LMM"]
+vec_MM_models = ["GBLUP", "RRBLUP"]
 maf = 0.001
-phenotype = "test/Simulated-16663168544.csv"
-delimiter = ","
-header = true
-id_col = 1
-phenotype_col = 2
-missing_strings = ["NA", "NAN", "NaN", "missing", ""]
 FE_method = ["CANONICAL", "N<<P"][2]
 alpha = 1.0
 covariate = ["", "XTX", "COR"][2]
-MM_model = ["GBLUP", "RRBLUP"][1]
 MM_method = ["ML", "REML"][1]
-inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
+inner_optimizer = ["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
 optim_trace = false
-save_plots = true
+mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[1]], length(vec_models)), vec_MM_models[end]))
+for i in 1:size(mat_models, 1)
+    model = mat_models[i, 1]
+    MM_model = mat_models[i, 2]
+    println(model)
+    model == "LMM" ? println(MM_model) : nothing
+    @time out = poolgen.genomic_prediction(syncx=syncx, 
+                                           phenotype=csv, 
+                                           model=model,
+                                           maf=maf,
+                                           FE_method=FE_method,
+                                           alpha=alpha,
+                                           covariate=covariate,
+                                           MM_model=MM_model,
+                                           MM_method=MM_method,
+                                           inner_optimizer=inner_optimizer,
+                                           optim_trace=optim_trace)
+end
+
+println("##########################################")
+println("GP cross-validation")
+println("##########################################")
+nfold = 2
+nrep = 3
+save_plots = false
 save_predictions = true
-out = ""
-@time poolgen.genomic_prediction_CV(nfold=nfold, nrep=nrep, model=model, syncx=syncx, maf=maf, phenotype=phenotype, delimiter=delimiter, header=header, id_col=id_col, phenotype_col=phenotype_col, missing_strings=missing_strings, FE_method=FE_method, alpha=alpha, covariate=covariate, MM_model=MM_model, MM_method=MM_method, inner_optimizer=inner_optimizer, optim_trace=optim_trace, save_plots=save_plots, save_predictions=save_predictions, out=out)
+for i in 1:size(mat_models, 1)
+    model = mat_models[i, 1]
+    MM_model = mat_models[i, 2]
+    println(model)
+    model == "LMM" ? println(MM_model) : nothing
+    @time out = poolgen.genomic_prediction_CV(nfold=nfold,
+                                              nrep=nrep,
+                                              model=model,
+                                              syncx=syncx,
+                                              maf=maf,
+                                              phenotype=csv,
+                                              FE_method=FE_method,
+                                              alpha=alpha,
+                                              covariate=covariate,
+                                              MM_model=MM_model,
+                                              MM_method=MM_method,
+                                              inner_optimizer=inner_optimizer,
+                                              optim_trace=optim_trace,
+                                              save_plots=save_plots,
+                                              save_predictions=save_predictions)
+end

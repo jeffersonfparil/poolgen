@@ -1632,7 +1632,7 @@ function OLS(X::Array{T}, y::Array{T})::Tuple{Vector{Float64}, Matrix{Float64}, 
     return(β̂, Vβ̂, σ2ϵ̂)
 end
 
-function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0)::Tuple{Float64, Vector{T}} where T <: Number
+function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0)::Vector{T} where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1672,7 +1672,7 @@ function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0)::Tuple{Float64, Ve
             idx = argmax(path.dev_ratio)
             append!([path.a0[idx]], path.betas[:, idx])
         end
-    return(β̂[1], β̂[2:end])
+    return(β̂)
 end
 
 function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Array{T}, R::Array{T}, FE_method::String)::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
@@ -1814,7 +1814,7 @@ function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Array{T}, R::Array{T})::Tu
     return(β̂, μ̂, Σ̂)
 end
 
-function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}=zeros(2,2), FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1])::Float64 where T <: Number
+function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1])::Float64 where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -1871,12 +1871,8 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T
 	n = length(y)		# number of individual samples
 	l = size(X, 2)		# number of fixed effects
 	nz, pz = size(Z)
-    ### Random effects variance-covariance matrix (homoscedastic)
-    if K == zeros(2, 2)
-        D = diagm(repeat([σ2u], pz))
-    else
-        D = σ2u .* K
-    end
+    ### Random effects variance-covariance matrix
+    D = σ2u .* K
     ### Error variance-covariance matrix (homoscedastic)
     R = diagm(repeat([σ2e], n))
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
@@ -1916,7 +1912,7 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T
     return(neg_log_lik)
 end
 
-function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}=zeros(2,2), FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
+function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -2025,12 +2021,12 @@ function BOOTSTRAP(ρ, x::Array{T}, y::Array{T}, F::Function, F_params="")::Tupl
         y_rand = sample(y, n; replace=false)
         if F_params != ""
             if isa(F_params, Vector)
-                append!(vec_ρ, F(x_rand, y_rand, F_params...))
+                append!(vec_ρ, F(x_rand, y_rand, F_params...)[end])
             else
-                append!(vec_ρ, F(x_rand, y_rand, F_params))
+                append!(vec_ρ, F(x_rand, y_rand, F_params)[end])
             end
         else
-            append!(vec_ρ, F(x_rand, y_rand))
+            append!(vec_ρ, F(x_rand, y_rand)[end])
         end
     end
     positive_cases = sum(abs.(vec_ρ) .>= abs(ρ))
@@ -2136,8 +2132,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     file_out = open(out, "a")
     ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = ϕ.phe[:,1]
-    y = (y .- mean(y)) ./ std(y)
+    y = Float64.(ϕ.phe[:,1])
     n = length(y)
     ### Open syncx file
     file = open(syncx, "r")
@@ -2196,6 +2191,8 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                     _, p = size(x)
                 end
                 ### OLS using the canonical method and outputting the estimates of the effects and variances
+                x = hcat(ones(n), x)
+                _, k = size(x)
                 β̂, Vβ̂, σ2ϵ̂ = OLS(x, y)
                 ### Test if we have reasonable residual variance estimate then proceed to output
                 if ((σϵ̂ < 0.0) | (σϵ̂ == Inf)) == false
@@ -2281,8 +2278,7 @@ function BOO_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     file_out = open(out, "a")
     ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = ϕ.phe[:,1]
-    y = (y .- mean(y)) ./ std(y)
+    y = Float64.(ϕ.phe[:,1])
     n = length(y)
     ### Open syncx file
     file = open(syncx, "r")
@@ -2331,12 +2327,12 @@ function BOO_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 x = X[:,i:i]
                 if F_params != ""
                     if isa(F_params, Vector)
-                        ρ = F(x, y, F_params...)[1]
+                        ρ = F(x, y, F_params...)[end]
                     else
-                        ρ = F(x, y, F_params)[1]
+                        ρ = F(x, y, F_params)[end]
                     end
                 else
-                    ρ = F(x, y)[1]
+                    ρ = F(x, y)[end]
                 end
                 pval = BOOTSTRAP_PVAL(ρ, x, y, F, F_params, nburnin, δ, maxiter)[end]
                 line = join([locus.chr[1],
@@ -2410,7 +2406,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     file_out = open(out, "a")
     ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = ϕ.phe[:,1]
+    y = Float64.(ϕ.phe[:,1])
     y = (y .- mean(y)) ./ std(y)
     n = length(y)
     ### Open syncx file
@@ -2427,13 +2423,8 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     ### Prepare covariate and variance-covariance matrix
     C = GENERATE_COVARIATE(syncx, 1_000, 0.95, n, "COR")
     if model == "GBLUP"
-        Z = diagm(repeat([1.0], n))    ### Genotypes have random effects...
-        K = C                               ### ... and are distributed normally μ=0, and Σ=σ2g*K
-    elseif model == "RRBLUP"
-        K = zeros(2,2)                      ### Kinships have random effects and are spherically distributed proportional to σ2g
-    else
-        println(string("Sorry ", model, " is not implemented."))
-        println("Please choose from 'GBLUP' and 'RRBLUP'.")
+        Z = diagm(repeat([1.0], n)) ### Genotypes have random effects...
+        K = C                       ### ... and are distributed normally μ=0, and Σ=σ2g*K
     end
     ### Regress
     # vec_chr = []
@@ -2478,16 +2469,13 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 elseif model == "RRBLUP"
                     Z = x                   ### SNPs have random effects
                     _X_ = hcat(ones(n), C)  ### Kinships have effects
+                    K = diagm(repeat([1.0], size(Z,2)))
                 end
                 _, p = size(_X_)
                 ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
                 σ2u, σ2e = OPTIM_MM(_X_, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
-                ### Random effects variance-covariance matrix (homoscedastic)
-                if model == "GBLUP"
-                    D = σ2u .* K
-                elseif model == "RRBLUP"
-                    D = diagm(repeat([σ2u], size(Z,2)))
-                end
+                ### Random effects variance-covariance matrix
+                D = σ2u .* K
                 ### Error variance-covariance matrix (homoscedastic)
                 R = diagm(repeat([σ2e], n))
                 ### Solve the mixed model equations
@@ -2570,20 +2558,26 @@ function OLS_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     n, p = size(X)
     ### Load phenotype data
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = ϕ.phe[:,1]
-    y = (y .- mean(y)) ./ std(y)
-    ### Check is we have the same number of individuals in the genotype and phenotype data
+    y = Float64.(ϕ.phe[:,1])
+    ### Check if we have the same number of individuals in the genotype and phenotype data
     @assert n == length(y) "Genotype and phenotype data mismatch!"
-    ### Fit (Note: not intercept as we normalised the y)
-    β̂ = OLS(X, y, FE_method)
+    ### Fit
+    β̂ = OLS(hcat(ones(n), X), y, FE_method)
     ### Output
     file_out = open(out, "a")
+    line = join(["Intercept",
+                 0,
+                 "N",
+                 0.0,
+                 β̂[1],
+                 "NA"], "\t")
+    write(file_out, string(line, "\n"))
     for i in 1:p
         line = join([vec_chr[i],
                      vec_pos[i],
                      vec_ale[i],
                      vec_frq[i],
-                     β̂[i],
+                     β̂[i+1],
                      "NA"], "\t")
         write(file_out, string(line, "\n"))
     end
@@ -2638,20 +2632,26 @@ function ELA_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     n, p = size(X)
     ### Load phenotype data
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = ϕ.phe[:,1]
-    y = (y .- mean(y)) ./ std(y)
-    ### Check is we have the same number of individuals in the genotype and phenotype data
+    y = Float64.(ϕ.phe[:,1])
+    ### Check if we have the same number of individuals in the genotype and phenotype data
     @assert n == length(y) "Genotype and phenotype data mismatch!"
-    ### Fit (Note: not intercept as we normalised the y)
-    a0, β̂ = GLMNET(X, y, alpha)
+    ### Fit
+    β̂ = GLMNET(X, y, alpha) # Note: intercept is included in the GLMNET model
     ### Output
     file_out = open(out, "a")
+    line = join(["Intercept",
+                 0,
+                 "N",
+                 0.0,
+                 β̂[1],
+                 "NA"], "\t")
+    write(file_out, string(line, "\n"))
     for i in 1:p
         line = join([vec_chr[i],
                      vec_pos[i],
                      vec_ale[i],
                      vec_frq[i],
-                     β̂[i],
+                     β̂[i+1],
                      "NA"], "\t")
         write(file_out, string(line, "\n"))
     end
@@ -2713,22 +2713,18 @@ function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     n, p = size(X)
     ### Load phenotype data
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = ϕ.phe[:,1]
-    y = (y .- mean(y)) ./ std(y)
-    ### Check is we have the same number of individuals in the genotype and phenotype data
+    y = Float64.(ϕ.phe[:,1])
+    ### Check if we have the same number of individuals in the genotype and phenotype data
     @assert n == length(y) "Genotype and phenotype data mismatch!"
     ### Prepare the design matrices for the fixed and random effects; and variance-covariance matrix of the random effects
     if model == "GBLUP"
-        Z = diagm(repeat([1.0], n))    ### Genotypes have random effects...
-        K = GENERATE_COVARIATE(syncx, 1_000, 0.95, n, "COR") ### ... and are distributed normally μ=0, and Σ=σ2g*K
+        Z = diagm(repeat([1.0], n))                             ### Genotypes have random effects...
+        K = GENERATE_COVARIATE(syncx, 1_000, 0.95, n, "COR")    ### ... and are distributed normally μ=0, and Σ=σ2g*K
+        X = hcat(ones(n), X)                                    ### SNP have fixed effects
     elseif model == "RRBLUP"
-        Z = X
-        if covariate == ""
-            X = ones(n, 1)
-        else
-            X = GENERATE_COVARIATE(syncx, 1_000, 0.95, n, "COR") ### ... and are distributed normally μ=0, and Σ=σ2g*K
-        end
-        K = zeros(2,2)                 ### Kinships have random effects and are spherically distributed proportional to σ2g
+        Z = X                               ### SNPs have random effects...
+        K = diagm(repeat([1.0], size(Z,2))) ### ... and are spherically distributed proportional to σ2g
+        X = ones(n, 1)                      ### Intercept is the only fixed effect
     else
         println(string("Sorry ", model, " is not implemented."))
         println("Please choose from 'GBLUP' and 'RRBLUP'.")
@@ -2747,12 +2743,8 @@ function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     end
     ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
     σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
-    ### Random effects variance-covariance matrix (homoscedastic)
-    if model == "GBLUP"
-        D = σ2u .* K
-    elseif model == "RRBLUP"
-        D = diagm(repeat([σ2u], size(Z,2)))
-    end
+    ### Random effects variance-covariance matrix
+    D = σ2u .* K
     ### Error variance-covariance matrix (homoscedastic)
     R = diagm(repeat([σ2e], n))
     ### Solve the mixed model equations
@@ -2760,16 +2752,23 @@ function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter:
     if model == "GBLUP"
         b = β̂
     elseif model == "RRBLUP"
-        b = μ̂
+        b = vcat(β̂, μ̂) # include the fixed intercept effect
     end
     ### Output
     file_out = open(out, "a")
+    line = join(["Intercept",
+                 0,
+                 "N",
+                 0.0,
+                 b[1],
+                 "NA"], "\t")
+    write(file_out, string(line, "\n"))
     for i in 1:p
         line = join([vec_chr[i],
                      vec_pos[i],
                      vec_ale[i],
                      vec_frq[i],
-                     b[i],
+                     b[i+1],
                      "NA"], "\t")
         write(file_out, string(line, "\n"))
     end
@@ -2843,18 +2842,19 @@ function PREDICT(tsv::String, syncx_validate::String)::Vector{Float64}
         end            
     end
     ### It is required that we capture all the alleles and loci in the estimated effects file (tsv) are present in the validation genotype data (syncx_validate)
-    if length(idx) < length(vec_beta)
+    if length(idx) < length(vec_beta) - 1 ### Account for the intercept
         println("ERROR: Missing loci in prediction dataset.")
         println("Please, consider havng the same loci covered in both training and prediction sets, i.e.")
         println(string("in '", tsv, "' and '", syncx_validate, "' files."))
         return(1)
     end
     X = χ.cou'[:, idx]
-    ŷ = X * vec_beta
+    n, _ = size(X)
+    ŷ = hcat(ones(n), X) * vec_beta
     return(ŷ)
 end
 
-function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Plots.Plot{Plots.GRBackend}} where T <: Number
+function CV_METRICS(y::Vector{T}, ŷ::Vector{T})::Tuple{Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Plots.Plot{Plots.GRBackend}} where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -2900,11 +2900,7 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{
     # @time ŷ = PREDICT(tsv, syncx_validate)
     # ϕ_validate = LOAD(phenotype_validate, delimiter, header, id_col, [phenotype_col], missing_strings)
     # y = Float64.(ϕ_validate.phe[:,1])
-    # ϕ_training = LOAD(phenotype_training, delimiter, header, id_col, [phenotype_col], missing_strings)
-    # y_training = Float64.(ϕ_training.phe[:,1])
-    # correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y, ŷ, y_training)
-    ### Transform the predictions into the range of the training data
-    ŷ = (ŷ .* std(y_training)) .+ mean(y_training)
+    # correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y, ŷ)
     ### Correlation metrics
     correlation_pearson = cor(y, ŷ)
     correlation_spearman = corspearman(y, ŷ)
@@ -3098,7 +3094,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         rm(pheno_validate)
         rm(tsv)
         ### Calculate prediction metrics
-        correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y[idx_validate], ŷ, y[idx_training])
+        correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y[idx_validate], ŷ)
         ### Save plots and/or predictions?
         if save_plots
             Plots.plot!(p, size=[700, 700]);
@@ -3108,7 +3104,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
             _out_pred = string(out, "-predictions-rep_", rep, "-fold_", fold, ".tsv") ### Only used if we want to save all the predictions
             _file_pred = open(_out_pred, "a")
             for k in 1:length(ŷ)
-                write(_file_pred, string(join([rep, fold, ŷ[k], y[idx_validate][k]], "\t"), "\n"))
+                write(_file_pred, string(join([rep, fold, y[idx_validate][k], ŷ[k]], "\t"), "\n"))
             end
             close(_file_pred)
         else
