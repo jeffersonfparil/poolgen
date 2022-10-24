@@ -2923,8 +2923,9 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T}, y_training::Vector{T})::Tuple{
     x = vcat(y, ŷ)
     δ = std(x) / sqrt(length(x))
     limits = [minimum(x)-δ, maximum(x)+δ]
-    p = Plots.scatter(y, ŷ, xlabel="True", ylab="Predicted", xlims=limits, ylims=limits, legend=false, markerstrokewidth=0.001, markeralpha=0.4, title="")
-    Plots.plot!(p, [0,1], [0 ,1], seriestype=:straightline, linecolor=:gray, legend=false)
+    p = Plots.scatter(y, ŷ, xlabel="True", ylab="Predicted", xlims=limits, ylims=limits, legend=false, markerstrokewidth=0.001, markeralpha=0.4, title="");
+    Plots.plot!(p, [0,1], [0 ,1], seriestype=:straightline, linecolor=:gray, legend=false);
+    Plots.plot!(p, size=(700, 700));
     ### Output metrics and plot
     return(correlation_pearson, correlation_spearman, correlation_kendall,
            R2, R2_adj,
