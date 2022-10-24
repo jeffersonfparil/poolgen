@@ -3017,8 +3017,8 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
             nfold = nfold - 1
         end
         if nfold == 1
-            println("Sorry you dataset is too small. Exiting now.")
-            exit()
+            println("Sorry you dataset is too small. Exiting function now.")
+            return("Error")
         else
             println(string("Set the number of folds to ", nfold, "."))
         end
