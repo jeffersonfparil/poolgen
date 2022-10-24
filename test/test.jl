@@ -107,7 +107,7 @@ distance=true
 println("##########################################")
 println("GP")
 println("##########################################")
-nfold = 10
+nfold = 2
 nrep = 3
 model = ["OLS", "ELASTIC-NET", "LMM"][1]
 syncx = "test/Simulated-16663168544.syncx"

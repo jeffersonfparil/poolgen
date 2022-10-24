@@ -2996,7 +2996,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     ###########################
     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-OLS_MULTIVAR_CV.tsv")
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-MULTIVAR_CV.tsv")
     end
     ### Load genotype data
     χ = LOAD(syncx, true)
