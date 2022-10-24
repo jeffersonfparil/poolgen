@@ -127,5 +127,3 @@ inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "Neld
 optim_trace = false
 out = ""
 @time poolgen.genomic_prediction_CV(nfold=nfold, nrep=nrep, model=model, syncx=syncx, maf=maf, phenotype=phenotype, delimiter=delimiter, header=header, id_col=id_col, phenotype_col=phenotype_col, missing_strings=missing_strings, FE_method=FE_method, alpha=alpha, covariate=covariate, MM_model=MM_model, MM_method=MM_method, inner_optimizer=inner_optimizer, optim_trace=optim_trace, out=out)
-
-
