@@ -18,6 +18,7 @@ Pkg.add(url="https://github.com/jeffersonfparil/poolgen.git")
 3. Usage and documentation access. Open Julia and browse the documentation for all the currently available functions:
 ```julia
 using poolgen
+?poolgen
 ?poolgen.convert
 ?poolgen.pileup2syncx
 ?poolgen.filter

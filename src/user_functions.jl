@@ -379,6 +379,37 @@ end
 #############################
 ### QUANTITATIVE GENETICS ###
 #############################
+"""
+    # ___________________________________
+    # Genome-wide additive allelic effects (alpha) association using Pool-seq data
+
+    `gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String`
+
+    # Inputs
+    1. syncx [String]: extended synchronised pileup file
+    2. py_phenotype [String]: Text with a ".py" extension:
+    ```python
+        Pheno_name='Phenotype Name';
+        sig=0.06724693662723039; # standard deviation
+        MIN=0.0; # minimum phenotype value
+        MAX=0.424591738712776; # maximum phenotype value
+        perc=[0.2,0.4,0.6,0.8];	 # cummulative pool sizes percentiles excluding the last pool
+        q=[0.16,0.20,0.23,0.27,0.42];  # phenotype values corresponding to each percentile
+    ```
+    3. maf [Float64]: minimum allele frequency (default=0.001)
+    4. penalty [Bool]: use the penalization for low allele frequency (default=true)
+    5. out [String]: output filename (default: `syncx` with the extension converted to `.tsv`)
+
+    # Output
+    1. [String]: filename of the output in tab-delimited format
+    - *Column 1*: chromosome names
+    - *Column 2*: position
+    - *Column 3*: allele name
+    - *Column 4*: 0 for skipped locus; and 1 for included locus
+    - *Column 5*: allele frequency
+    - *Column 6*: alpha or allele effect
+
+"""
 function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -421,7 +452,56 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
     return(out)
 end
 
-function genomic_prediction(;syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
+"""
+    # ___________________________________
+    # Fit genomic prediction models
+
+    `genomic_prediction(;syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String`
+
+    # Inputs
+    1.  syncx [String]: extended synchronised pileup file
+    2.  maf [Float64]: minimum allele frequency
+    3.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+    4.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
+    5.  delimiter [String]: delimited of the `phenotype` (default=",")
+    6.  header [Bool]: header of the `phenotype` (default=true)
+    7.  id_col [Int]: column of the `phenotype` containing the pool IDs (default=1)
+    8.  phenotype_col [Int]: column of the `phenotype` containing the phenotype values (default=2)
+    9.  missing_strings [Vector{String}]: missing phenotype data encoding (default=["NA", "NAN", "NaN", "missing", ""])
+    10. FE_method [String]: fixed effect estimation method. Choose from "CANONICAL" (inverse(XᵀX)(Xᵀy)), and "N<<P" ((Xᵀ)inverse(XXᵀ)(y)) (default="N<<P")
+    11. alpha [Float64]: elastic-net penalty. Ranges from 0.0 (ridge) to 1.0 (lasso) (default=1.0)
+    12. covariate [String]: covarate to use in linear mixed models. Choose from "" (none), "XTX" (unscaled kinship matrix or squared Euclidean distance between indvidual), and "COR" (Pearson's correlation matrix) (default: "XTX")
+    13. MM_model [String]: linear mixed model. Chose from "GBLUP", and "RRBLUP"][1]
+        - GBLUP: `y = Xβ + g + ϵ`,
+            where `X` are the intercept and SNPs,
+            `g = Zμ = μ` are the individual genotype effects,
+                where `Z = I(nxn)`, and `(μ==g)~MVN(0, D),`
+                    where `D = σ2u * K`
+                        where `K ≈ (X'X)/n`
+            and `ϵ~MVN(0, R)`
+                where `R = σ2e * I`
+        - RR-BLUP: `y = Xβ + Zμ + ϵ`,
+            where `X` are the intercept and covariates, if any,
+            `Z` are the SNPs,
+            μ~MVN(0, D),
+                where D = σ2u * I
+            and ϵ~MVN(0, R)
+                where R = σ2e * I
+    14. MM_method [String]: linear mixed model parameter estimation method. Choose from "ML" (maximum likelihood), and "REML" (restricted maximum likelihood) (default="ML")
+    15. inner_optimizer [String]: linear mixed model parameter estimation inner optimiser. Choose from "LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", and "NelderMead" (default="LBFGS")
+    16. optim_trace [Bool]: print out optimisation progress (default=false)
+    17. out [String]: output filename (default: `syncx` with the extension converted to `.tsv`)
+
+    # Output
+    1. [String]: filename of the output in tab-delimited format
+    - *Column 1*: chromosome names
+    - *Column 2*: position
+    - *Column 3*: allele name
+    - *Column 4*: allele frequency
+    - *Column 5*: allele effect
+    - *Column 6*: "NA" (used as p-value column in GWAS)
+"""
+function genomic_prediction(;syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
     # model = ["OLS", "ELASTIC", "LMM"][1]
     # syncx = "../test/test_5.syncx"
     # maf = 0.001
@@ -457,6 +537,69 @@ function genomic_prediction(;syncx::String, maf::Float64, phenotype::String, mod
     return(out)
 end
 
+"""
+    # ___________________________________
+    # Genomic prediction cross-validation
+
+    `genomic_prediction_CV(;nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String`
+
+    # Inputs
+    1.  nrep [Int64]: number of randomisation replication to perform k-fold cross-validation on
+    2.  nfold [Int64]: number of sets to divide the pools into for k-fold cross-validation. If this value results to less than 5 pools per set, the a lower value will be selected.
+    3.  syncx [String]: extended synchronised pileup file
+    4.  maf [Float64]: minimum allele frequency
+    5.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+    6.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
+    7.  delimiter [String]: delimited of the `phenotype` (default=",")
+    8.  header [Bool]: header of the `phenotype` (default=true)
+    9.  id_col [Int]: column of the `phenotype` containing the pool IDs (default=1)
+    10. phenotype_col [Int]: column of the `phenotype` containing the phenotype values (default=2)
+    11. missing_strings [Vector{String}]: missing phenotype data encoding (default=["NA", "NAN", "NaN", "missing", ""])
+    12. FE_method [String]: fixed effect estimation method. Choose from "CANONICAL" (inverse(XᵀX)(Xᵀy)), and "N<<P" ((Xᵀ)inverse(XXᵀ)(y)) (default="N<<P")
+    13. alpha [Float64]: elastic-net penalty. Ranges from 0.0 (ridge) to 1.0 (lasso) (default=1.0)
+    14. covariate [String]: covarate to use in linear mixed models. Choose from "" (none), "XTX" (unscaled kinship matrix or squared Euclidean distance between indvidual), and "COR" (Pearson's correlation matrix) (default: "XTX")
+    15. MM_model [String]: linear mixed model. Chose from "GBLUP", and "RRBLUP"][1]
+        - GBLUP: `y = Xβ + g + ϵ`,
+            where `X` are the intercept and SNPs,
+            `g = Zμ = μ` are the individual genotype effects,
+                where `Z = I(nxn)`, and `(μ==g)~MVN(0, D),`
+                    where `D = σ2u * K`
+                        where `K ≈ (X'X)/n`
+            and `ϵ~MVN(0, R)`
+                where `R = σ2e * I`
+        - RR-BLUP: `y = Xβ + Zμ + ϵ`,
+            where `X` are the intercept and covariates, if any,
+            `Z` are the SNPs,
+            μ~MVN(0, D),
+                where D = σ2u * I
+            and ϵ~MVN(0, R)
+                where R = σ2e * I
+    16. MM_method [String]: linear mixed model parameter estimation method. Choose from "ML" (maximum likelihood), and "REML" (restricted maximum likelihood) (default="ML")
+    17. inner_optimizer [String]: linear mixed model parameter estimation inner optimiser. Choose from "LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", and "NelderMead" (default="LBFGS")
+    18. optim_trace [Bool]: print out optimisation progress (default=false)
+    19. save_plots [Bool]: save scatter plots of true vs. predicted phenotypes (default=false)
+    20. save_predictions [Bool]: save true and predicted phenotypes across replications and folds (default=false)
+    21. out [String]: output filename (default: `syncx` with the extension converted to `-MULTIVAR_CV.tsv`)
+
+    # Output
+    1. [String]: filename of the genomic prediction cross-validation accuracy metrics in tab-delimited format (header: "rep", "fold", "correlation_pearson", "correlation_spearman", "correlation_kendall", "R2", "R2_adj", "MAE", "MBE", "RAE", "MSE", "RMSE", "RRMSE", "RMSLE")
+    - *Column 1*:  replication number
+    - *Column 2*:  fold number
+    - *Column 3*:  coefficient of determination (model = predicted ~ 1 + true)
+    - *Column 4*:  adjusted coefficient of determination
+    - *Column 5*:  mean absolute error (MAE = mean(abs.(y .- ŷ)))
+    - *Column 6*:  mean bias error (MBE = mean(y .- ŷ))
+    - *Column 7*:  relative absolute error (RAE = sum(abs.(y .- ŷ)) / sum(abs.(y .- mean(y))))
+    - *Column 8*:  mean square error (MSE = mean((y .- ŷ).^2))
+    - *Column 9*:  root mean square error (RMSE = sqrt(MSE))
+    - *Column 10*: relative root mean square error (RRMSE = sqrt(MSE / sum(ŷ.^2)))
+    - *Column 11*: root mean squared logarithmic error (RMSLE = sqrt(mean((log.(y .+ min_y .+ 1) .- log10.(ŷ .+ min_ŷ .+ 1)).^2)))
+    2. [String; Optional output, i.e. if save_predictions==true]: filename of the true and predicted phenotype values across replications and folds (header: "rep", "fold", "true", "pred")
+    - *Column 1*:  replication number
+    - *Column 2*:  fold number
+    - *Column 3*:  true phenotype value
+    - *Column 4*:  predicted phenotype value
+"""
 function genomic_prediction_CV(;nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String
     # nfold = 10
     # nrep = 3
