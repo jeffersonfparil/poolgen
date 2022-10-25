@@ -150,4 +150,4 @@ Performs simple linear regression to predict missing allele counts per window fo
 
 - [Benjamin Camm](https://adaptive-evolution.biosciences.unimelb.edu.au/people/bencamm.html)
 
-![](res/BJC_pic.jpg)
+![ben](misc/BJC_pic.jpg)
