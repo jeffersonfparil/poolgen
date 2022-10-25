@@ -39,7 +39,7 @@ using .functions: CV_MULTIVAR
 1. Single-core conversion
 ```julia
 using poolgen
-n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=true; npools=5
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
 map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
 sync_out = poolgen.convert(syncx, out="test.sync")
 sync_out = poolgen.convert(syncx, out="test.syncx")
@@ -50,7 +50,7 @@ sync_out = poolgen.convert(syncx, out="test.syncx")
 using Distributed
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
-n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=true; npools=5
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
 map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
 sync_out = poolgen.convert(syncx, out="test.sync")
 sync_out = poolgen.convert(syncx, out="test.syncx")
@@ -183,6 +183,37 @@ end
 
 1. Single-core filtering
 ```julia
+using poolgen
+pileup = "test.pileup"
+f = open(pileup, "a")
+write(f, "seq1\t272\tT\t24\t,......,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\t24\t,......,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\n")
+write(f, "seq1\t273\tT\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\n")
+write(f, "seq1\t274\tT\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n")
+write(f, "seq1\t275\tA\t23\t,....,,.,.,...,,,.,...^l.\t<+;9*<<<<<<<<<=<<:;<<<<\t23\t,....,,.,.,...,,,.,...^l.\t<+;9*<<<<<<<<<=<<:;<<<<\n")
+write(f, "seq2\t276\tG\t22\t...T,,.,.,...,,,.,....\t33;+<<7=7<<7<&<<1;<<6<\t22\t...T,,.,.,...,,,.,....\t33;+<<7=7<<7<&<<1;<<6<\n")
+write(f, "seq2\t277\tT\t22\t....,,.,.,.C.,,,.,..G.\t+7<;<<<<<<<&<=<<:;<<&<\t22\t....,,.,.,.C.,,,.,..G.\t+7<;<<<<<<<&<=<<:;<<&<\n")
+write(f, "seq2\t278\tG\t23\t....,,.,.,...,,,.,....^k.\t%38*<<;<7<<7<=<<<;<<<<<\t23\t....,,.,.,...,,,.,....^k.\t%38*<<;<7<<7<=<<<;<<<<<\n")
+write(f, "seq2\t279\tC\t23\tA..T,,.,.,...,,,.,.....\t75&<<<<<<<<<=<<<9<<:<<<\t23\tA..T,,.,.,...,,,.,.....\t75&<<<<<<<<<=<<<9<<:<<<\n")
+close(f)
+@time poolgen.filter(pileup, "pileup")
+@time poolgen.filter(pileup, "syncx")
+```
+
+2. Multi-core filtering
+```julia
+using Distributed
+Distributed.addprocs(length(Sys.cpu_info())-1)
+@everywhere using poolgen
+pileup = "test.pileup"
+f = open(pileup, "a")
+for i in 1:10_000
+    write(f, "seq1\t272\tT\t24\t,......,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\t24\t,......,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\n")
+    write(f, "seq1\t273\tT\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\n")
+    write(f, "seq1\t274\tT\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n")
+end
+close(f)
+@time poolgen.filter(pileup, "pileup")
+@time poolgen.filter(pileup, "syncx")
 ```
 """
 function filter(pileup::String, outype::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
@@ -244,6 +275,26 @@ end
 
 # Output
 1. [String]: filename of the output
+
+# Examples
+
+1. Single-core conversion
+```julia
+using poolgen
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
+map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+@time poolgen.filter(syncx)
+```
+
+2. Multi-core conversion
+```julia
+using Distributed
+Distributed.addprocs(length(Sys.cpu_info())-1)
+@everywhere using poolgen
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
+map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+@time poolgen.filter(syncx)
+```
 """
 function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # using Distributed
@@ -304,6 +355,46 @@ end
 
 # Output
 1. [String]: filename of the output
+
+# Examples
+
+1. Single-core conversion
+```julia
+using poolgen
+pileup = "test.pileup"
+f = open(pileup, "a")
+for i in 1:10_000
+    write(f, "seq1\t272\tT\t24\t,......,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\t24\t,......,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\n")
+    write(f, "seq1\t273\tT\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\n")
+    write(f, "seq1\t274\tT\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n")
+    write(f, "seq1\t275\tT\t0\t*\t*\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n")
+    write(f, "seq1\t276\tT\t0\t*\t*\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n")
+end
+close(f)
+syncx = poolgen.pileup2syncx(pileup)
+@time poolgen.impute(pileup)
+@time poolgen.impute(syncx)
+```
+
+2. Multi-core conversion
+```julia
+using Distributed
+Distributed.addprocs(length(Sys.cpu_info())-1)
+@everywhere using poolgen
+pileup = "test.pileup"
+f = open(pileup, "a")
+for i in 1:10_000
+    write(f, "seq1\t272\tT\t24\t,......,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\t24\t,......,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\n")
+    write(f, "seq1\t273\tT\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\n")
+    write(f, "seq1\t274\tT\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n")
+    write(f, "seq1\t275\tT\t0\t*\t*\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n")
+    write(f, "seq1\t276\tT\t0\t*\t*\t23\t,.....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n")
+end
+close(f)
+syncx = poolgen.pileup2syncx(pileup)
+@time poolgen.impute(pileup)
+@time poolgen.impute(syncx)
+```
 """
 function impute(filename::String; window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String
     # using Distributed
@@ -404,6 +495,14 @@ end
 4. [String]: filename of fam file ([plink1.9 fam format](https://www.cog-genomics.org/plink/1.9/formats#fam))
 5. [String]: filename of pool genotype file (extended synchronised pileup "syncx" format)
 6. [String]: filename of phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+
+# Example
+
+```julia
+using poolgen
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
+@time map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+```
 """
 function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}
     # n = 5                 ### number of founders
@@ -513,9 +612,9 @@ end
 
 # Inputs
 1.  syncx [String]: extended synchronised pileup file
-2.  maf [Float64]: minimum allele frequency
-3.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
-4.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
+2.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+3.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
+4.  maf [Float64]: minimum allele frequency (default=0.001)
 5.  delimiter [String]: delimited of the `phenotype` (default=",")
 6.  header [Bool]: header of the `phenotype` (default=true)
 7.  id_col [Int]: column of the `phenotype` containing the pool IDs (default=1)
@@ -553,8 +652,21 @@ end
 - *Column 4*: allele frequency
 - *Column 5*: allele effect
 - *Column 6*: "NA" (used as p-value column in GWAS)
+
+# Example
+
+```julia
+using Distributed
+Distributed.addprocs(length(Sys.cpu_info())-1)
+@everywhere using poolgen
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
+map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+@time poolgen.genomic_prediction(syncx=syncx, phenotype=csv)
+@time poolgen.genomic_prediction(syncx=syncx, phenotype=csv, model="ELASTIC", alpha=0.50)
+@time poolgen.genomic_prediction(syncx=syncx, phenotype=csv, model="LMM", MM_model="GBLUP", MM_method="ML")
+```
 """
-function genomic_prediction(;syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
+function genomic_prediction(;syncx::String, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
     # model = ["OLS", "ELASTIC", "LMM"][1]
     # syncx = "../test/test_5.syncx"
     # maf = 0.001
@@ -600,9 +712,9 @@ end
 1.  nrep [Int64]: number of randomisation replication to perform k-fold cross-validation on
 2.  nfold [Int64]: number of sets to divide the pools into for k-fold cross-validation. If this value results to less than 5 pools per set, the a lower value will be selected.
 3.  syncx [String]: extended synchronised pileup file
-4.  maf [Float64]: minimum allele frequency
-5.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
-6.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
+4.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+5.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
+6.  maf [Float64]: minimum allele frequency (default=0.001)
 7.  delimiter [String]: delimited of the `phenotype` (default=",")
 8.  header [Bool]: header of the `phenotype` (default=true)
 9.  id_col [Int]: column of the `phenotype` containing the pool IDs (default=1)
@@ -652,8 +764,21 @@ end
 - *Column 2*:  fold number
 - *Column 3*:  true phenotype value
 - *Column 4*:  predicted phenotype value
+
+# Example
+
+```julia
+using Distributed
+Distributed.addprocs(length(Sys.cpu_info())-1)
+@everywhere using poolgen
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
+map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+@time poolgen.genomic_prediction(nrep=3, nfold=10, syncx=syncx, phenotype=csv)
+@time poolgen.genomic_prediction(nrep=3, nfold=10, syncx=syncx, phenotype=csv, model="ELASTIC", alpha=0.50)
+@time poolgen.genomic_prediction(nrep=3, nfold=10, syncx=syncx, phenotype=csv, model="LMM", MM_model="GBLUP", MM_method="ML")
+```
 """
-function genomic_prediction_CV(;nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String
+function genomic_prediction_CV(;nfold::Int64, nrep::Int64, syncx::String, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String
     # nfold = 10
     # nrep = 3
     # model = ["OLS", "ELASTIC", "LMM"][1]
