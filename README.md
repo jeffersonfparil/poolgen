@@ -7,21 +7,15 @@ Quantitative and population genetics analyses using pool sequencing data
 
 ## Quickstart
 
-1. Install Julia
+1. Download and install Julia. See [https://julialang.org/downloads/](https://julialang.org/downloads/).
 
-Download and install julia from their [website](https://julialang.org/downloads/).
-
-2. Install the poolgen package
-
-Open Julia and run the following:
+2. Install the poolgen package. Open Julia and run the following:
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/jeffersonfparil/poolgen.git")
 ```
 
-3. Usage and documentation access
-
-Open Julia and browse the documentation for all the currently available functions:
+3. Usage and documentation access. Open Julia and browse the documentation for all the currently available functions:
 ```julia
 using poolgen
 ?poolgen.convert
