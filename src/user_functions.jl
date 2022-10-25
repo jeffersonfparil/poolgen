@@ -35,7 +35,6 @@ using .functions: CV_MULTIVAR
 1. [String]: filename of the output
 
 # Examples
-
 1. Single-core conversion
 ```julia
 using poolgen
@@ -103,7 +102,6 @@ end
 1. [String]: filename of the output
 
 # Examples
-
 1. Single-core parsing
 ```julia
 using poolgen
@@ -180,7 +178,6 @@ end
 1. [String]: filename of the output
 
 # Examples
-
 1. Single-core filtering
 ```julia
 using poolgen
@@ -277,7 +274,6 @@ end
 1. [String]: filename of the output
 
 # Examples
-
 1. Single-core conversion
 ```julia
 using poolgen
@@ -357,7 +353,6 @@ end
 1. [String]: filename of the output
 
 # Examples
-
 1. Single-core conversion
 ```julia
 using poolgen
@@ -497,7 +492,6 @@ end
 6. [String]: filename of phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
 
 # Example
-
 ```julia
 using poolgen
 n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
@@ -538,6 +532,12 @@ end
 
 `gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String`
 
+# Original implementation
+Compatible with the original implementation published and reposited in:
+- Fournier-Level A, Robin C, Balding DJ (2016). [GWAlpha: Genome-Wide estimation of additive effects (Alpha) based on trait quantile distribution from pool-sequencing experiments.](https://doi.org/10.1093/bioinformatics/btw805)
+- https://github.com/aflevel/GWAlpha
+
+
 # Inputs
 1. syncx [String]: extended synchronised pileup file
 2. py_phenotype [String]: Text with a ".py" extension:
@@ -561,6 +561,22 @@ end
 - *Column 4*: 0 for skipped locus; and 1 for included locus
 - *Column 5*: allele frequency
 - *Column 6*: alpha or allele effect
+
+# Example
+```julia
+using Distributed
+Distributed.addprocs(length(Sys.cpu_info())-1)
+@everywhere using poolgen
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
+map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+
+write(f, "Pheno_name=\'Phenotype Name\';\n")
+write(f, "sig=0.06724693662723039;\n")
+write(f, "MIN=0.0;\n")
+write(f, "MAX=0.424591738712776;\n")
+write(f, "perc=[0.2,0.4,0.6,0.8];\n")
+write(f, "q=[0.16,0.20,0.23,0.27,0.42];\n")
+```
 """
 function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String
     # using Distributed
@@ -654,7 +670,6 @@ end
 - *Column 6*: "NA" (used as p-value column in GWAS)
 
 # Example
-
 ```julia
 using Distributed
 Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -766,7 +781,6 @@ end
 - *Column 4*:  predicted phenotype value
 
 # Example
-
 ```julia
 using Distributed
 Distributed.addprocs(length(Sys.cpu_info())-1)

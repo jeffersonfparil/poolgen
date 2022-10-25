@@ -145,3 +145,7 @@ Performs simple linear regression to predict missing allele counts per window fo
     + **Xₘ** is the matrix of allele counts of pools without missing data at the loci with missing data in the other pools (dimensions: mₘ non-missing loci × 7 alleles, nₚ pools without missing loci).
 
 - The imputed allele counts are averaged across the windows sliding one locus at a time.
+
+## Acknowledgements
+
+- Benjamin Camm ![](res/BJC_pic.jpg)
