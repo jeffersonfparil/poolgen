@@ -89,29 +89,6 @@ Spiritual successor to [popoolation2's](https://academic.oup.com/bioinformatics/
 	q=[0.16,0.20,0.23,0.27,0.42];	# phenotype values corresponding to each percentile
 ```
 
-## Imputation details
-Performs simple linear regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
-
-- For each pool with missing data we estimate β̂ as:
-```
-          yₚ = Xₚβ
-        → β̂ = inverse(XₚᵀXₚ) (Xₚᵀyₚ).
-```
-
-- For each pool with missing data, imputation is achieved by predicting the missing allele counts:
-```
-          ŷₘ = XₘB̂.
-```
-- Where:
-    + **yₚ** is the vector of allele counts of one of the pools with missing data at the loci without missing data (length: mₚ non-missing loci × 7 alleles);
-    + **Xₚ** is the matrix of allele counts of pools without missing data at the loci without missing data in the other pools (dimensions: mₚ non-missing loci × 7 alleles, nₚ pools without missing loci);
-    + **β̂** is the vector of estimates of the effects of each pool without missing data on the allele counts of one of the pools with missing data (length: nₚ pools without missing loci);
-    + **inverse()** is the Moore-Penrose pseudoinverse if the automatic Julia solver fails;
-    + **ŷₘ** is the vector of imputed allele counts of one of the pools with missing data (length: mₘ missing loci × 7 alleles); and
-    + **Xₘ** is the matrix of allele counts of pools without missing data at the loci with missing data in the other pools (dimensions: mₘ non-missing loci × 7 alleles, nₚ pools without missing loci).
-
-- The imputed allele counts are averaged across the windows sliding one locus at a time.
-
 ## Details
 
 ### GWAlpha details (needs updating)
@@ -144,3 +121,26 @@ Empirical p-values were calculated by modelling the additive allelic effects (α
 - ridge regression at α = 0.0
 - LASSO regression at α = 0.0
 - See: Friedman, Jerome, Trevor Hastie, and Robert Tibshirani. 2010. “Regularization Paths for Generalized Linear Models via Coordinate Descent.” Journal of Statistical Software, Articles 33 (1): 1–22. https://doi.org/10.18637/jss.v033.i01.
+
+### Imputation details
+Performs simple linear regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
+
+- For each pool with missing data we estimate β̂ as:
+```
+          yₚ = Xₚβ
+        → β̂ = inverse(XₚᵀXₚ) (Xₚᵀyₚ).
+```
+
+- For each pool with missing data, imputation is achieved by predicting the missing allele counts:
+```
+          ŷₘ = XₘB̂.
+```
+- Where:
+    + **yₚ** is the vector of allele counts of one of the pools with missing data at the loci without missing data (length: mₚ non-missing loci × 7 alleles);
+    + **Xₚ** is the matrix of allele counts of pools without missing data at the loci without missing data in the other pools (dimensions: mₚ non-missing loci × 7 alleles, nₚ pools without missing loci);
+    + **β̂** is the vector of estimates of the effects of each pool without missing data on the allele counts of one of the pools with missing data (length: nₚ pools without missing loci);
+    + **inverse()** is the Moore-Penrose pseudoinverse if the automatic Julia solver fails;
+    + **ŷₘ** is the vector of imputed allele counts of one of the pools with missing data (length: mₘ missing loci × 7 alleles); and
+    + **Xₘ** is the matrix of allele counts of pools without missing data at the loci with missing data in the other pools (dimensions: mₘ non-missing loci × 7 alleles, nₚ pools without missing loci).
+
+- The imputed allele counts are averaged across the windows sliding one locus at a time.
