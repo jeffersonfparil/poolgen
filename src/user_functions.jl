@@ -22,17 +22,17 @@ using .functions: CV_MULTIVAR
 ### I/O ###
 ###########
 """
-    # ___________________________________
-    # Convert synchronised pileup formats from sync to syncx and vice-versa
+# ___________________________________
+# Convert synchronised pileup formats from sync to syncx and vice-versa
 
-    `convert(syncx_or_sync::String; out::String="")::String`
+`convert(syncx_or_sync::String; out::String="")::String`
 
-    # Inputs
-    1. syncx_or_sync [String]: synchronised pileup file, i.e. sync or syncx
-    2. out [String]: output filename (defaults to the basename of `syncx_or_sync` with the extension name converted from sync to syncx and vice-versa)
+# Inputs
+1. syncx_or_sync [String]: synchronised pileup file, i.e. sync or syncx
+2. out [String]: output filename (defaults to the basename of `syncx_or_sync` with the extension name converted from sync to syncx and vice-versa)
 
-    # Output
-    1. [String]: filename of the output
+# Output
+1. [String]: filename of the output
 """
 function convert(syncx_or_sync::String; out::String="")::String
     # using Distributed
@@ -68,17 +68,17 @@ function convert(syncx_or_sync::String; out::String="")::String
 end
 
 """
-    # ___________________________________
-    # Convert pileup into the extended synchronised pileup format
+# ___________________________________
+# Convert pileup into the extended synchronised pileup format
 
-    `pileup2syncx(pileup::String; out::String="")::String`
+`pileup2syncx(pileup::String; out::String="")::String`
 
-    # Inputs
-    1. pileup [String]: pileup file
-    2. out [String]: output filename (defaults to the basename of `pileup` with the extension name converted to syncx)
+# Inputs
+1. pileup [String]: pileup file
+2. out [String]: output filename (defaults to the basename of `pileup` with the extension name converted to syncx)
 
-    # Output
-    1. [String]: filename of the output
+# Output
+1. [String]: filename of the output
 """
 function pileup2syncx(pileup::String; out::String="")::String
     # using Distributed
@@ -113,23 +113,23 @@ function pileup2syncx(pileup::String; out::String="")::String
 end
 
 """
-    # ___________________________________
-    # Filter pileup
+# ___________________________________
+# Filter pileup
 
-    `filter(pileup::String, outype::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String`
+`filter(pileup::String, outype::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String`
 
-    # Inputs
-    1. pileup [String]: pileup file
-    2. outype [String]: type of the output file, i.e. "pileup" or "syncx"
-    3. maximum_missing_fraction [Float64]: maximum fraction of individuals with missing loci (dafault=0.10)
-    4. alpha1 [Float64]: percentile allele frequency to implement `maf` (default=0.05)
-    5. maf [Float64]: minimum allele frequency (default=0.01)
-    6. alpha2 [Float64]: percentile coverage to implement `minimum_coverage` (default=0.50)
-    7. minimum_coverage [Int64]: minmum sequence coverage (default=5)
-    8. out [String]: output filename
+# Inputs
+1. pileup [String]: pileup file
+2. outype [String]: type of the output file, i.e. "pileup" or "syncx"
+3. maximum_missing_fraction [Float64]: maximum fraction of individuals with missing loci (dafault=0.10)
+4. alpha1 [Float64]: percentile allele frequency to implement `maf` (default=0.05)
+5. maf [Float64]: minimum allele frequency (default=0.01)
+6. alpha2 [Float64]: percentile coverage to implement `minimum_coverage` (default=0.50)
+7. minimum_coverage [Int64]: minmum sequence coverage (default=5)
+8. out [String]: output filename
 
-    # Output
-    1. [String]: filename of the output
+# Output
+1. [String]: filename of the output
 """
 function filter(pileup::String, outype::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # using Distributed
@@ -174,22 +174,22 @@ function filter(pileup::String, outype::String; maximum_missing_fraction::Float6
 end
 
 """
-    # ___________________________________
-    # Filter syncx
+# ___________________________________
+# Filter syncx
 
-    `filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String`
+`filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String`
 
-    # Inputs
-    1. syncx [String]: extended synchronised pileup file
-    2. maximum_missing_fraction [Float64]: maximum fraction of individuals with missing loci (dafault=0.10)
-    3. alpha1 [Float64]: percentile allele frequency to implement `maf` (default=0.05)
-    4. maf [Float64]: minimum allele frequency (default=0.01)
-    5. alpha2 [Float64]: percentile coverage to implement `minimum_coverage` (default=0.50)
-    6. minimum_coverage [Int64]: minmum sequence coverage (default=5)
-    7. out [String]: output filename
+# Inputs
+1. syncx [String]: extended synchronised pileup file
+2. maximum_missing_fraction [Float64]: maximum fraction of individuals with missing loci (dafault=0.10)
+3. alpha1 [Float64]: percentile allele frequency to implement `maf` (default=0.05)
+4. maf [Float64]: minimum allele frequency (default=0.01)
+5. alpha2 [Float64]: percentile coverage to implement `minimum_coverage` (default=0.50)
+6. minimum_coverage [Int64]: minmum sequence coverage (default=5)
+7. out [String]: output filename
 
-    # Output
-    1. [String]: filename of the output
+# Output
+1. [String]: filename of the output
 """
 function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # using Distributed
@@ -236,20 +236,20 @@ end
 ### IMPUTATION ###
 ##################
 """
-    # ___________________________________
-    # Impute pileup or synchronised pileup formats
+# ___________________________________
+# Impute pileup or synchronised pileup formats
 
-    `impute(filename::String; window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String`
+`impute(filename::String; window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String`
 
-    # Inputs
-    1. filename [String]: filename of the input pileup or syncx file
-    2. window_size [Int]: sliding window size (slides 1 position; default=100)
-    3. model [String]: linear regression model to use in imputation. Select from "Mean", "OLS", "RR", "LASSO", and "GLMNET" (default="OLS")
-    4. distance [Bool]: use distances as covariate (default=true)
-    5. out [String]: output filename
+# Inputs
+1. filename [String]: filename of the input pileup or syncx file
+2. window_size [Int]: sliding window size (slides 1 position; default=100)
+3. model [String]: linear regression model to use in imputation. Select from "Mean", "OLS", "RR", "LASSO", and "GLMNET" (default="OLS")
+4. distance [Bool]: use distances as covariate (default=true)
+5. out [String]: output filename
 
-    # Output
-    1. [String]: filename of the output
+# Output
+1. [String]: filename of the output
 """
 function impute(filename::String; window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String
     # using Distributed
@@ -319,37 +319,37 @@ end
 ### SIMULATION ###
 ##################
 """
-    # ___________________________________
-    # Simulation function
+# ___________________________________
+# Simulation function
 
-    `simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}`
+`simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}`
 
-    # Inputs
-    1.  n [Int64]: number of heterozygote founders
-    2.  m [Int64]: number of loci
-    3.  l [Int64]: total genome size in base-pairs
-    4.  k [Int64]: number of chromosomes
-    5.  ϵ [Int64]: an arbitrarily large Int64 number to indicate no LD, i.e. the distance between the termini of 2 adjacent chromosomes is infinitely large LD-wise but we don't want to use Inf as it is not Int64 (default=Int(1e+15))
-    6.  a [Int64]: number of alleles per locus (default=2 or biallelic)
-    7.  vec_chr_lengths [Vector{Int64}]: lengths of chromosomes (default: equally/similarly sized)
-    8.  vec_chr_names [Vector{String}]: chromosome names (default: consecutive numbers, i.e. "1", "2", ..., string(k))
-    9.  dist_noLD [Int64]: distance in base-pairs a with LD decays to zero (default=10_000)
-    10. o [Int64]: constant number of individuals per simulated generation, which also correspond to the total number of output individuals simulated (default=1_000)
-    11. t [Int64]: number of random mating generations (default=10)
-    12. nQTL [Int64]: number of completely additive quantitative trait loci (default=10)
-    13. heritability [Float64]: broad-sense or narrow-sense heritability as only additive effects are simulated (default=0.5)
-    14. npools [Int64]: number of pools (default=5)
-    15. LD_chr [String]: chromosome to use in linkage disequillibrium (LD) estimation (default: first chromosome)
-    16. LD_n_pairs [Int64]: number of randomly sampled loci pairs to use in LD estimation (default=10_000)
-    17. plot_LD [Bool]: plot the LD decay (default=true)
+# Inputs
+1.  n [Int64]: number of heterozygote founders
+2.  m [Int64]: number of loci
+3.  l [Int64]: total genome size in base-pairs
+4.  k [Int64]: number of chromosomes
+5.  ϵ [Int64]: an arbitrarily large Int64 number to indicate no LD, i.e. the distance between the termini of 2 adjacent chromosomes is infinitely large LD-wise but we don't want to use Inf as it is not Int64 (default=Int(1e+15))
+6.  a [Int64]: number of alleles per locus (default=2 or biallelic)
+7.  vec_chr_lengths [Vector{Int64}]: lengths of chromosomes (default: equally/similarly sized)
+8.  vec_chr_names [Vector{String}]: chromosome names (default: consecutive numbers, i.e. "1", "2", ..., string(k))
+9.  dist_noLD [Int64]: distance in base-pairs a with LD decays to zero (default=10_000)
+10. o [Int64]: constant number of individuals per simulated generation, which also correspond to the total number of output individuals simulated (default=1_000)
+11. t [Int64]: number of random mating generations (default=10)
+12. nQTL [Int64]: number of completely additive quantitative trait loci (default=10)
+13. heritability [Float64]: broad-sense or narrow-sense heritability as only additive effects are simulated (default=0.5)
+14. npools [Int64]: number of pools (default=5)
+15. LD_chr [String]: chromosome to use in linkage disequillibrium (LD) estimation (default: first chromosome)
+16. LD_n_pairs [Int64]: number of randomly sampled loci pairs to use in LD estimation (default=10_000)
+17. plot_LD [Bool]: plot the LD decay (default=true)
 
-    # Outputs
-    1. [String]: filename of map file ([plink1.9 map format](https://www.cog-genomics.org/plink/1.9/formats#map))
-    2. [String]: filename of bim file ([plink1.9 bim format](https://www.cog-genomics.org/plink/1.9/formats#bim))
-    3. [String]: filename of ped file ([plink1.9 ped format](https://www.cog-genomics.org/plink/1.9/formats#ped))
-    4. [String]: filename of fam file ([plink1.9 fam format](https://www.cog-genomics.org/plink/1.9/formats#fam))
-    5. [String]: filename of pool genotype file (extended synchronised pileup "syncx" format)
-    6. [String]: filename of phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+# Outputs
+1. [String]: filename of map file ([plink1.9 map format](https://www.cog-genomics.org/plink/1.9/formats#map))
+2. [String]: filename of bim file ([plink1.9 bim format](https://www.cog-genomics.org/plink/1.9/formats#bim))
+3. [String]: filename of ped file ([plink1.9 ped format](https://www.cog-genomics.org/plink/1.9/formats#ped))
+4. [String]: filename of fam file ([plink1.9 fam format](https://www.cog-genomics.org/plink/1.9/formats#fam))
+5. [String]: filename of pool genotype file (extended synchronised pileup "syncx" format)
+6. [String]: filename of phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
 """
 function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}
     # n = 5                 ### number of founders
@@ -380,35 +380,34 @@ end
 ### QUANTITATIVE GENETICS ###
 #############################
 """
-    # ___________________________________
-    # Genome-wide additive allelic effects (alpha) association using Pool-seq data
+# ___________________________________
+# Genome-wide additive allelic effects (alpha) association using Pool-seq data
 
-    `gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String`
+`gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String`
 
-    # Inputs
-    1. syncx [String]: extended synchronised pileup file
-    2. py_phenotype [String]: Text with a ".py" extension:
-    ```python
-        Pheno_name='Phenotype Name';
-        sig=0.06724693662723039; # standard deviation
-        MIN=0.0; # minimum phenotype value
-        MAX=0.424591738712776; # maximum phenotype value
-        perc=[0.2,0.4,0.6,0.8];	 # cummulative pool sizes percentiles excluding the last pool
-        q=[0.16,0.20,0.23,0.27,0.42];  # phenotype values corresponding to each percentile
-    ```
-    3. maf [Float64]: minimum allele frequency (default=0.001)
-    4. penalty [Bool]: use the penalization for low allele frequency (default=true)
-    5. out [String]: output filename (default: `syncx` with the extension converted to `.tsv`)
+# Inputs
+1. syncx [String]: extended synchronised pileup file
+2. py_phenotype [String]: Text with a ".py" extension:
+```python
+    Pheno_name='Phenotype Name';
+    sig=0.06724693662723039; # standard deviation
+    MIN=0.0; # minimum phenotype value
+    MAX=0.424591738712776; # maximum phenotype value
+    perc=[0.2,0.4,0.6,0.8];	 # cummulative pool sizes percentiles excluding the last pool
+    q=[0.16,0.20,0.23,0.27,0.42];  # phenotype values corresponding to each percentile
+```
+3. maf [Float64]: minimum allele frequency (default=0.001)
+4. penalty [Bool]: use the penalization for low allele frequency (default=true)
+5. out [String]: output filename (default: `syncx` with the extension converted to `.tsv`)
 
-    # Output
-    1. [String]: filename of the output in tab-delimited format
-    - *Column 1*: chromosome names
-    - *Column 2*: position
-    - *Column 3*: allele name
-    - *Column 4*: 0 for skipped locus; and 1 for included locus
-    - *Column 5*: allele frequency
-    - *Column 6*: alpha or allele effect
-
+# Output
+1. [String]: filename of the output in tab-delimited format
+- *Column 1*: chromosome names
+- *Column 2*: position
+- *Column 3*: allele name
+- *Column 4*: 0 for skipped locus; and 1 for included locus
+- *Column 5*: allele frequency
+- *Column 6*: alpha or allele effect
 """
 function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String
     # using Distributed
@@ -453,53 +452,53 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
 end
 
 """
-    # ___________________________________
-    # Fit genomic prediction models
+# ___________________________________
+# Fit genomic prediction models
 
-    `genomic_prediction(;syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String`
+`genomic_prediction(;syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String`
 
-    # Inputs
-    1.  syncx [String]: extended synchronised pileup file
-    2.  maf [Float64]: minimum allele frequency
-    3.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
-    4.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
-    5.  delimiter [String]: delimited of the `phenotype` (default=",")
-    6.  header [Bool]: header of the `phenotype` (default=true)
-    7.  id_col [Int]: column of the `phenotype` containing the pool IDs (default=1)
-    8.  phenotype_col [Int]: column of the `phenotype` containing the phenotype values (default=2)
-    9.  missing_strings [Vector{String}]: missing phenotype data encoding (default=["NA", "NAN", "NaN", "missing", ""])
-    10. FE_method [String]: fixed effect estimation method. Choose from "CANONICAL" (inverse(XᵀX)(Xᵀy)), and "N<<P" ((Xᵀ)inverse(XXᵀ)(y)) (default="N<<P")
-    11. alpha [Float64]: elastic-net penalty. Ranges from 0.0 (ridge) to 1.0 (lasso) (default=1.0)
-    12. covariate [String]: covarate to use in linear mixed models. Choose from "" (none), "XTX" (unscaled kinship matrix or squared Euclidean distance between indvidual), and "COR" (Pearson's correlation matrix) (default: "XTX")
-    13. MM_model [String]: linear mixed model. Chose from "GBLUP", and "RRBLUP"][1]
-        - GBLUP: `y = Xβ + g + ϵ`,
-            where `X` are the intercept and SNPs,
-            `g = Zμ = μ` are the individual genotype effects,
-                where `Z = I(nxn)`, and `(μ==g)~MVN(0, D),`
-                    where `D = σ2u * K`
-                        where `K ≈ (X'X)/n`
-            and `ϵ~MVN(0, R)`
-                where `R = σ2e * I`
-        - RR-BLUP: `y = Xβ + Zμ + ϵ`,
-            where `X` are the intercept and covariates, if any,
-            `Z` are the SNPs,
-            μ~MVN(0, D),
-                where D = σ2u * I
-            and ϵ~MVN(0, R)
-                where R = σ2e * I
-    14. MM_method [String]: linear mixed model parameter estimation method. Choose from "ML" (maximum likelihood), and "REML" (restricted maximum likelihood) (default="ML")
-    15. inner_optimizer [String]: linear mixed model parameter estimation inner optimiser. Choose from "LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", and "NelderMead" (default="LBFGS")
-    16. optim_trace [Bool]: print out optimisation progress (default=false)
-    17. out [String]: output filename (default: `syncx` with the extension converted to `.tsv`)
+# Inputs
+1.  syncx [String]: extended synchronised pileup file
+2.  maf [Float64]: minimum allele frequency
+3.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+4.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
+5.  delimiter [String]: delimited of the `phenotype` (default=",")
+6.  header [Bool]: header of the `phenotype` (default=true)
+7.  id_col [Int]: column of the `phenotype` containing the pool IDs (default=1)
+8.  phenotype_col [Int]: column of the `phenotype` containing the phenotype values (default=2)
+9.  missing_strings [Vector{String}]: missing phenotype data encoding (default=["NA", "NAN", "NaN", "missing", ""])
+10. FE_method [String]: fixed effect estimation method. Choose from "CANONICAL" (inverse(XᵀX)(Xᵀy)), and "N<<P" ((Xᵀ)inverse(XXᵀ)(y)) (default="N<<P")
+11. alpha [Float64]: elastic-net penalty. Ranges from 0.0 (ridge) to 1.0 (lasso) (default=1.0)
+12. covariate [String]: covarate to use in linear mixed models. Choose from "" (none), "XTX" (unscaled kinship matrix or squared Euclidean distance between indvidual), and "COR" (Pearson's correlation matrix) (default: "XTX")
+13. MM_model [String]: linear mixed model. Chose from "GBLUP", and "RRBLUP"][1]
+    - GBLUP: `y = Xβ + g + ϵ`,
+        where `X` are the intercept and SNPs,
+        `g = Zμ = μ` are the individual genotype effects,
+            where `Z = I(nxn)`, and `(μ==g)~MVN(0, D),`
+                where `D = σ2u * K`
+                    where `K ≈ (X'X)/n`
+        and `ϵ~MVN(0, R)`
+            where `R = σ2e * I`
+    - RR-BLUP: `y = Xβ + Zμ + ϵ`,
+        where `X` are the intercept and covariates, if any,
+        `Z` are the SNPs,
+        μ~MVN(0, D),
+            where D = σ2u * I
+        and ϵ~MVN(0, R)
+            where R = σ2e * I
+14. MM_method [String]: linear mixed model parameter estimation method. Choose from "ML" (maximum likelihood), and "REML" (restricted maximum likelihood) (default="ML")
+15. inner_optimizer [String]: linear mixed model parameter estimation inner optimiser. Choose from "LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", and "NelderMead" (default="LBFGS")
+16. optim_trace [Bool]: print out optimisation progress (default=false)
+17. out [String]: output filename (default: `syncx` with the extension converted to `.tsv`)
 
-    # Output
-    1. [String]: filename of the output in tab-delimited format
-    - *Column 1*: chromosome names
-    - *Column 2*: position
-    - *Column 3*: allele name
-    - *Column 4*: allele frequency
-    - *Column 5*: allele effect
-    - *Column 6*: "NA" (used as p-value column in GWAS)
+# Output
+1. [String]: filename of the output in tab-delimited format
+- *Column 1*: chromosome names
+- *Column 2*: position
+- *Column 3*: allele name
+- *Column 4*: allele frequency
+- *Column 5*: allele effect
+- *Column 6*: "NA" (used as p-value column in GWAS)
 """
 function genomic_prediction(;syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
     # model = ["OLS", "ELASTIC", "LMM"][1]
@@ -538,67 +537,67 @@ function genomic_prediction(;syncx::String, maf::Float64, phenotype::String, mod
 end
 
 """
-    # ___________________________________
-    # Genomic prediction cross-validation
+# ___________________________________
+# Genomic prediction cross-validation
 
-    `genomic_prediction_CV(;nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String`
+`genomic_prediction_CV(;nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String`
 
-    # Inputs
-    1.  nrep [Int64]: number of randomisation replication to perform k-fold cross-validation on
-    2.  nfold [Int64]: number of sets to divide the pools into for k-fold cross-validation. If this value results to less than 5 pools per set, the a lower value will be selected.
-    3.  syncx [String]: extended synchronised pileup file
-    4.  maf [Float64]: minimum allele frequency
-    5.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
-    6.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
-    7.  delimiter [String]: delimited of the `phenotype` (default=",")
-    8.  header [Bool]: header of the `phenotype` (default=true)
-    9.  id_col [Int]: column of the `phenotype` containing the pool IDs (default=1)
-    10. phenotype_col [Int]: column of the `phenotype` containing the phenotype values (default=2)
-    11. missing_strings [Vector{String}]: missing phenotype data encoding (default=["NA", "NAN", "NaN", "missing", ""])
-    12. FE_method [String]: fixed effect estimation method. Choose from "CANONICAL" (inverse(XᵀX)(Xᵀy)), and "N<<P" ((Xᵀ)inverse(XXᵀ)(y)) (default="N<<P")
-    13. alpha [Float64]: elastic-net penalty. Ranges from 0.0 (ridge) to 1.0 (lasso) (default=1.0)
-    14. covariate [String]: covarate to use in linear mixed models. Choose from "" (none), "XTX" (unscaled kinship matrix or squared Euclidean distance between indvidual), and "COR" (Pearson's correlation matrix) (default: "XTX")
-    15. MM_model [String]: linear mixed model. Chose from "GBLUP", and "RRBLUP"][1]
-        - GBLUP: `y = Xβ + g + ϵ`,
-            where `X` are the intercept and SNPs,
-            `g = Zμ = μ` are the individual genotype effects,
-                where `Z = I(nxn)`, and `(μ==g)~MVN(0, D),`
-                    where `D = σ2u * K`
-                        where `K ≈ (X'X)/n`
-            and `ϵ~MVN(0, R)`
-                where `R = σ2e * I`
-        - RR-BLUP: `y = Xβ + Zμ + ϵ`,
-            where `X` are the intercept and covariates, if any,
-            `Z` are the SNPs,
-            μ~MVN(0, D),
-                where D = σ2u * I
-            and ϵ~MVN(0, R)
-                where R = σ2e * I
-    16. MM_method [String]: linear mixed model parameter estimation method. Choose from "ML" (maximum likelihood), and "REML" (restricted maximum likelihood) (default="ML")
-    17. inner_optimizer [String]: linear mixed model parameter estimation inner optimiser. Choose from "LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", and "NelderMead" (default="LBFGS")
-    18. optim_trace [Bool]: print out optimisation progress (default=false)
-    19. save_plots [Bool]: save scatter plots of true vs. predicted phenotypes (default=false)
-    20. save_predictions [Bool]: save true and predicted phenotypes across replications and folds (default=false)
-    21. out [String]: output filename (default: `syncx` with the extension converted to `-MULTIVAR_CV.tsv`)
+# Inputs
+1.  nrep [Int64]: number of randomisation replication to perform k-fold cross-validation on
+2.  nfold [Int64]: number of sets to divide the pools into for k-fold cross-validation. If this value results to less than 5 pools per set, the a lower value will be selected.
+3.  syncx [String]: extended synchronised pileup file
+4.  maf [Float64]: minimum allele frequency
+5.  phenotype [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+6.  model [String]: genomic prediction model. Choose from "OLS", "ELASTIC", and "LMM"] (default="OLS")
+7.  delimiter [String]: delimited of the `phenotype` (default=",")
+8.  header [Bool]: header of the `phenotype` (default=true)
+9.  id_col [Int]: column of the `phenotype` containing the pool IDs (default=1)
+10. phenotype_col [Int]: column of the `phenotype` containing the phenotype values (default=2)
+11. missing_strings [Vector{String}]: missing phenotype data encoding (default=["NA", "NAN", "NaN", "missing", ""])
+12. FE_method [String]: fixed effect estimation method. Choose from "CANONICAL" (inverse(XᵀX)(Xᵀy)), and "N<<P" ((Xᵀ)inverse(XXᵀ)(y)) (default="N<<P")
+13. alpha [Float64]: elastic-net penalty. Ranges from 0.0 (ridge) to 1.0 (lasso) (default=1.0)
+14. covariate [String]: covarate to use in linear mixed models. Choose from "" (none), "XTX" (unscaled kinship matrix or squared Euclidean distance between indvidual), and "COR" (Pearson's correlation matrix) (default: "XTX")
+15. MM_model [String]: linear mixed model. Chose from "GBLUP", and "RRBLUP"][1]
+    - GBLUP: `y = Xβ + g + ϵ`,
+        where `X` are the intercept and SNPs,
+        `g = Zμ = μ` are the individual genotype effects,
+            where `Z = I(nxn)`, and `(μ==g)~MVN(0, D),`
+                where `D = σ2u * K`
+                    where `K ≈ (X'X)/n`
+        and `ϵ~MVN(0, R)`
+            where `R = σ2e * I`
+    - RR-BLUP: `y = Xβ + Zμ + ϵ`,
+        where `X` are the intercept and covariates, if any,
+        `Z` are the SNPs,
+        μ~MVN(0, D),
+            where D = σ2u * I
+        and ϵ~MVN(0, R)
+            where R = σ2e * I
+16. MM_method [String]: linear mixed model parameter estimation method. Choose from "ML" (maximum likelihood), and "REML" (restricted maximum likelihood) (default="ML")
+17. inner_optimizer [String]: linear mixed model parameter estimation inner optimiser. Choose from "LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", and "NelderMead" (default="LBFGS")
+18. optim_trace [Bool]: print out optimisation progress (default=false)
+19. save_plots [Bool]: save scatter plots of true vs. predicted phenotypes (default=false)
+20. save_predictions [Bool]: save true and predicted phenotypes across replications and folds (default=false)
+21. out [String]: output filename (default: `syncx` with the extension converted to `-MULTIVAR_CV.tsv`)
 
-    # Output
-    1. [String]: filename of the genomic prediction cross-validation accuracy metrics in tab-delimited format (header: "rep", "fold", "correlation_pearson", "correlation_spearman", "correlation_kendall", "R2", "R2_adj", "MAE", "MBE", "RAE", "MSE", "RMSE", "RRMSE", "RMSLE")
-    - *Column 1*:  replication number
-    - *Column 2*:  fold number
-    - *Column 3*:  coefficient of determination (model = predicted ~ 1 + true)
-    - *Column 4*:  adjusted coefficient of determination
-    - *Column 5*:  mean absolute error (MAE = mean(abs.(y .- ŷ)))
-    - *Column 6*:  mean bias error (MBE = mean(y .- ŷ))
-    - *Column 7*:  relative absolute error (RAE = sum(abs.(y .- ŷ)) / sum(abs.(y .- mean(y))))
-    - *Column 8*:  mean square error (MSE = mean((y .- ŷ).^2))
-    - *Column 9*:  root mean square error (RMSE = sqrt(MSE))
-    - *Column 10*: relative root mean square error (RRMSE = sqrt(MSE / sum(ŷ.^2)))
-    - *Column 11*: root mean squared logarithmic error (RMSLE = sqrt(mean((log.(y .+ min_y .+ 1) .- log10.(ŷ .+ min_ŷ .+ 1)).^2)))
-    2. [String; Optional output, i.e. if save_predictions==true]: filename of the true and predicted phenotype values across replications and folds (header: "rep", "fold", "true", "pred")
-    - *Column 1*:  replication number
-    - *Column 2*:  fold number
-    - *Column 3*:  true phenotype value
-    - *Column 4*:  predicted phenotype value
+# Output
+1. [String]: filename of the genomic prediction cross-validation accuracy metrics in tab-delimited format (header: "rep", "fold", "correlation_pearson", "correlation_spearman", "correlation_kendall", "R2", "R2_adj", "MAE", "MBE", "RAE", "MSE", "RMSE", "RRMSE", "RMSLE")
+- *Column 1*:  replication number
+- *Column 2*:  fold number
+- *Column 3*:  coefficient of determination (model = predicted ~ 1 + true)
+- *Column 4*:  adjusted coefficient of determination
+- *Column 5*:  mean absolute error (MAE = mean(abs.(y .- ŷ)))
+- *Column 6*:  mean bias error (MBE = mean(y .- ŷ))
+- *Column 7*:  relative absolute error (RAE = sum(abs.(y .- ŷ)) / sum(abs.(y .- mean(y))))
+- *Column 8*:  mean square error (MSE = mean((y .- ŷ).^2))
+- *Column 9*:  root mean square error (RMSE = sqrt(MSE))
+- *Column 10*: relative root mean square error (RRMSE = sqrt(MSE / sum(ŷ.^2)))
+- *Column 11*: root mean squared logarithmic error (RMSLE = sqrt(mean((log.(y .+ min_y .+ 1) .- log10.(ŷ .+ min_ŷ .+ 1)).^2)))
+2. [String; Optional output, i.e. if save_predictions==true]: filename of the true and predicted phenotype values across replications and folds (header: "rep", "fold", "true", "pred")
+- *Column 1*:  replication number
+- *Column 2*:  fold number
+- *Column 3*:  true phenotype value
+- *Column 4*:  predicted phenotype value
 """
 function genomic_prediction_CV(;nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String
     # nfold = 10

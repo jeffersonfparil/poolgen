@@ -1,6 +1,7 @@
 module poolgen
 
 include("user_functions.jl")
+using .user_functions: convert
 using .user_functions: pileup2syncx
 using .user_functions: filter
 using .user_functions: impute
