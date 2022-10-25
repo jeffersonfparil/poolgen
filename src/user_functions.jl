@@ -21,6 +21,19 @@ using .functions: CV_MULTIVAR
 ###########
 ### I/O ###
 ###########
+"""
+    # ___________________________________
+    # Convert synchronised pileup formats from sync to syncx and vice-versa
+
+    `convert(syncx_or_sync::String; out::String="")::String`
+
+    # Inputs
+    1. syncx_or_sync [String]: synchronised pileup file, i.e. sync or syncx
+    2. out [String]: output filename (defaults to the basename of `syncx_or_sync` with the extension name converted from sync to syncx and vice-versa)
+
+    # Output
+    1. [String]: filename of the output
+"""
 function convert(syncx_or_sync::String; out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -54,6 +67,19 @@ function convert(syncx_or_sync::String; out::String="")::String
     return(out)
 end
 
+"""
+    # ___________________________________
+    # Convert pileup into the extended synchronised pileup format
+
+    `pileup2syncx(pileup::String; out::String="")::String`
+
+    # Inputs
+    1. pileup [String]: pileup file
+    2. out [String]: output filename (defaults to the basename of `pileup` with the extension name converted to syncx)
+
+    # Output
+    1. [String]: filename of the output
+"""
 function pileup2syncx(pileup::String; out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -86,6 +112,25 @@ function pileup2syncx(pileup::String; out::String="")::String
     return(out)
 end
 
+"""
+    # ___________________________________
+    # Filter pileup
+
+    `filter(pileup::String, outype::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String`
+
+    # Inputs
+    1. pileup [String]: pileup file
+    2. outype [String]: type of the output file, i.e. "pileup" or "syncx"
+    3. maximum_missing_fraction [Float64]: maximum fraction of individuals with missing loci (dafault=0.10)
+    4. alpha1 [Float64]: percentile allele frequency to implement `maf` (default=0.05)
+    5. maf [Float64]: minimum allele frequency (default=0.01)
+    6. alpha2 [Float64]: percentile coverage to implement `minimum_coverage` (default=0.50)
+    7. minimum_coverage [Int64]: minmum sequence coverage (default=5)
+    8. out [String]: output filename
+
+    # Output
+    1. [String]: filename of the output
+"""
 function filter(pileup::String, outype::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -128,6 +173,24 @@ function filter(pileup::String, outype::String; maximum_missing_fraction::Float6
     return(out)
 end
 
+"""
+    # ___________________________________
+    # Filter syncx
+
+    `filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String`
+
+    # Inputs
+    1. syncx [String]: extended synchronised pileup file
+    2. maximum_missing_fraction [Float64]: maximum fraction of individuals with missing loci (dafault=0.10)
+    3. alpha1 [Float64]: percentile allele frequency to implement `maf` (default=0.05)
+    4. maf [Float64]: minimum allele frequency (default=0.01)
+    5. alpha2 [Float64]: percentile coverage to implement `minimum_coverage` (default=0.50)
+    6. minimum_coverage [Int64]: minmum sequence coverage (default=5)
+    7. out [String]: output filename
+
+    # Output
+    1. [String]: filename of the output
+"""
 function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -168,6 +231,26 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     return(out)
 end
 
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+##################
+### IMPUTATION ###
+##################
+"""
+    # ___________________________________
+    # Impute pileup or synchronised pileup formats
+
+    `impute(filename::String; window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String`
+
+    # Inputs
+    1. filename [String]: filename of the input pileup or syncx file
+    2. window_size [Int]: sliding window size (slides 1 position; default=100)
+    3. model [String]: linear regression model to use in imputation. Select from "Mean", "OLS", "RR", "LASSO", and "GLMNET" (default="OLS")
+    4. distance [Bool]: use distances as covariate (default=true)
+    5. out [String]: output filename
+
+    # Output
+    1. [String]: filename of the output
+"""
 function impute(filename::String; window_size::Int=100, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true, out::String="")::String
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -235,6 +318,39 @@ end
 ##################
 ### SIMULATION ###
 ##################
+"""
+    # ___________________________________
+    # Simulation function
+
+    `simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}`
+
+    # Inputs
+    1.  n [Int64]: number of heterozygote founders
+    2.  m [Int64]: number of loci
+    3.  l [Int64]: total genome size in base-pairs
+    4.  k [Int64]: number of chromosomes
+    5.  ϵ [Int64]: an arbitrarily large Int64 number to indicate no LD, i.e. the distance between the termini of 2 adjacent chromosomes is infinitely large LD-wise but we don't want to use Inf as it is not Int64 (default=Int(1e+15))
+    6.  a [Int64]: number of alleles per locus (default=2 or biallelic)
+    7.  vec_chr_lengths [Vector{Int64}]: lengths of chromosomes (default: equally/similarly sized)
+    8.  vec_chr_names [Vector{String}]: chromosome names (default: consecutive numbers, i.e. "1", "2", ..., string(k))
+    9.  dist_noLD [Int64]: distance in base-pairs a with LD decays to zero (default=10_000)
+    10. o [Int64]: constant number of individuals per simulated generation, which also correspond to the total number of output individuals simulated (default=1_000)
+    11. t [Int64]: number of random mating generations (default=10)
+    12. nQTL [Int64]: number of completely additive quantitative trait loci (default=10)
+    13. heritability [Float64]: broad-sense or narrow-sense heritability as only additive effects are simulated (default=0.5)
+    14. npools [Int64]: number of pools (default=5)
+    15. LD_chr [String]: chromosome to use in linkage disequillibrium (LD) estimation (default: first chromosome)
+    16. LD_n_pairs [Int64]: number of randomly sampled loci pairs to use in LD estimation (default=10_000)
+    17. plot_LD [Bool]: plot the LD decay (default=true)
+
+    # Outputs
+    1. [String]: filename of map file ([plink1.9 map format](https://www.cog-genomics.org/plink/1.9/formats#map))
+    2. [String]: filename of bim file ([plink1.9 bim format](https://www.cog-genomics.org/plink/1.9/formats#bim))
+    3. [String]: filename of ped file ([plink1.9 ped format](https://www.cog-genomics.org/plink/1.9/formats#ped))
+    4. [String]: filename of fam file ([plink1.9 fam format](https://www.cog-genomics.org/plink/1.9/formats#fam))
+    5. [String]: filename of pool genotype file (extended synchronised pileup "syncx" format)
+    6. [String]: filename of phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+"""
 function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci

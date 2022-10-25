@@ -5,6 +5,33 @@ Quantitative and population genetics analyses using pool sequencing data
 |:---:|:---:|
 | <a href="https://github.com/jeffersonfparil/poolgen/actions"><img src="https://github.com/jeffersonfparil/poolgen/actions/workflows/julia.yml/badge.svg"></a> | [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) |
 
+## Quickstart
+
+1. Install Julia
+Download and install julia from their [website](https://julialang.org/downloads/).
+
+2. Install the poolgen package
+Open Julia and run the following:
+```julia
+using Pkg
+Pkg.add(url="https://github.com/jeffersonfparil/poolgen.git")
+```
+
+3. Usage and documentation access
+Open Julia and browse the documentation for all the currently available functions:
+```julia
+using poolgen
+?poolgen.convert
+?poolgen.pileup2syncx
+?poolgen.filter
+?poolgen.filter
+?poolgen.impute
+?poolgen.simulate
+?poolgen.gwalpha
+?poolgen.genomic_prediction
+?poolgen.genomic_prediction_CV
+```
+
 ## Checklist
 - [X] Types: pileup line
 - [X] Types: syncx line
