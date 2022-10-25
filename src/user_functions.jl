@@ -33,6 +33,28 @@ using .functions: CV_MULTIVAR
 
 # Output
 1. [String]: filename of the output
+
+# Examples
+
+1. Single-core conversion
+```julia
+using poolgen
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=true; npools=5
+map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+sync_out = poolgen.convert(syncx, out="test.sync")
+sync_out = poolgen.convert(syncx, out="test.syncx")
+```
+
+2. Multi-core conversion
+```julia
+using Distributed
+Distributed.addprocs(length(Sys.cpu_info())-1)
+@everywhere using poolgen
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=true; npools=5
+map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+sync_out = poolgen.convert(syncx, out="test.sync")
+sync_out = poolgen.convert(syncx, out="test.syncx")
+```
 """
 function convert(syncx_or_sync::String; out::String="")::String
     # using Distributed
@@ -79,17 +101,43 @@ end
 
 # Output
 1. [String]: filename of the output
+
+# Examples
+
+1. Single-core parsing
+```julia
+using poolgen
+pileup = "test.pileup"
+f = open(pileup, "a")
+write(f, string("seq1\t272\tT\t24\t,.", '$', ".....,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\t24\t,.", '$', ".....,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\n"))
+write(f, string("seq1\t273\tT\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\n"))
+write(f, string("seq1\t274\tT\t23\t,.", '$', "....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\t23\t,.", '$', "....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n"))
+write(f, string("seq1\t275\tA\t23\t,", '$', "....,,.,.,...,,,.,...^l.\t<+;9*<<<<<<<<<=<<:;<<<<\t23\t,", '$', "....,,.,.,...,,,.,...^l.\t<+;9*<<<<<<<<<=<<:;<<<<\n"))
+write(f, string("seq2\t276\tG\t22\t...T,,.,.,...,,,.,....\t33;+<<7=7<<7<&<<1;<<6<\t22\t...T,,.,.,...,,,.,....\t33;+<<7=7<<7<&<<1;<<6<\n"))
+write(f, string("seq2\t277\tT\t22\t....,,.,.,.C.,,,.,..G.\t+7<;<<<<<<<&<=<<:;<<&<\t22\t....,,.,.,.C.,,,.,..G.\t+7<;<<<<<<<&<=<<:;<<&<\n"))
+write(f, string("seq2\t278\tG\t23\t....,,.,.,...,,,.,....^k.\t%38*<<;<7<<7<=<<<;<<<<<\t23\t....,,.,.,...,,,.,....^k.\t%38*<<;<7<<7<=<<<;<<<<<\n"))
+write(f, string("seq2\t279\tC\t23\tA..T,,.,.,...,,,.,.....\t75&<<<<<<<<<=<<<9<<:<<<\t23\tA..T,,.,.,...,,,.,.....\t75&<<<<<<<<<=<<<9<<:<<<\n"))
+close(f)
+@time poolgen.pileup2syncx(pileup)
+```
+
+2. Multi-core parsing
+```julia
+using Distributed
+Distributed.addprocs(length(Sys.cpu_info())-1)
+@everywhere using poolgen
+pileup = "test.pileup"
+f = open(pileup, "a")
+for i in 1:10_000
+    write(f, string("seq1\t272\tT\t24\t,.", '$', ".....,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\t24\t,.", '$', ".....,,.,.,...,,,.,..^+.\t<<<+;<<<<<<<<<<<=<;<;7<&\n"))
+    write(f, string("seq1\t273\tT\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\t23\t,.....,,.,.,...,,,.,..A\t<<<;<<<<<<<<<3<=<<<;<<+\n"))
+    write(f, string("seq1\t274\tT\t23\t,.", '$', "....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\t23\t,.", '$', "....,,.,.,...,,,.,...\t7<7;<;<<<<<<<<<=<;<;<<6\n"))
+end
+close(f)
+@time poolgen.pileup2syncx(pileup)
+```
 """
 function pileup2syncx(pileup::String; out::String="")::String
-    # using Distributed
-    # Distributed.addprocs(length(Sys.cpu_info())-1)
-    # @everywhere using ProgressMeter
-    # @everywhere include("functions.jl")
-    # @everywhere using .functions: PileupLine, LocusAlleleCounts, Window
-    # @everywhere using .functions: SPLIT, MERGE, PILEUP2SYNCX
-    # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup"    
-    # # pileup = "/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup"    
-    # out = ""
     ### Define output file if not specified
     if out == ""
         out = string(join(split(pileup, ".")[1:(end-1)], "."), ".syncx")
@@ -130,6 +178,12 @@ end
 
 # Output
 1. [String]: filename of the output
+
+# Examples
+
+1. Single-core filtering
+```julia
+```
 """
 function filter(pileup::String, outype::String; maximum_missing_fraction::Float64=0.10, alpha1::Float64=0.05, maf::Float64=0.01, alpha2::Float64=0.50, minimum_coverage::Int64=5, out::String="")::String
     # using Distributed
