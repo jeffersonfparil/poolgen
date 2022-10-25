@@ -564,18 +564,33 @@ Compatible with the original implementation published and reposited in:
 
 # Example
 ```julia
+using StatsBase
 using Distributed
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
 n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
 map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
-
+py_phenotype = replace(csv, ".csv" => ".py")
+vec_ϕ = []
+f = open(fam, "r")
+while !eof(f)
+    append!(vec_ϕ, parse(Float64, split(readline(f), "\t")[end]))
+end
+close(f)
+std_ϕ = std(vec_ϕ)
+min_ϕ = minimum(vec_ϕ)
+max_ϕ = maximum(vec_ϕ)
+perc = round.(collect(0:20:100)[2:(end-1)] ./ 100, digits=2)
+q = round.(percentile(vec_ϕ, collect(0:20:100))[2:end], digits=2)
+f = open(py_phenotype, "a")
 write(f, "Pheno_name=\'Phenotype Name\';\n")
-write(f, "sig=0.06724693662723039;\n")
-write(f, "MIN=0.0;\n")
-write(f, "MAX=0.424591738712776;\n")
-write(f, "perc=[0.2,0.4,0.6,0.8];\n")
-write(f, "q=[0.16,0.20,0.23,0.27,0.42];\n")
+write(f, string("sig=", std_ϕ, ";\n"))
+write(f, string("MIN=", min_ϕ, ";\n"))
+write(f, string("MAX=", max_ϕ, ";\n"))
+write(f, string("perc=[", join(perc, ","), "];\n"))
+write(f, string("q=[", join(q, ","), "];\n"))
+close(f)
+@time poolgen.gwalpha(syncx=syncx, py_phenotype=py_phenotype)
 ```
 """
 function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penalty::Bool=true, out::String="")::String
