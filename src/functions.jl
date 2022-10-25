@@ -326,7 +326,7 @@ function MERGE(filenames_out::Vector{String}, out::String)::String
     ### Sort the output files from parallel processing
     sort!(filenames_out)
     ### Merge
-    file_out = open(out, "w")
+    file_out = open(out, "a")
     for i in eachindex(filenames_out)
         if isfile(filenames_out[i])
             file_in = open(filenames_out[i], "r")
@@ -3137,6 +3137,9 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     ### Output
     if save_predictions
         out_pred = string(out, "-predictions.tsv")
+        f = open(out_pred, "a")
+        write(f, string(join(["rep", "fold", "true", "pred"], "\t"), "\n"))
+        close(f)
         vec_predictions = string.(vec_predictions)
         sort!(vec_predictions)
         MERGE(vec_predictions, out_pred)
