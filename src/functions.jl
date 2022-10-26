@@ -16,7 +16,7 @@ using Distributions
 using Optim
 using StatsBase
 using Dates
-using Polts
+using Plots
 
 include("structs.jl")
 using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype
@@ -2854,52 +2854,52 @@ function PREDICT(tsv::String, syncx_validate::String)::Vector{Float64}
 end
 
 function CV_METRICS(y::Vector{T}, ŷ::Vector{T})::Tuple{Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Plots.Plot{Plots.GRBackend}} where T <: Number
-    n = 5                 ### number of founders
-    m = 10_000            ### number of loci
-    l = 135_000_000       ### total genome length
-    k = 5                 ### number of chromosomes
-    ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    a = 2                 ### number of alleles per locus
-    vec_chr_lengths = [0] ### chromosome lengths
-    vec_chr_names = [""]  ### chromosome names 
-    dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    o = 1_000             ### total number of simulated individuals
-    t = 10                ### number of random mating constant population size generation to simulate
-    nQTL = 10             ### number of QTL to simulate
-    heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    LD_chr = ""           ### chromosome to calculate LD decay from
-    LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    plot_LD = false       ### simulate# plot simulated LD decay
-    @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    npools = 50
-    @time X, y = POOL(_X, _y, npools)
-    idx = collect(1:npools)
-    idx_training = sort(sample(idx, Int(round(npools*0.75)), replace=false))
-    idx_validate = idx[[sum(idx_training .== x)==0 for x in idx]]
-    @time syncx_training, phenotype_training = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X[idx_training, :], y[idx_training])
-    @time syncx_validate, phenotype_validate = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X[idx_validate, :], y[idx_validate])
-    maf = 0.001
-    delimiter = ","
-    header = true
-    id_col = 1
-    phenotype_col = 2
-    missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    FE_method = ["CANONICAL", "N<<P"][2]
-    alpha = 1.0
-    covariate = "COR"; model = "GBLUP"
-    # covariate = "";    model = "RRBLUP"
-    method = "ML"
-    FE_method = "N<<P"
-    inner_optimizer = LBFGS()
-    optim_trace = true
-    out = ""
-    @time tsv = OLS_MULTIVAR(syncx_training, maf, phenotype_training, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
-    # @time tsv = ELA_MULTIVAR(syncx_training, maf, phenotype_training, delimiter, header, id_col, phenotype_col, missing_strings, alpha, out)
-    # @time tsv = LMM_MULTIVAR(syncx_training, maf, phenotype_training, delimiter, header, id_col, phenotype_col, missing_strings, covariate, model, method, FE_method, inner_optimizer, optim_trace, out)
-    @time ŷ = PREDICT(tsv, syncx_validate)
-    ϕ_validate = LOAD(phenotype_validate, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = Float64.(ϕ_validate.phe[:,1])
-    correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y, ŷ)
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 1_000             ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 50
+    # @time X, y = POOL(_X, _y, npools)
+    # idx = collect(1:npools)
+    # idx_training = sort(sample(idx, Int(round(npools*0.75)), replace=false))
+    # idx_validate = idx[[sum(idx_training .== x)==0 for x in idx]]
+    # @time syncx_training, phenotype_training = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X[idx_training, :], y[idx_training])
+    # @time syncx_validate, phenotype_validate = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X[idx_validate, :], y[idx_validate])
+    # maf = 0.001
+    # delimiter = ","
+    # header = true
+    # id_col = 1
+    # phenotype_col = 2
+    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    # alpha = 1.0
+    # covariate = "COR"; model = "GBLUP"
+    # # covariate = "";    model = "RRBLUP"
+    # method = "ML"
+    # FE_method = "N<<P"
+    # inner_optimizer = LBFGS()
+    # optim_trace = true
+    # out = ""
+    # @time tsv = OLS_MULTIVAR(syncx_training, maf, phenotype_training, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
+    # # @time tsv = ELA_MULTIVAR(syncx_training, maf, phenotype_training, delimiter, header, id_col, phenotype_col, missing_strings, alpha, out)
+    # # @time tsv = LMM_MULTIVAR(syncx_training, maf, phenotype_training, delimiter, header, id_col, phenotype_col, missing_strings, covariate, model, method, FE_method, inner_optimizer, optim_trace, out)
+    # @time ŷ = PREDICT(tsv, syncx_validate)
+    # ϕ_validate = LOAD(phenotype_validate, delimiter, header, id_col, [phenotype_col], missing_strings)
+    # y = Float64.(ϕ_validate.phe[:,1])
+    # correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y, ŷ)
     ### Correlation metrics
     correlation_pearson = cor(y, ŷ)
     correlation_spearman = corspearman(y, ŷ)
@@ -2931,8 +2931,18 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T})::Tuple{Float64, Float64, Float
     x = vcat(y, ŷ)
     δ = std(x) / sqrt(length(x))
     limits = [minimum(x)-δ, maximum(x)+δ]
-    p = Plots.scatter(y, ŷ, xlabel="True", ylab="Predicted", xlims=limits, ylims=limits, legend=false, markerstrokewidth=0.001, markeralpha=0.4, title="");
+    p = Plots.scatter(y, ŷ, xlabel="True", ylab="Predicted", xlims=limits, ylims=limits,
+                      marekercolor=RGB(0.5,0.5,0.9), markerstrokewidth=0.001, markeralpha=0.4, title="", legend=false);
     Plots.plot!(p, [0,1], [0 ,1], seriestype=:straightline, linecolor=:gray, legend=false);
+    Plots.annotate!(p, limits[1]+(2*δ), limits[2],
+                text(string("R²=", round(R2, digits=2),
+                            "\nRMSE=", round(RMSE, digits=2),
+                            "\nRRMSE=", round(RRMSE, digits=2),
+                            "\nMAE=", round(MAE, digits=2),
+                            "\nMBE=", round(MBE, digits=2),
+                            "\nRAE=", round(RAE, digits=2)),
+                     :left, :top, 10)
+                   );
     ### Output metrics and plot
     return(correlation_pearson, correlation_spearman, correlation_kendall,
            R2, R2_adj,
