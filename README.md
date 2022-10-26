@@ -83,11 +83,11 @@ Spiritual successor to [popoolation2's](https://academic.oup.com/bioinformatics/
 2. Text with a ".py" extension for GWAlpha:
 ```python
 	Pheno_name='Phenotype Name';
-	sig=0.06724693662723039;		  # standard deviation
-	MIN=0.0;				              # minimum phenotype value
-	MAX=0.424591738712776;			  # maximum phenotype value
-	perc=[0.2,0.4,0.6,0.8];			  # cummulative pool sizes percentiles excluding the last pool
-	q=[0.16,0.20,0.23,0.27,0.42];	# phenotype values corresponding to each percentile
+	sig=0.06724693662723039; # standard deviation
+	MIN=0.0; # minimum phenotype value
+	MAX=0.424591738712776; # maximum phenotype value
+	perc=[0.2,0.4,0.6,0.8]; # cummulative pool sizes percentiles excluding the last pool
+	q=[0.16,0.20,0.23,0.27,0.42]; # phenotype values corresponding to each percentile
 ```
 
 ## Details
