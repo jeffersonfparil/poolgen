@@ -180,6 +180,7 @@ nfold = 2
 nrep = 3
 save_plots = false
 save_predictions = true
+save_summary_plot = false
 for i in 1:size(mat_models, 1)
     model = mat_models[i, 1]
     MM_model = mat_models[i, 2]
@@ -199,5 +200,6 @@ for i in 1:size(mat_models, 1)
                                               inner_optimizer=inner_optimizer,
                                               optim_trace=optim_trace,
                                               save_plots=save_plots,
-                                              save_predictions=save_predictions)
+                                              save_predictions=save_predictions,
+                                              save_summary_plot=save_summary_plot)
 end
