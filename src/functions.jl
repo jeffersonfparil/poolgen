@@ -457,7 +457,6 @@ function PILEUP2SYNCX(pileup::String, init::Int, term::Int, out::String="")::Str
 end
 
 function LOAD(syncx::String, count::Bool)::Window
-    # include("user_functions.jl"); using .user_functions: pileup2syncx
     # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_1.pileup")
     # syncx = pileup2syncx("/home/jeffersonfparil/Documents/poolgen/test/test_2.pileup")
     # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
@@ -2932,7 +2931,7 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T})::Tuple{Float64, Float64, Float
     δ = std(x) / sqrt(length(x))
     limits = [minimum(x)-δ, maximum(x)+δ]
     p = Plots.scatter(y, ŷ, xlabel="True", ylab="Predicted", xlims=limits, ylims=limits,
-                      marekercolor=RGB(0.5,0.5,0.9), markerstrokewidth=0.001, markeralpha=0.4, title="", legend=false);
+                      markercolor=RGB(0.5,0.5,0.9), markerstrokewidth=0.001, markeralpha=0.4, title="", legend=false);
     Plots.plot!(p, [0,1], [0 ,1], seriestype=:straightline, linecolor=:gray, legend=false);
     Plots.annotate!(p, limits[1]+(2*δ), limits[2],
                 text(string("R²=", round(R2, digits=2),
@@ -2952,7 +2951,7 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T})::Tuple{Float64, Float64, Float
 end
 
 # function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], out::String="")::String
-function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String
+function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], save_plots::Bool=false, save_predictions::Bool=false, save_summary_plot::Bool=false, out::String="")::String
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length
@@ -2982,39 +2981,25 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
     # FE_method = ["CANONICAL", "N<<P"][2]
-    # out = ""
-    # save_plots = false
-    # cv_tsv = CV_OLS_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
     # ###########################
     # nfold = 10
     # nrep = 3
-    # syncx = "../test/Simulated-16663168544.syncx"
-    # maf = 0.0001
-    # phenotype = "../test/Simulated-16663168544.csv"
-    # delimiter = ","
-    # header = true
-    # id_col = 1
-    # phenotype_col = 2
-    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    # # model  = OLS_MULTIVAR; params = ["N<<P"]
-    # # model  = poolgen.user_functions.functions.ELA_MULTIVAR; params = [1.0]
-    # # #########################
     # _covariate = ["", "XTX", "COR"][2]
     # _model = ["GBLUP", "RRBLUP"][1]
     # _method = ["ML", "REML"][1]
     # _FE_method = ["CANONICAL", "N<<P"][2]
     # _inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
     # _optim_trace = false
-    # model = LMM_MULTIVAR; params = [_covariate, _model, _method, _FE_method, _inner_optimizer, _optim_trace]
+    # model = OLS_MULTIVAR; params = [FE_method]
+    # # model = LMM_MULTIVAR; params = [_covariate, _model, _method, _FE_method, _inner_optimizer, _optim_trace]
     # save_plots = false
     # save_predictions = false
+    # save_summary_plot = false
     # out = ""
-    # # poolgen.user_functions.functions.CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
-    # poolgen.user_functions.functions.CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, model, params, out)
-    ###########################
+    # CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, model, params, save_plots, save_predictions, save_summary_plot, out)
     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-MULTIVAR_CV.tsv")
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_CV.tsv")
     end
     ### Load genotype data
     χ = LOAD(syncx, true)
@@ -3065,6 +3050,9 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
     vec_RMSE = []
     vec_RRMSE = []
     vec_RMSLE = []
+    if save_summary_plot
+        save_predictions = true
+    end 
     if save_predictions
        vec_predictions = []
     end
@@ -3085,7 +3073,7 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         pheno_training = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-TRAINING.csv")
         syncx_validate = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-VALIDATE.syncx")
         pheno_validate = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-VALIDATE.csv")
-        tsv = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-OLS_MULTIVAR.tsv")
+        tsv = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-", string(model), ".tsv")
         ### Save the training and validation data
         SAVE(Window(χ.chr, χ.pos, χ.ref, χ.cou[:, idx_training], zeros(1,1)),  syncx_training)
         SAVE(Phenotype(ϕ.iid[idx_training], [ϕ.tid[1]], ϕ.phe[idx_training, 1:1]), pheno_training, delimiter, ["id", ϕ.tid[1]])
@@ -3152,6 +3140,19 @@ function CV_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phe
         vec_predictions = string.(vec_predictions)
         sort!(vec_predictions)
         MERGE(vec_predictions, out_pred)
+    end
+    if save_summary_plot
+        vec_y = []; vec_ŷ = []
+        f = open(out_pred, "r")
+        _ = readline(f)
+        while !eof(f)
+            line = split(readline(f), "\t")
+            push!(vec_y, parse(Float64, line[3]))
+            push!(vec_ŷ, parse(Float64, line[4]))
+        end
+        close(f)
+        _, _, _, _, _, _, _, _, _, _, _, _, p = CV_METRICS(Float64.(vec_y), Float64.(vec_ŷ))
+        Plots.savefig(p, string(out, "-summary.svg"));
     end
     file_out = open(out, "a")
     line = string(join(["rep", "fold", "correlation_pearson", "correlation_spearman", "correlation_kendall", "R2", "R2_adj", "MAE", "MBE", "RAE", "MSE", "RMSE", "RRMSE", "RMSLE"], "\t"), "\n")

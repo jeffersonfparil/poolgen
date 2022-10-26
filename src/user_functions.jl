@@ -518,7 +518,7 @@ function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15),
     vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
     G, p = POOL(X, y, npools)
     map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p)
+    syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p, replace(fam, ".fam"=>".syncx"), replace(fam, ".fam"=>".csv"))
     return(map, bim, ped, fam, syncx, csv)
 end
 
@@ -774,7 +774,8 @@ end
 18. `optim_trace` [Bool]: print out optimisation progress (default=false)
 19. `save_plots` [Bool]: save scatter plots of true vs. predicted phenotypes (default=false)
 20. `save_predictions` [Bool]: save true and predicted phenotypes across replications and folds (default=false)
-21. `out` [String]: output filename (default: `syncx` with the extension converted to `-MULTIVAR_CV.tsv`)
+21. `save_summary_plot`[Bool]: save scatter plot of true and predicted phenotypes across replications and folds (default=false)
+22. `out` [String]: output filename (default: `syncx` with the extension converted to `-MULTIVAR_CV.tsv`)
 
 # Output
 1. [String]: filename of the genomic prediction cross-validation accuracy metrics in tab-delimited format (header: "rep", "fold", "correlation_pearson", "correlation_spearman", "correlation_kendall", "R2", "R2_adj", "MAE", "MBE", "RAE", "MSE", "RMSE", "RRMSE", "RMSLE")
@@ -800,14 +801,14 @@ end
 using Distributed
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
-n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
+n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=1_000; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=50
 map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
-@time poolgen.genomic_prediction(nrep=3, nfold=10, syncx=syncx, phenotype=csv)
-@time poolgen.genomic_prediction(nrep=3, nfold=10, syncx=syncx, phenotype=csv, model="ELASTIC", alpha=0.50)
-@time poolgen.genomic_prediction(nrep=3, nfold=10, syncx=syncx, phenotype=csv, model="LMM", MM_model="GBLUP", MM_method="ML")
+@time poolgen.genomic_prediction_CV(nrep=3, nfold=10, syncx=syncx, phenotype=csv, save_summary_plot=true)
+@time poolgen.genomic_prediction_CV(nrep=3, nfold=10, syncx=syncx, phenotype=csv, model="ELASTIC", alpha=0.50)
+@time poolgen.genomic_prediction_CV(nrep=3, nfold=10, syncx=syncx, phenotype=csv, model="LMM", MM_model="GBLUP", MM_method="ML")
 ```
 """
-function genomic_prediction_CV(;nfold::Int64, nrep::Int64, syncx::String, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, out::String="")::String
+function genomic_prediction_CV(;nrep::Int64, nfold::Int64, syncx::String, phenotype::String, model::String=["OLS", "ELASTIC", "LMM"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, save_plots::Bool=false, save_predictions::Bool=false, save_summary_plot::Bool=false, out::String="")::String
     # nfold = 10
     # nrep = 3
     # model = ["OLS", "ELASTIC", "LMM"][1]
@@ -833,27 +834,21 @@ function genomic_prediction_CV(;nfold::Int64, nrep::Int64, syncx::String, phenot
     ### Fit
     if model == "OLS"
         params=[FE_method]
-        out = CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
-                          OLS_MULTIVAR,
-                          params,
-                          save_plots,
-                          save_predictions,
+        out = CV_MULTIVAR(nrep, nfold, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
+                          OLS_MULTIVAR, params,
+                          save_plots, save_predictions, save_summary_plot,
                           out)
     elseif model == "ELASTIC"
         params=[alpha]
-        out = CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
-                          ELA_MULTIVAR,
-                          params,
-                          save_plots,
-                          save_predictions,
+        out = CV_MULTIVAR(nrep, nfold, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
+                          ELA_MULTIVAR, params,
+                          save_plots, save_predictions, save_summary_plot,
                           out)
     elseif model == "LMM"
         params=[covariate, MM_model, MM_method, FE_method, inner_optimizer, optim_trace]
-        out = CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
-                          LMM_MULTIVAR,
-                          params,
-                          save_plots,
-                          save_predictions,
+        out = CV_MULTIVAR(nrep, nfold, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings,
+                          LMM_MULTIVAR, params,
+                          save_plots, save_predictions, save_summary_plot,
                           out)
     else
         println(string("Sorry the genomic prodection model: ", model, " is not implemented."))
