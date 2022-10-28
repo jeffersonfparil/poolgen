@@ -797,21 +797,22 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
         end
     end
     ### Keep only p-1 alleles per locus where p is the number of polymorphic alleles in a locus
-    _X = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
-    n, m = size(_X)
+    S = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
+    n, m = size(S)
     vec_idx = []
     for j in 1:m
-        x = _X[:, j]
-        idx = x .!= 0
-        idx_allele = collect(1:7)[idx]
-        x = x[idx_allele]
-        idx_allele = (j-1)*7 .+ idx_allele
-        if sum(x .== minimum(x)) > 1
-            saved_min_allele = idx_allele[x .== minimum(x)][2:end]
-        else
-            saved_min_allele = []
-        end
-        append!(vec_idx, append!(idx_allele, saved_min_allele))
+        # j = 1
+        x = S[:, j]
+        idx_nonzero = x .!= 0
+        x = x[idx_nonzero]
+        idx_sort = sortperm(x)
+        x = x[idx_sort]
+        idx_minus_one_allele = collect(2:length(x))
+
+        idx = collect(1:7)[idx_nonzero][idx_sort][idx_minus_one_allele]
+        idx = (j-1)*7 .+ idx
+
+        append!(vec_idx, idx)
     end
     X = X[:, vec_idx]
     ### Filter by minimum allele frequency
@@ -2983,7 +2984,11 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
     # CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, model, params, save_plots, save_predictions, save_summary_plot, out)
     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_CV.tsv")
+        if string(model) == "LMM_MULTIVAR"
+            out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_", params[2], "_CV.tsv")
+        else    
+            out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_CV.tsv")
+        end
     end
     ### Load genotype data
     χ = LOAD(syncx, true)
@@ -3066,15 +3071,6 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
         ### Fit
         # tsv = OLS_MULTIVAR(syncx_training, maf, pheno_training, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, tsv)
         tsv = model(syncx_training, maf, pheno_training, delimiter, header, id_col, phenotype_col, missing_strings, params..., tsv)
-        
-        T_vec_chr, T_vec_pos, T_vec_allele, T_vec_freq, T_vec_beta, T_vec_pval = LOAD_OUT(tsv)
-        chr = unique(T_vec_chr)
-        cou = zeros(Int, length(chr))
-        for i in 1:length(chr)
-            cou[i] = sum(chr[i] .== T_vec_chr)
-        end
-        hcat(chr, cou)
-
         ### Predict
         ŷ = PREDICT(tsv, syncx_validate)
         ### Clean-up
@@ -3158,7 +3154,7 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
     return(out)
 end
 
-
+# Bayesian models
 
 
 

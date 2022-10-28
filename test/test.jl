@@ -203,3 +203,50 @@ for i in 1:size(mat_models, 1)
                                               save_predictions=save_predictions,
                                               save_summary_plot=save_summary_plot)
 end
+
+# println("##########################################")
+# println("GP cross-validation - WeedOmics data")
+# println("##########################################")
+# using Distributed
+# Distributed.addprocs(length(Sys.cpu_info())-1)
+# @everywhere include("/data-weedomics-2/poolgen/src/poolgen.jl")
+# syncx = "test/test_Lr.syncx"
+# phenotype = "test/test_Lr.csv"
+# nfold = 10
+# nrep = 1
+# save_plots = false
+# save_predictions = true
+# save_summary_plot = true
+# vec_models = ["OLS", "ELASTIC", "LMM"]
+# vec_MM_models = ["GBLUP", "RRBLUP"]
+# maf = 0.001
+# FE_method = ["CANONICAL", "N<<P"][2]
+# alpha = 1.0
+# covariate = ["", "XTX", "COR"][2]
+# MM_method = ["ML", "REML"][1]
+# inner_optimizer = ["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
+# optim_trace = false
+# mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[1]], length(vec_models)), vec_MM_models[end]))
+# for i in 1:size(mat_models, 1)
+#     # i = 1
+#     model = mat_models[i, 1]
+#     MM_model = mat_models[i, 2]
+#     println(model)
+#     model == "LMM" ? println(MM_model) : nothing
+#     @time out = poolgen.genomic_prediction_CV(nfold=nfold,
+#                                               nrep=nrep,
+#                                               model=model,
+#                                               syncx=syncx,
+#                                               maf=maf,
+#                                               phenotype=phenotype,
+#                                               FE_method=FE_method,
+#                                               alpha=alpha,
+#                                               covariate=covariate,
+#                                               MM_model=MM_model,
+#                                               MM_method=MM_method,
+#                                               inner_optimizer=inner_optimizer,
+#                                               optim_trace=optim_trace,
+#                                               save_plots=save_plots,
+#                                               save_predictions=save_predictions,
+#                                               save_summary_plot=save_summary_plot)
+end
