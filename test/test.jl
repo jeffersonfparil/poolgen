@@ -212,14 +212,14 @@ end
 # @everywhere include("/data-weedomics-2/poolgen/src/poolgen.jl")
 # syncx = "test/test_Lr.syncx"
 # phenotype = "test/test_Lr.csv"
-# nfold = 10
+# nfold = 5 ### Not enough RAM to parallele compute (1266Gb)
 # nrep = 1
 # save_plots = false
 # save_predictions = true
 # save_summary_plot = true
 # vec_models = ["OLS", "ELASTIC", "LMM"]
 # vec_MM_models = ["GBLUP", "RRBLUP"]
-# maf = 0.001
+# maf = 1/(42*4)
 # FE_method = ["CANONICAL", "N<<P"][2]
 # alpha = 1.0
 # covariate = ["", "XTX", "COR"][2]

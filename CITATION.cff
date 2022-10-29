@@ -4,7 +4,7 @@ authors:
 - family-names: "Paril"
   given-names: "Jefferson"
   orcid: " https://orcid.org/0000-0002-5693-4123"
-title: "poolquantgen"
+title: "poolgen"
 version: 0.0.1
 date-released: 2022-01-26
 url: "https://github.com/jeffersonfparil/poolgen"
