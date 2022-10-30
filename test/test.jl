@@ -233,20 +233,28 @@ end
 #     MM_model = mat_models[i, 2]
 #     println(model)
 #     model == "LMM" ? println(MM_model) : nothing
-#     @time out = poolgen.genomic_prediction_CV(nfold=nfold,
-#                                               nrep=nrep,
-#                                               model=model,
-#                                               syncx=syncx,
-#                                               maf=maf,
-#                                               phenotype=phenotype,
-#                                               FE_method=FE_method,
-#                                               alpha=alpha,
-#                                               covariate=covariate,
-#                                               MM_model=MM_model,
-#                                               MM_method=MM_method,
-#                                               inner_optimizer=inner_optimizer,
-#                                               optim_trace=optim_trace,
-#                                               save_plots=save_plots,
-#                                               save_predictions=save_predictions,
-#                                               save_summary_plot=save_summary_plot)
+#     for j in 1:10
+#         println(model)
+#         println(string("rep-", j))
+#         if model == "LMM"
+#             out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", model, "_", MM_model, "_CV-rep_", j, ".tsv")
+#         else    
+#             out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", model, "_CV-rep_", j, ".tsv")
+#         @time out = poolgen.genomic_prediction_CV(nfold=nfold,
+#                                                 nrep=nrep,
+#                                                 model=model,
+#                                                 syncx=syncx,
+#                                                 maf=maf,
+#                                                 phenotype=phenotype,
+#                                                 FE_method=FE_method,
+#                                                 alpha=alpha,
+#                                                 covariate=covariate,
+#                                                 MM_model=MM_model,
+#                                                 MM_method=MM_method,
+#                                                 inner_optimizer=inner_optimizer,
+#                                                 optim_trace=optim_trace,
+#                                                 save_plots=save_plots,
+#                                                 save_predictions=save_predictions,
+#                                                 save_summary_plot=save_summary_plot)
+#         end
 # end
