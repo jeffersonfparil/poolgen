@@ -240,6 +240,7 @@ end
 #             out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", model, "_", MM_model, "_CV-rep_", j, ".tsv")
 #         else    
 #             out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", model, "_CV-rep_", j, ".tsv")
+#         end
 #         @time out = poolgen.genomic_prediction_CV(nfold=nfold,
 #                                                 nrep=nrep,
 #                                                 model=model,
