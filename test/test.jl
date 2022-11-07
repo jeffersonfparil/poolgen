@@ -148,16 +148,16 @@ npools = 50
 # println("##########################################")
 # println("GP")
 # println("##########################################")
-# vec_models = ["OLS", "ELASTIC", "LMM"]
-# vec_MM_models = ["GBLUP", "RRBLUP"]
-# maf = 0.001
-# FE_method = ["CANONICAL", "N<<P"][2]
-# alpha = 1.0
-# covariate = ["", "XTX", "COR"][2]
-# MM_method = ["ML", "REML"][1]
-# inner_optimizer = ["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
-# optim_trace = false
-# mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[1]], length(vec_models)), vec_MM_models[end]))
+vec_models = ["OLS", "ELASTIC", "LMM"]
+vec_MM_models = ["GBLUP", "RRBLUP"]
+maf = 0.001
+FE_method = ["CANONICAL", "N<<P"][2]
+alpha = 1.0
+covariate = ["", "XTX", "COR"][2]
+MM_method = ["ML", "REML"][1]
+inner_optimizer = ["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
+optim_trace = false
+mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[1]], length(vec_models)), vec_MM_models[end]))
 # for i in 1:size(mat_models, 1)
 #     model = mat_models[i, 1]
 #     MM_model = mat_models[i, 2]
