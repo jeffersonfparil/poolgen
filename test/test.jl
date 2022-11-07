@@ -2,13 +2,16 @@ githubci = parse(Bool, ARGS[1])
 
 ### Load libraries
 using Distributed
-Distributed.addprocs(length(Sys.cpu_info())-1)
 if githubci
     using Pkg
     Pkg.add(url="https://github.com/jeffersonfparil/poolgen.git")
-    @everywhere using poolgen
+    using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
+    Distributed.addprocs(length(Sys.cpu_info())-1)
+    @everywhere using poolgen ### Load poolgen for each process
 else
-    @everywhere include("/data-weedomics-2/poolgen/src/poolgen.jl")
+    include("/data-weedomics-2/poolgen/src/poolgen.jl")  ### Load poolgen first so we can compile now and no precompilation for each process
+    Distributed.addprocs(length(Sys.cpu_info())-1)
+    @everywhere include("/data-weedomics-2/poolgen/src/poolgen.jl") ### Load poolgen for each process
 end
 
 println("##########################################")
@@ -194,7 +197,7 @@ for i in 1:size(mat_models, 1)
                                               phenotype=csv,
                                               FE_method=FE_method,
                                               alpha=alpha,
-                                              covariate=covariate,
+                                              GBLUP_K=covariate,
                                               MM_model=MM_model,
                                               MM_method=MM_method,
                                               inner_optimizer=inner_optimizer,
@@ -208,54 +211,94 @@ end
 # println("GP cross-validation - WeedOmics data")
 # println("##########################################")
 # using Distributed
+# include("/data-weedomics-2/poolgen/src/poolgen.jl")
 # Distributed.addprocs(length(Sys.cpu_info())-1)
 # @everywhere include("/data-weedomics-2/poolgen/src/poolgen.jl")
-# syncx = "test/test_Lr.syncx"
-# phenotype = "test/test_Lr.csv"
-# nfold = 5 ### Not enough RAM to parallele compute (1266Gb)
+# syncx = "/data-weedomics-2/2.d_40_populations_model_validation/Not_imputed.syncx"
+# # # syncx = "/data-weedomics-2/2.d_40_populations_model_validation/Imputed_geno-mean.syncx"
+# # phenotype = "/data-weedomics-2/2.d_40_populations_model_validation/Lolium_phenotype_data-READY.csv"
+# phenotype = "/data-weedomics-2/2.d_40_populations_model_validation/phenotype_data.csv"
+# delimiter=","
+# header=true
+# id_col=1
+# # phenotype_col=13
+# # # Y = poolgen.user_functions.functions.LOAD(phenotype, ",", true, 1, [11])
+# # # for p in Y.iid
+# # #     println(p)
+# # # end
+# # # idx = (match.(Regex("ACC"), Y.iid) .!= nothing) .& (match.(Regex("Pool"), Y.iid) .== nothing)
+# # # y = Y.phe
+# # # y[.!idx, 1] .= missing
+# # # Φ = poolgen.user_functions.functions.Phenotype(Y.iid, Y.tid, y)
+# # # poolgen.user_functions.functions.SAVE(Φ, replace(phenotype, "Lolium_phenotype_data-READY.csv" => "Lolium_glyphosate_resistance_populations_only.csv"), ",", ["id", "Glyphosate_resistance"])
+# # # phenotype = "/data-weedomics-2/2.d_40_populations_model_validation/Lolium_glyphosate_resistance_populations_only.csv"
+# # # phenotype_col=2
+
+# # nfold = 10
 # nrep = 1
 # save_plots = false
 # save_predictions = true
 # save_summary_plot = true
-# vec_models = ["OLS", "ELASTIC", "LMM"]
-# vec_MM_models = ["GBLUP", "RRBLUP"]
 # maf = 1/(42*4)
+# # filter_genotype = true
+# filter_genotype = false
+# # transform_phenotype = true
+# transform_phenotype = false
+# standardise = false
 # FE_method = ["CANONICAL", "N<<P"][2]
-# alpha = 1.0
-# covariate = ["", "XTX", "COR"][2]
+# GBLUP_K = ["", "XTX", "COR"][2]
 # MM_method = ["ML", "REML"][1]
 # inner_optimizer = ["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
 # optim_trace = false
-# mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[1]], length(vec_models)), vec_MM_models[end]))
-# for i in 1:size(mat_models, 1)
-#     # i = 1
-#     model = mat_models[i, 1]
-#     MM_model = mat_models[i, 2]
-#     println(model)
-#     model == "LMM" ? println(MM_model) : nothing
-#     for j in 1:10
-#         println(model)
-#         println(string("rep-", j))
-#         if model == "LMM"
-#             out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", model, "_", MM_model, "_CV-rep_", j, ".tsv")
-#         else    
-#             out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", model, "_CV-rep_", j, ".tsv")
+# mat_models = hcat(["OLS", "GLMNET", "GLMNET", "MM"],
+#                   ["", "", "", "GBLUP"],
+#                   [0, 0.0, 1.0, 0])
+
+# vec_phenotype_cols = vcat(collect(10:18), collect(20:22), collect(28:33))
+# Y = poolgen.user_functions.functions.LOAD(phenotype, ",", true, 1, vec_phenotype_cols)
+# for j in 1:length(vec_phenotype_cols)
+#     # j = 1
+#     pheno = Y.tid[j]
+#     phenotype_col = vec_phenotype_cols[j]
+#     nfold = sum(.!ismissing.(Y.phe[:,j]))
+#     for i in 1:size(mat_models, 1)
+#         # i = 1
+#         model = mat_models[i, 1]
+#         MM_model = mat_models[i, 2]
+#         alpha = mat_models[i, 3]
+#         if model == "MM"
+#             out = string(pheno, "-", model, "_", MM_model, ".tsv")
+#         elseif model == "GLMNET"
+#             out = string(pheno, "-", model, "-alpha_", round(alpha, digits=4), ".tsv")
+#         else
+#             out = string(pheno, "-", model, ".tsv")
 #         end
+#         println("===============================================")
+#         println(out)
+#         println("===============================================")
 #         @time out = poolgen.genomic_prediction_CV(nfold=nfold,
 #                                                 nrep=nrep,
 #                                                 model=model,
 #                                                 syncx=syncx,
 #                                                 maf=maf,
 #                                                 phenotype=phenotype,
+#                                                 delimiter=delimiter,
+#                                                 header=header,
+#                                                 id_col=id_col,
+#                                                 phenotype_col=phenotype_col,
+#                                                 filter_genotype=filter_genotype,
+#                                                 transform_phenotype=transform_phenotype,
+#                                                 standardise=standardise,
 #                                                 FE_method=FE_method,
 #                                                 alpha=alpha,
-#                                                 covariate=covariate,
+#                                                 GBLUP_K=GBLUP_K,
 #                                                 MM_model=MM_model,
 #                                                 MM_method=MM_method,
 #                                                 inner_optimizer=inner_optimizer,
 #                                                 optim_trace=optim_trace,
 #                                                 save_plots=save_plots,
 #                                                 save_predictions=save_predictions,
-#                                                 save_summary_plot=save_summary_plot)
-#         end
+#                                                 save_summary_plot=save_summary_plot,
+#                                                 out=out)
+#     end
 # end

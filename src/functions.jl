@@ -778,7 +778,7 @@ function FILTER(syncx::String, init::Int, term::Int, maximum_missing_fraction::F
     return(out)
 end
 
-function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insertions::Bool=true, remove_correlated_alleles::Bool=true, θ::Float64=1.00, centre::Bool=false)::Tuple{Matrix{Float64}, Vector{String}, Vector{Int64}, Vector{String}}
+function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insertions::Bool=true, remove_minor_alleles::Bool=false, remove_correlated_alleles::Bool=true, θ::Float64=1.00, centre::Bool=false)::Tuple{Matrix{Float64}, Vector{String}, Vector{Int64}, Vector{String}}
     # χ = LOAD("../test/test_3.syncx", false)
     # maf = 0.001
     # δ = 1e-10
@@ -787,9 +787,10 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
     # θ = 0.99
     # centre = true
     X = Float64.(χ.cou')
+    vec_idx = []
     ### If we are outputting frequencies we need to remove insertion counts since they're also counted as the bases the are.
     if remove_insertions
-        for i in 1:7:size(X,2)
+        @showprogress "Removing insertion alleles: " for i in 1:7:size(X,2)
             # i = 1
             g = X[:, i:(i+6)]
             g[:, 5] .= 0
@@ -797,29 +798,36 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
         end
     end
     ### Keep only p-1 alleles per locus where p is the number of polymorphic alleles in a locus
-    S = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
-    n, m = size(S)
-    vec_idx = []
-    for j in 1:m
-        # j = 1
-        x = S[:, j]
-        idx_nonzero = x .!= 0
-        x = x[idx_nonzero]
-        idx_sort = sortperm(x)
-        x = x[idx_sort]
-        idx_minus_one_allele = collect(2:length(x))
+    if remove_minor_alleles
+        S = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
+        n, m = size(S)
+        @showprogress "Removing minor alleles: " for j in 1:m
+            # j = 1
+            x = S[:, j]
+            idx_nonzero = x .!= 0
+            x = x[idx_nonzero]
+            idx_sort = sortperm(x)
+            x = x[idx_sort]
+            idx_minus_one_allele = collect(2:length(x))
 
-        idx = collect(1:7)[idx_nonzero][idx_sort][idx_minus_one_allele]
-        idx = (j-1)*7 .+ idx
+            idx = collect(1:7)[idx_nonzero][idx_sort][idx_minus_one_allele]
+            idx = (j-1)*7 .+ idx
 
-        append!(vec_idx, idx)
+            append!(vec_idx, idx)
+        end
+        X = X[:, vec_idx]
+    else
+        vec_idx = collect(1:size(X,2))
     end
-    X = X[:, vec_idx]
     ### Filter by minimum allele frequency
-    idx = (minimum(X, dims=1)[1,:] .>= maf) .& (maximum(X, dims=1)[1,:] .<= 1-maf)
-    X = X[:, idx]
-    vec_idx = vec_idx[idx] ### update index
+    if (maf > 0) & (maf < 1)
+        println("Filtering by minor allele frequency.")
+        idx = (minimum(X, dims=1)[1,:] .>= maf) .& (maximum(X, dims=1)[1,:] .<= 1-maf)
+        X = X[:, idx]
+        vec_idx = vec_idx[idx] ### update index
+    end
     ### Remove non-polymorphic loci
+    println("Removing non-polymorphc loci.")
     idx = (Distributions.var(X, dims=1) .> δ)[1,:]
     X = X[:, idx]
     vec_idx = vec_idx[idx] ### update index
@@ -829,7 +837,7 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
     if remove_correlated_alleles
         idx = zeros(Bool, p)
         idx[end] = true
-        for i in 1:(p-1)
+        @showprogress "Removing correlated alleles: " for i in 1:(p-1)
             test_θ = true
             for j in (i+1):p
                 # i = 1; j = 10
@@ -854,8 +862,84 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
     ### Output
     vec_chr = repeat(χ.chr, inner=7)[vec_idx]
     vec_pos = repeat(χ.pos, inner=7)[vec_idx]
-    vec_ale = repeat(["A", "T", "C", "G", "INS", "DEL", "N"], outer=m)[vec_idx]
+    vec_ale = repeat(["A", "T", "C", "G", "INS", "DEL", "N"], outer=Int(size(χ.cou,1)/7))[vec_idx]
     return(X, vec_chr, vec_pos, vec_ale)
+end
+
+### DATA TRANSFRMATION
+function TRANSFORM(y::Vector{T}, absolute_threshold::Float64=0.1, maxiter::Int=10)::Tuple{Vector{T}, Vector{String}, Vector{T}} where T <: Number
+    vec_fun = []
+    vec_max = []
+    iter = 0
+    while ((skewness(y) > absolute_threshold) | (skewness(y) < -absolute_threshold)) & (iter < maxiter)
+        iter += 1
+        if skewness(y) > 1.00
+            push!(vec_fun, "++")
+            push!(vec_max, 0.00)
+            y = log.(y .+ 1)
+        elseif skewness(y) > 0.00
+            push!(vec_fun, "+")
+            push!(vec_max, 0.00)
+            y = sqrt.(y)
+        elseif skewness(y) < -1.00
+            push!(vec_fun, "--")
+            push!(vec_max, maximum(y .+ 1))
+            y = log.(vec_max[end] .- y)
+        elseif skewness(y) < 0.00
+            push!(vec_fun, "-")
+            push!(vec_max, maximum(y .+ 1))
+            y = sqrt.(vec_max[end] .- y)
+        else
+            break
+        end
+    end
+    return(y, vec_fun, vec_max)
+end
+
+function UNTRANSFORM(y::Vector{T}, vec_fun::Vector{String}, vec_max::Vector{T})::Vector{T} where T <: Number
+    vec_fun = reverse(vec_fun)
+    vec_max = reverse(vec_max)
+    for i in 1:length(vec_fun)
+        if vec_fun[i] == "++"
+            y = exp.(y) .- 1
+        elseif vec_fun[i] == "+"
+            y = y.^2
+        elseif vec_fun[i] == "--"
+            y = .-(exp.(y) .- vec_max[i])
+        elseif vec_fun[i] == "-"
+            y = .-((y.^2) .- vec_max[i])
+        end
+    end
+    return(y)
+end
+
+function TRANSFORM(y::Vector{T}, centre::Bool, scale::Bool, box::Bool)::Tuple{Vector{T}, Vector{String}, Vector{T}} where T <: Number
+    ### centre: subtract the mean
+    ### scale: divide by the standard deviation
+    ### box: scale between zero and one, i.e. (y - min(y)) / (max(y) - min(y))
+    vec_fun = []
+    vec_par = []
+    if centre
+        μ = mean(y)
+        y = y .- μ
+        push!(vec_fun, "centre")
+        push!(vec_par, μ)
+    end
+    if scale
+        σ = std(y)
+        y = y ./ σ
+        push!(vec_fun, "scale")
+        push!(vec_par, σ)
+    end
+    if box
+        m = minimum(y)
+        M = maximum(y)
+        y = (y .- m) ./ (M - m)
+        push!(vec_fun, "box")
+        push!(vec_par, m)
+        push!(vec_par, M)
+    end
+    return(y, vec_fun, vec_par)
 end
 
 ### SIMULATION (using Int64 for the genotype encoding so we can include multi-allelic loci in the future)
@@ -1144,12 +1228,16 @@ function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5)::Tuple{Matr
     add_to_last_pool = n - sum(vec_idx_pools)
     vec_idx_pools[end] = vec_idx_pools[end] + add_to_last_pool
     vec_idx_pools = append!([0], cumsum(vec_idx_pools))
+    ### Setup the exponentially distributed allele counting errors during pooling
+    λ = log(n/npools)
+    D = Distributions.Exponential(λ)
     ### Generate the matrix of genotype frequencies per pool across m loci and vector of mean phenotypes per pool
     G = zeros(Float64, npools, m)
     p = zeros(Float64, npools)
     for i in 1:npools
         init = vec_idx_pools[i] + 1
         term = vec_idx_pools[i+1]
+        ϵ = rand(D)
         G[i, :] = mean(X[init:term, :], dims=1) ./ 2
         p[i] = mean(y[init:term])
     end
@@ -1475,6 +1563,30 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     return(out)
 end
 
+function GENERATE_COVARIATE(X::Array{T}, df::Int64=1, covariate::String=["XTX", "COR"][2])::Array{T} where T <: Number
+    n, p = size(X)
+    ### Calculate covariate
+    if covariate == "XTX"
+        ### (1) X'*X/n covariate
+        C = (X * X') ./ p
+    elseif covariate == "COR"
+        ### (2) Pearson's product-moment correlation
+        C = cor(X')
+    elseif covariate == "DIST"
+        C = zeros(Int, n, n)
+        for i in 1:n
+            for j in 1:n
+                C[i,j] = abs(vec_pos[i] - vec_pos[j])
+            end
+        end
+    end
+    ### Use the PCs if the we're asking for columns (i.e. df) less than the number of columns in C
+    if (df < n)
+        C = MultivariateStats.projection(MultivariateStats.fit(PCA, C; maxoutdim=df))
+    end
+    return(C)
+end
+
 function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95, df::Int64=1, covariate::String=["XTX", "COR"][2])::Matrix{Float64}
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
@@ -1499,6 +1611,7 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95,
     # nloci = 1_000       ### number of equally-consecutively-spaced loci to include
     # θ = 0.95 ### maximum correlation between alleles/locus (Pearson's product moment correlation)
     # df = 1
+    # covariate = "COR"
     ### Extract allele frequencies
     ### Include nloci where the default is zero corresponding to all loci
     file = open(syncx, "r")
@@ -1526,30 +1639,12 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95,
     maf = 0.0001
     δ = 1e-10
     remove_insertions = true
+    remove_minor_alleles = false
     remove_correlated_alleles = true
     θ = 0.99
     centre = true
-    X, vec_chr, vec_pos, vec_ref = FILTER(χ, maf, δ, remove_insertions, remove_correlated_alleles, θ, centre)
-    n, p = size(X)
-    ### Calculate covariate
-    if covariate == "XTX"
-        ### (1) X'*X/n covariate
-        C = (X * X') ./ p
-    elseif covariate == "COR"
-        ### (2) Pearson's product-moment correlation
-        C = cor(X')
-    elseif covariate == "DIST"
-        C = zeros(Int, n, n)
-        for i in 1:n
-            for j in 1:n
-                C[i,j] = abs(vec_pos[i] - vec_pos[j])
-            end
-        end
-    end
-    ### Use the PCs if the we're asking for columns (i.e. df) less than the number of columns in C
-    if (df < n)
-        C = MultivariateStats.projection(MultivariateStats.fit(PCA, C; maxoutdim=df))
-    end
+    X, vec_chr, vec_pos, vec_ref = FILTER(χ, maf, δ, remove_insertions, remove_minor_alleles, remove_correlated_alleles, θ, centre)
+    C = GENERATE_COVARIATE(X, df, covariate)
     return(C)
 end
 
@@ -1584,8 +1679,12 @@ function OLS(X::Array{T}, y::Array{T}, FE_method::String)::Vector{Float64} where
     # FE_method = ["CANONICAL", "MULTIALGORITHMIC", "N<<P"][3]
     # @time β̂ = OLS(X, y, FE_method)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    n, p = size(X)
     if isa(X, Vector)
-        X = reshape(X, (length(X), 1))
+        X = reshape(X, n)
+    end
+    if X[:,1] != ones(n)
+        X = hcat(ones(n), X)
     end
     if FE_method == "CANONICAL"
         β̂ = INVERSE(X' * X) * (X' * y)
@@ -1623,6 +1722,12 @@ function OLS(X::Array{T}, y::Array{T})::Tuple{Vector{Float64}, Matrix{Float64}, 
     # @time β̂, Vβ̂, σ2ϵ̂ = OLS(X, y)
     # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
     n, p = size(X)
+    if isa(X, Vector)
+        X = reshape(X, n)
+    end
+    if X[:,1] != ones(n)
+        X = hcat(ones(n), X)
+    end
     V = INVERSE(X' * X)
     β̂ = V * (X' * y)
     ε̂ = y - (X * β̂)
@@ -1729,6 +1834,13 @@ function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Array{T}, R::Array{T}, FE_
     # FE_method = "N<<P"
     # @time β̂, μ̂ = MM(X, y, Z, D, R, FE_method)
     # p2 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    n, p = size(X)
+    if isa(X, Vector)
+        X = reshape(X, n)
+    end
+    if X[:,1] != ones(n)
+        X = hcat(ones(n), X)
+    end
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
     V = (Z * D * Z') + R
 	VI = INVERSE(V)
@@ -1803,6 +1915,13 @@ function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Array{T}, R::Array{T})::Tu
     # @time β̂, μ̂, Σ̂ = MM(X, y, Z, D, R)
     # p2 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
     ### Linear mixed model fitting which outputs the fixed effects variances for iterative regression
+    n, p = size(X)
+    if isa(X, Vector)
+        X = reshape(X, n)
+    end
+    if X[:,1] != ones(n)
+        X = hcat(ones(n), X)
+    end
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
     V = (Z * D * Z') + R
 	VI = INVERSE(V)
@@ -1864,6 +1983,13 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T
     # method = "ML"
     # θ = [2.0, 1.0]
     # @time ll = NLL_MM(θ, X, y, Z, K, FE_method, method)
+    n, p = size(X)
+    if isa(X, Vector)
+        X = reshape(X, n)
+    end
+    if X[:,1] != ones(n)
+        X = hcat(ones(n), X)
+    end
     ### Homoscedastic error and random effect variances
 	σ2u = θ[1]          # variance of the other random effects (assuming homoscedasticity)
     σ2e = θ[2]          # variance of the error effects (assuming homoscedasticity)
@@ -1933,9 +2059,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}, FE_method:
     # @time X, y = POOL(_X, _y, npools)
     # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
     # G = LOAD(syncx, false)
-    # X, idx = FILTER(G)
-    # vec_chr = repeat(G.chr, inner=7)[idx]
-    # vec_pos = repeat(G.pos, inner=7)[idx]
+    # X, vec_chr, vec_pos, vec_ale = FILTER(G)
     # ϕ = LOAD(csv, ",", true, 1, [2])
     # y = Float64.(ϕ.phe)[:,1]
     # @time C = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
@@ -1972,6 +2096,13 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}, FE_method:
     # optim_trace = true
     # @time σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
     # p2 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false, markerstrokewidth=0.001, markeralpha=0.4);; Plots.plot(p1, p2, layout=(2,1))
+    n, p = size(X)
+    if isa(X, Vector)
+        X = reshape(X, n)
+    end
+    if X[:,1] != ones(n)
+        X = hcat(ones(n), X)
+    end
     ### Find the optimum β̂ and μ̂
     lower_limits = [1e-5, 1e-5]
     upper_limits = [1e+5, 1e+5]
@@ -2000,6 +2131,79 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Array{T}, K::Array{T}, FE_method:
         end
     end
     return(σ2u, σ2e)
+end
+
+function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2])::Array{T} where T <: Number
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 5
+    # @time X, y = POOL(_X, _y, npools)
+    # model = ["GBLUP", "RRBLUP"][1]
+    # method = ["ML", "REML"][1]
+    # inner_optimizer = [LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1]
+    # optim_trace = false
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    # GBLUP_K = ["XTX", "COR"][2]
+    ###################################################
+    n, p = size(X)
+    if isa(X, Vector)
+        X = reshape(X, n)
+    end
+    if X[:,1] != ones(n)
+        X = hcat(ones(n), X)
+    end
+    if model == "GBLUP"
+        Z = diagm(repeat([1.0], n))                             ### Genotypes have random effects...
+        K = GENERATE_COVARIATE(X, n, GBLUP_K)    ### ... and are distributed normally μ=0, and Σ=σ2g*K
+    elseif model == "RRBLUP"
+        Z = X[:,2:end]                               ### SNPs have random effects...
+        K = diagm(repeat([1.0], size(Z,2))) ### ... and are spherically distributed proportional to σ2g
+        X = X[:,1:1]                      ### Intercept is the only fixed effect
+    else
+        println(string("Sorry ", model, " is not implemented."))
+        println("Please choose from 'GBLUP' and 'RRBLUP'.")
+    end
+    ### Define the inner optimiser
+    if inner_optimizer == "LBFGS"
+        inner_optimizer = Optim.LBFGS()
+    elseif inner_optimizer == "BFGS"
+        inner_optimizer = Optim.BFGS()
+    elseif inner_optimizer == "SimulatedAnnealing"
+        inner_optimizer = Optim.SimulatedAnnealing()
+    elseif inner_optimizer == "GradientDescent"
+        inner_optimizer = Optim.GradientDescent()
+    elseif inner_optimizer == "NelderMead"
+        inner_optimizer = Optim.NelderMead()
+    end
+    ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
+    σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
+    ### Random effects variance-covariance matrix
+    D = σ2u .* K
+    ### Error variance-covariance matrix (homoscedastic)
+    R = diagm(repeat([σ2e], n))
+    ### Solve the mixed model equations
+    β̂, μ̂ = MM(X, y, Z, D, R, FE_method)
+    if model == "GBLUP"
+        θ̂ = β̂
+    elseif model == "RRBLUP"
+        θ̂ = vcat(β̂, μ̂) # include the fixed intercept effect
+    end
+    return(θ̂)
 end
 
 function BOOTSTRAP(ρ, x::Array{T}, y::Array{T}, F::Function, F_params="")::Tuple{Int64, Int64} where T <: Number
@@ -2510,255 +2714,255 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     return(out)
 end
 
-function OLS_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], out::String="")::String
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # npools = 5
-    # @time X, y = POOL(_X, _y, npools)
-    # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # maf = 0.001
-    # delimiter = ","
-    # header = true
-    # id_col = 1
-    # phenotype_col = 2
-    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    # FE_method = ["CANONICAL", "N<<P"][2]
-    # out = ""
-    # @time tsv = OLS_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
-    ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
-    if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-OLS_MULTIVAR.tsv")
-    end
-    ### Load genotype data
-    χ = LOAD(syncx, false)
-    ### Filter
-    X, vec_chr, vec_pos, vec_ale = FILTER(χ, maf)
-    vec_frq = mean(X, dims=1)
-    n, p = size(X)
-    ### Load phenotype data
-    ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = Float64.(ϕ.phe[:,1])
-    ### Check if we have the same number of individuals in the genotype and phenotype data
-    @assert n == length(y) "Genotype and phenotype data mismatch!"
-    ### Fit
-    β̂ = OLS(hcat(ones(n), X), y, FE_method)
-    ### Output
-    file_out = open(out, "a")
-    line = join(["Intercept",
-                 0,
-                 "N",
-                 0.0,
-                 β̂[1],
-                 "NA"], "\t")
-    write(file_out, string(line, "\n"))
-    for i in 1:p
-        line = join([vec_chr[i],
-                     vec_pos[i],
-                     vec_ale[i],
-                     vec_frq[i],
-                     β̂[i+1],
-                     "NA"], "\t")
-        write(file_out, string(line, "\n"))
-    end
-    close(file_out)
-    return(out)
-end
+# function OLS_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], out::String="")::String
+#     # n = 5                 ### number of founders
+#     # m = 10_000            ### number of loci
+#     # l = 135_000_000       ### total genome length
+#     # k = 5                 ### number of chromosomes
+#     # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+#     # a = 2                 ### number of alleles per locus
+#     # vec_chr_lengths = [0] ### chromosome lengths
+#     # vec_chr_names = [""]  ### chromosome names 
+#     # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+#     # o = 100               ### total number of simulated individuals
+#     # t = 10                ### number of random mating constant population size generation to simulate
+#     # nQTL = 10             ### number of QTL to simulate
+#     # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+#     # LD_chr = ""           ### chromosome to calculate LD decay from
+#     # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+#     # plot_LD = false       ### simulate# plot simulated LD decay
+#     # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+#     # npools = 5
+#     # @time X, y = POOL(_X, _y, npools)
+#     # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+#     # maf = 0.001
+#     # delimiter = ","
+#     # header = true
+#     # id_col = 1
+#     # phenotype_col = 2
+#     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+#     # FE_method = ["CANONICAL", "N<<P"][2]
+#     # out = ""
+#     # @time tsv = OLS_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, out)
+#     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
+#     if out==""
+#         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-OLS_MULTIVAR.tsv")
+#     end
+#     ### Load genotype data
+#     χ = LOAD(syncx, false)
+#     ### Filter
+#     X, vec_chr, vec_pos, vec_ale = FILTER(χ, maf)
+#     vec_frq = mean(X, dims=1)
+#     n, p = size(X)
+#     ### Load phenotype data
+#     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
+#     y = Float64.(ϕ.phe[:,1])
+#     ### Check if we have the same number of individuals in the genotype and phenotype data
+#     @assert n == length(y) "Genotype and phenotype data mismatch!"
+#     ### Fit
+#     β̂ = OLS(hcat(ones(n), X), y, FE_method)
+#     ### Output
+#     file_out = open(out, "a")
+#     line = join(["Intercept",
+#                  0,
+#                  "N",
+#                  0.0,
+#                  β̂[1],
+#                  "NA"], "\t")
+#     write(file_out, string(line, "\n"))
+#     for i in 1:p
+#         line = join([vec_chr[i],
+#                      vec_pos[i],
+#                      vec_ale[i],
+#                      vec_frq[i],
+#                      β̂[i+1],
+#                      "NA"], "\t")
+#         write(file_out, string(line, "\n"))
+#     end
+#     close(file_out)
+#     return(out)
+# end
 
-function ELA_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], alpha::Float64=1.0, out::String="")::String
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # npools = 5
-    # @time X, y = POOL(_X, _y, npools)
-    # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # maf = 0.001
-    # delimiter = ","
-    # header = true
-    # id_col = 1
-    # phenotype_col = 2
-    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    # alpha = 1.0
-    # out = ""
-    # @time tsv = ELA_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, alpha, out)
-    ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
-    if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-ELA_MULTIVAR_alpha_", round(alpha, digits=2),".tsv")
-    end
-    ### Load genotype data
-    χ = LOAD(syncx, false)
-    ### Filter
-    X, vec_chr, vec_pos, vec_ale = FILTER(χ, maf)
-    vec_frq = mean(X, dims=1)
-    n, p = size(X)
-    ### Load phenotype data
-    ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = Float64.(ϕ.phe[:,1])
-    ### Check if we have the same number of individuals in the genotype and phenotype data
-    @assert n == length(y) "Genotype and phenotype data mismatch!"
-    ### Fit
-    β̂ = GLMNET(X, y, alpha) # Note: intercept is included in the GLMNET model
-    ### Output
-    file_out = open(out, "a")
-    line = join(["Intercept",
-                 0,
-                 "N",
-                 0.0,
-                 β̂[1],
-                 "NA"], "\t")
-    write(file_out, string(line, "\n"))
-    for i in 1:p
-        line = join([vec_chr[i],
-                     vec_pos[i],
-                     vec_ale[i],
-                     vec_frq[i],
-                     β̂[i+1],
-                     "NA"], "\t")
-        write(file_out, string(line, "\n"))
-    end
-    close(file_out)
-    return(out)
-end
+# function ELA_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], alpha::Float64=1.0, out::String="")::String
+#     # n = 5                 ### number of founders
+#     # m = 10_000            ### number of loci
+#     # l = 135_000_000       ### total genome length
+#     # k = 5                 ### number of chromosomes
+#     # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+#     # a = 2                 ### number of alleles per locus
+#     # vec_chr_lengths = [0] ### chromosome lengths
+#     # vec_chr_names = [""]  ### chromosome names 
+#     # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+#     # o = 100               ### total number of simulated individuals
+#     # t = 10                ### number of random mating constant population size generation to simulate
+#     # nQTL = 10             ### number of QTL to simulate
+#     # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+#     # LD_chr = ""           ### chromosome to calculate LD decay from
+#     # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+#     # plot_LD = false       ### simulate# plot simulated LD decay
+#     # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+#     # npools = 5
+#     # @time X, y = POOL(_X, _y, npools)
+#     # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+#     # maf = 0.001
+#     # delimiter = ","
+#     # header = true
+#     # id_col = 1
+#     # phenotype_col = 2
+#     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+#     # alpha = 1.0
+#     # out = ""
+#     # @time tsv = ELA_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, alpha, out)
+#     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
+#     if out==""
+#         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-ELA_MULTIVAR_alpha_", round(alpha, digits=2),".tsv")
+#     end
+#     ### Load genotype data
+#     χ = LOAD(syncx, false)
+#     ### Filter
+#     X, vec_chr, vec_pos, vec_ale = FILTER(χ, maf)
+#     vec_frq = mean(X, dims=1)
+#     n, p = size(X)
+#     ### Load phenotype data
+#     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
+#     y = Float64.(ϕ.phe[:,1])
+#     ### Check if we have the same number of individuals in the genotype and phenotype data
+#     @assert n == length(y) "Genotype and phenotype data mismatch!"
+#     ### Fit
+#     β̂ = GLMNET(X, y, alpha) # Note: intercept is included in the GLMNET model
+#     ### Output
+#     file_out = open(out, "a")
+#     line = join(["Intercept",
+#                  0,
+#                  "N",
+#                  0.0,
+#                  β̂[1],
+#                  "NA"], "\t")
+#     write(file_out, string(line, "\n"))
+#     for i in 1:p
+#         line = join([vec_chr[i],
+#                      vec_pos[i],
+#                      vec_ale[i],
+#                      vec_frq[i],
+#                      β̂[i+1],
+#                      "NA"], "\t")
+#         write(file_out, string(line, "\n"))
+#     end
+#     close(file_out)
+#     return(out)
+# end
 
-function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], model::String=["GBLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # npools = 5
-    # @time X, y = POOL(_X, _y, npools)
-    # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # maf = 0.001
-    # delimiter = ","
-    # header = true
-    # id_col = 1
-    # phenotype_col = 2
-    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    # covariate = "COR"
-    # model = "GBLUP"
-    # model = "RRBLUP"
-    # method = "ML"
-    # FE_method = "N<<P"
-    # inner_optimizer = "LBFGS"
-    # optim_trace = true
-    # out = ""
-    # @time tsv = LMM_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, model, method, FE_method, inner_optimizer, optim_trace, out)
-    # vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval = LOAD_OUT(tsv)
-    ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
-    if out==""
-        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-LMM_MULTIVAR_", method,".tsv")
-    end
-    ### Load genotype data
-    χ = LOAD(syncx, false)
-    ### Filter
-    X, vec_chr, vec_pos, vec_ale = FILTER(χ, maf)
-    vec_frq = mean(X, dims=1)
-    n, p = size(X)
-    ### Load phenotype data
-    ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
-    y = Float64.(ϕ.phe[:,1])
-    ### Check if we have the same number of individuals in the genotype and phenotype data
-    @assert n == length(y) "Genotype and phenotype data mismatch!"
-    ### Prepare the design matrices for the fixed and random effects; and variance-covariance matrix of the random effects
-    if model == "GBLUP"
-        Z = diagm(repeat([1.0], n))                             ### Genotypes have random effects...
-        K = GENERATE_COVARIATE(syncx, 1_000, 0.95, n, "COR")    ### ... and are distributed normally μ=0, and Σ=σ2g*K
-        X = hcat(ones(n), X)                                    ### SNP have fixed effects
-    elseif model == "RRBLUP"
-        Z = X                               ### SNPs have random effects...
-        K = diagm(repeat([1.0], size(Z,2))) ### ... and are spherically distributed proportional to σ2g
-        X = ones(n, 1)                      ### Intercept is the only fixed effect
-    else
-        println(string("Sorry ", model, " is not implemented."))
-        println("Please choose from 'GBLUP' and 'RRBLUP'.")
-    end
-    ### Define the inner optimiser
-    if inner_optimizer == "LBFGS"
-        inner_optimizer = Optim.LBFGS()
-    elseif inner_optimizer == "BFGS"
-        inner_optimizer = Optim.BFGS()
-    elseif inner_optimizer == "SimulatedAnnealing"
-        inner_optimizer = Optim.SimulatedAnnealing()
-    elseif inner_optimizer == "GradientDescent"
-        inner_optimizer = Optim.GradientDescent()
-    elseif inner_optimizer == "NelderMead"
-        inner_optimizer = Optim.NelderMead()
-    end
-    ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
-    σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
-    ### Random effects variance-covariance matrix
-    D = σ2u .* K
-    ### Error variance-covariance matrix (homoscedastic)
-    R = diagm(repeat([σ2e], n))
-    ### Solve the mixed model equations
-    β̂, μ̂ = MM(X, y, Z, D, R, FE_method)
-    if model == "GBLUP"
-        b = β̂
-    elseif model == "RRBLUP"
-        b = vcat(β̂, μ̂) # include the fixed intercept effect
-    end
-    ### Output
-    file_out = open(out, "a")
-    line = join(["Intercept",
-                 0,
-                 "N",
-                 0.0,
-                 b[1],
-                 "NA"], "\t")
-    write(file_out, string(line, "\n"))
-    for i in 1:p
-        line = join([vec_chr[i],
-                     vec_pos[i],
-                     vec_ale[i],
-                     vec_frq[i],
-                     b[i+1],
-                     "NA"], "\t")
-        write(file_out, string(line, "\n"))
-    end
-    close(file_out)
-    return(out)
-end
+# function LMM_MULTIVAR(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], model::String=["GBLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], inner_optimizer::String=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
+#     # n = 5                 ### number of founders
+#     # m = 10_000            ### number of loci
+#     # l = 135_000_000       ### total genome length
+#     # k = 5                 ### number of chromosomes
+#     # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+#     # a = 2                 ### number of alleles per locus
+#     # vec_chr_lengths = [0] ### chromosome lengths
+#     # vec_chr_names = [""]  ### chromosome names 
+#     # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+#     # o = 100               ### total number of simulated individuals
+#     # t = 10                ### number of random mating constant population size generation to simulate
+#     # nQTL = 10             ### number of QTL to simulate
+#     # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+#     # LD_chr = ""           ### chromosome to calculate LD decay from
+#     # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+#     # plot_LD = false       ### simulate# plot simulated LD decay
+#     # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+#     # npools = 5
+#     # @time X, y = POOL(_X, _y, npools)
+#     # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+#     # maf = 0.001
+#     # delimiter = ","
+#     # header = true
+#     # id_col = 1
+#     # phenotype_col = 2
+#     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+#     # covariate = "COR"
+#     # model = "GBLUP"
+#     # model = "RRBLUP"
+#     # method = "ML"
+#     # FE_method = "N<<P"
+#     # inner_optimizer = "LBFGS"
+#     # optim_trace = true
+#     # out = ""
+#     # @time tsv = LMM_MULTIVAR(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, model, method, FE_method, inner_optimizer, optim_trace, out)
+#     # vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval = LOAD_OUT(tsv)
+#     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
+#     if out==""
+#         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-LMM_MULTIVAR_", method,".tsv")
+#     end
+#     ### Load genotype data
+#     χ = LOAD(syncx, false)
+#     ### Filter
+#     X, vec_chr, vec_pos, vec_ale = FILTER(χ, maf)
+#     vec_frq = mean(X, dims=1)
+#     n, p = size(X)
+#     ### Load phenotype data
+#     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
+#     y = Float64.(ϕ.phe[:,1])
+#     ### Check if we have the same number of individuals in the genotype and phenotype data
+#     @assert n == length(y) "Genotype and phenotype data mismatch!"
+#     ### Prepare the design matrices for the fixed and random effects; and variance-covariance matrix of the random effects
+#     if model == "GBLUP"
+#         Z = diagm(repeat([1.0], n))                             ### Genotypes have random effects...
+#         K = GENERATE_COVARIATE(syncx, 1_000, 0.95, n, "COR")    ### ... and are distributed normally μ=0, and Σ=σ2g*K
+#         X = hcat(ones(n), X)                                    ### SNP have fixed effects
+#     elseif model == "RRBLUP"
+#         Z = X                               ### SNPs have random effects...
+#         K = diagm(repeat([1.0], size(Z,2))) ### ... and are spherically distributed proportional to σ2g
+#         X = ones(n, 1)                      ### Intercept is the only fixed effect
+#     else
+#         println(string("Sorry ", model, " is not implemented."))
+#         println("Please choose from 'GBLUP' and 'RRBLUP'.")
+#     end
+#     ### Define the inner optimiser
+#     if inner_optimizer == "LBFGS"
+#         inner_optimizer = Optim.LBFGS()
+#     elseif inner_optimizer == "BFGS"
+#         inner_optimizer = Optim.BFGS()
+#     elseif inner_optimizer == "SimulatedAnnealing"
+#         inner_optimizer = Optim.SimulatedAnnealing()
+#     elseif inner_optimizer == "GradientDescent"
+#         inner_optimizer = Optim.GradientDescent()
+#     elseif inner_optimizer == "NelderMead"
+#         inner_optimizer = Optim.NelderMead()
+#     end
+#     ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
+#     σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
+#     ### Random effects variance-covariance matrix
+#     D = σ2u .* K
+#     ### Error variance-covariance matrix (homoscedastic)
+#     R = diagm(repeat([σ2e], n))
+#     ### Solve the mixed model equations
+#     β̂, μ̂ = MM(X, y, Z, D, R, FE_method)
+#     if model == "GBLUP"
+#         b = β̂
+#     elseif model == "RRBLUP"
+#         b = vcat(β̂, μ̂) # include the fixed intercept effect
+#     end
+#     ### Output
+#     file_out = open(out, "a")
+#     line = join(["Intercept",
+#                  0,
+#                  "N",
+#                  0.0,
+#                  b[1],
+#                  "NA"], "\t")
+#     write(file_out, string(line, "\n"))
+#     for i in 1:p
+#         line = join([vec_chr[i],
+#                      vec_pos[i],
+#                      vec_ale[i],
+#                      vec_frq[i],
+#                      b[i+1],
+#                      "NA"], "\t")
+#         write(file_out, string(line, "\n"))
+#     end
+#     close(file_out)
+#     return(out)
+# end
 
 ### CROSS-VALIDATION
 function PREDICT(tsv::String, syncx_validate::String)::Vector{Float64}
@@ -2936,31 +3140,36 @@ function CV_METRICS(y::Vector{T}, ŷ::Vector{T})::Tuple{Float64, Float64, Float
            p)
 end
 
-# function CV_OLS_MULTIVAR(nfold::Int64, nrep::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], out::String="")::String
-function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], model::Function=OLS_MULTIVAR, params=["N<<P"], save_plots::Bool=false, save_predictions::Bool=false, save_summary_plot::Bool=false, out::String="")::String
-    # # n = 5                 ### number of founders
-    # # m = 10_000            ### number of loci
-    # # l = 135_000_000       ### total genome length
-    # # k = 5                 ### number of chromosomes
-    # # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # # a = 2                 ### number of alleles per locus
-    # # vec_chr_lengths = [0] ### chromosome lengths
-    # # vec_chr_names = [""]  ### chromosome names 
-    # # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # # o = 1_000               ### total number of simulated individuals
-    # # t = 10                ### number of random mating constant population size generation to simulate
-    # # nQTL = 10             ### number of QTL to simulate
-    # # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # # LD_chr = ""           ### chromosome to calculate LD decay from
-    # # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # # plot_LD = false       ### simulate# plot simulated LD decay
-    # # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # # npools = 50
-    # # @time X, y = POOL(_X, _y, npools)
-    # # # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # syncx = "../test/test_Lr.syncx"
-    # phenotype = "../test/test_Lr.csv"
-    # ###########################
+function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, model::Function=OLS, params=["N<<P"], save_plots::Bool=false, save_predictions::Bool=false, save_summary_plot::Bool=false, out::String="")::String
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 1_000               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.2    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulate# plot simulated LD decay
+    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 50
+    # @time X, y = POOL(_X, _y, npools)
+    # ### Skew y
+    # using UnicodePlots
+    # y = (y .- minimum(y)) ./ (maximum(y)-minimum(y))
+    # UnicodePlots.histogram(Float64.(y))
+    # y = y.^7
+    # UnicodePlots.histogram(Float64.(y))
+    # @time syncx, phenotype = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    # # syncx = "../test/test_Lr.syncx"
+    # # phenotype = "../test/test_Lr.csv"
+    # # ###########################
     # nfold = 10
     # nrep = 3
     # maf = 0.001
@@ -2969,19 +3178,23 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
     # id_col = 1
     # phenotype_col = 2
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
-    # _covariate = ["", "XTX", "COR"][2]
     # _model = ["GBLUP", "RRBLUP"][1]
     # _method = ["ML", "REML"][1]
     # _FE_method = ["CANONICAL", "N<<P"][2]
     # _inner_optimizer=["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
     # _optim_trace = false
-    # model = OLS_MULTIVAR; params = [_FE_method]
-    # # model = LMM_MULTIVAR; params = [_covariate, _model, _method, _FE_method, _inner_optimizer, _optim_trace]
+    # _GBLUP_K = ["", "XTX", "COR"][2]
+    # model = OLS; params = [_FE_method]
+    # model = GLMNET; params = [1.00]
+    # # model = MM; params = [_model, _method, _inner_optimizer, _optim_trace, _FE_method, _GBLUP_K]
+    # filter_genotype = true
+    # transform_phenotype = true
+    # standardise = false
     # save_plots = false
     # save_predictions = false
     # save_summary_plot = false
     # out = ""
-    # CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, model, params, save_plots, save_predictions, save_summary_plot, out)
+    # CV_MULTIVAR(nfold, nrep, syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, filter_genotype, transform_phenotype, standardise, model, params, save_plots, save_predictions, save_summary_plot, out)
     ### Output tab-delimeted file including the (1) chromosome name, (2) position, (3) allele, (4) allele frequency, (5) allele effect, an (6) p-value
     if out==""
         if string(model) == "LMM_MULTIVAR"
@@ -2992,27 +3205,65 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
     end
     ### Load genotype data
     χ = LOAD(syncx, true)
-    p, n = size(χ.cou)
     ### Load phenotype data
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
+    ### Remove missing observations
+    idx = .!ismissing.(ϕ.phe[:,1])
+    χ.cou = χ.cou[:, idx]
+    ϕ = Phenotype(ϕ.iid[idx], ϕ.tid, ϕ.phe[idx, 1:1])
+    ### Filter genotype data
+    if filter_genotype
+        X, vec_chr, vec_pos, vec_ale = FILTER(χ, maf)
+    else
+        X = Float64.(χ.cou')
+        vec_chr = repeat(χ.chr, inner=7)
+        vec_pos = repeat(χ.pos, inner=7)
+        vec_ale = repeat(["A", "T", "C", "G", "INS", "DEL", "N"], outer=length(χ.chr))
+    end
+    n, p = size(X)
+    ### Transform phenotype data
     y = Float64.(ϕ.phe[:,1])
+    if transform_phenotype
+        y, vec_fun, vec_max = TRANSFORM(y)
+        y, vec_fun, vec_par = TRANSFORM(y, true, true, true)
+    else
+        vec_fun = []
+        vec_max = []
+    end
+    ### Standardise X and y so we can get rid of the intercept, i.e. for one less parameter to estimate
+    if standardise
+        μX = mean(X)
+        σX = std(X)
+        μy = mean(y)
+        σy = std(y)
+        X = (X .- μX) ./ σX
+        y = (y .- μy) ./ σy
+    end
+    ### Save predictions if we waht to save the final plot
+    if save_summary_plot
+        save_predictions = true
+    end
     ### Check is we have the same number of individuals in the genotype and phenotype data
     @assert n == length(y) "Genotype and phenotype data mismatch!"
-    ### Divide the observations into nfold partitions
-    if (n/nfold) < 5
-        println(string("Sorry, there is not enough observations to perform ", nfold, "-fold cross validation"))
-        println(string("with at least 5 observations in each set,"))
-        println(string("i.e. you have at most ", Int(ceil(n/nfold)), " observations per set."))
-        println("Trying to set a lower number of folds.")
-        while ((n/nfold) < 5) | (nfold > 1)
-            nfold = nfold - 1
-        end
-        if nfold == 1
-            println("Sorry you dataset is too small. Exiting function now.")
-            return("Error")
-        else
-            println(string("Set the number of folds to ", nfold, "."))
-        end
+    # ### Divide the observations into nfold partitions
+    # if (n/nfold) < 5
+    #     println(string("Sorry, there is not enough observations to perform ", nfold, "-fold cross validation"))
+    #     println(string("with at least 5 observations in each set,"))
+    #     println(string("i.e. you have at most ", Int(ceil(n/nfold)), " observations per set."))
+    #     println("Trying to set a lower number of folds.")
+    #     while ((n/nfold) < 5) | (nfold > 1)
+    #         nfold = nfold - 1
+    #     end
+    #     if nfold == 1
+    #         println("Sorry you dataset is too small. Exiting function now.")
+    #         return("Error")
+    #     else
+    #         println(string("Set the number of folds to ", nfold, "."))
+    #     end
+    # end
+    if (n/nfold) < 1
+        println("Sorry you dataset is too small. Exiting function now.")
+        return("Error")
     end
     vec_fld = repeat(collect(1:nfold), inner=Int(floor(n/nfold)))
     if length(vec_fld) < n
@@ -3025,6 +3276,40 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
         mat_idx_rand[:, i] = sample(vec_fld, n, replace=false)
     end
     ### Cross-validate for nrep randomisations and k-fold cross-validation
+    ### Parallel execution
+    vec_vec_metrics = @sync @showprogress "Cross-validation: " @distributed (hcat) for i in 1:(nrep*nfold)
+    # @showprogress "Cross-validating: " for i in 1:(nrep*nfold)
+        # i = 1
+        ### Determine the rep and fold numbers
+        rep = Int(ceil(i/nfold))
+        fold = mod(i, nfold)
+        if fold == 0
+            fold = nfold
+        end
+        ### Set the pre-randomised training and validation sets
+        idx_training = mat_idx_rand[:, rep] .!= fold
+        idx_validate = mat_idx_rand[:, rep] .== fold
+        
+        X_training = X[idx_training, :]
+        X_validate = X[idx_validate, :]
+        y_training = y[idx_training]
+        y_validate = y[idx_validate]
+        β̂ = model(X_training, y_training, params...)
+
+        ŷ_validate = hcat(ones(length(y_validate)), X_validate) * β̂
+        if transform_phenotype
+            y_validate = UNTRANSFORM(y_validate, vec_fun, vec_max)
+            ŷ_validate = UNTRANSFORM(ŷ_validate, vec_fun, vec_max)
+        end
+        if standardise
+            y_validate = (y_validate .* σy) .+ μy
+            ŷ_validate = (ŷ_validate .* σy) .+ μy
+        end
+        correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y_validate, ŷ_validate)
+        ### Vectorise for hcat-ing
+        [rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, join(round.(y_validate, digits=2), ","), join(round.(ŷ_validate, digits=2), ",")]
+    end
+    ### Consolidate metrics
     vec_rep = []
     vec_fold = []
     vec_correlation_pearson = []
@@ -3039,69 +3324,13 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
     vec_RMSE = []
     vec_RRMSE = []
     vec_RMSLE = []
-    if save_summary_plot
-        save_predictions = true
-    end 
     if save_predictions
-       vec_predictions = []
+        vec_true = []
+        vec_pred = []
     end
-    ### Parallel execution
-    vec_vec_metrics = @sync @showprogress @distributed (hcat) for i in 1:(nrep*nfold)
-        # i = 1
-        ### Determine the rep and fold numbers
-        rep = Int(ceil(i/nfold))
-        fold = mod(i, nfold)
-        if fold == 0
-            fold = nfold
-        end
-        ### Set the pre-randomised training and validation sets
-        idx_training = mat_idx_rand[:, rep] .!= fold
-        idx_validate = mat_idx_rand[:, rep] .== fold
-        ### Set the names of the training and validation genotype and phenotype data and output
-        syncx_training = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-TRAINING.syncx")
-        pheno_training = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-TRAINING.csv")
-        syncx_validate = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-VALIDATE.syncx")
-        pheno_validate = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-VALIDATE.csv")
-        tsv = string(syncx, "-CV-rep_", rep, "-fold_", fold, "-", string(model), ".tsv")
-        ### Save the training and validation data
-        SAVE(Window(χ.chr, χ.pos, χ.ref, χ.cou[:, idx_training], zeros(1,1)),  syncx_training)
-        SAVE(Phenotype(ϕ.iid[idx_training], [ϕ.tid[1]], ϕ.phe[idx_training, 1:1]), pheno_training, delimiter, ["id", ϕ.tid[1]])
-        SAVE(Window(χ.chr, χ.pos, χ.ref, χ.cou[:, idx_validate], zeros(1,1)),  syncx_validate)
-        SAVE(Phenotype(ϕ.iid[idx_validate], [ϕ.tid[1]], ϕ.phe[idx_validate, 1:1]), pheno_validate, delimiter, ["id", ϕ.tid[1]])
-        ### Fit
-        # tsv = OLS_MULTIVAR(syncx_training, maf, pheno_training, delimiter, header, id_col, phenotype_col, missing_strings, FE_method, tsv)
-        tsv = model(syncx_training, maf, pheno_training, delimiter, header, id_col, phenotype_col, missing_strings, params..., tsv)
-        ### Predict
-        ŷ = PREDICT(tsv, syncx_validate)
-        ### Clean-up
-        rm(syncx_training)
-        rm(pheno_training)
-        rm(syncx_validate)
-        rm(pheno_validate)
-        rm(tsv)
-        ### Calculate prediction metrics
-        correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, p = CV_METRICS(y[idx_validate], ŷ)
-        ### Save plots and/or predictions?
-        if save_plots
-            Plots.plot!(p, size=[700, 700]);
-            Plots.savefig(p, string(out, "-", i, ".svg"));
-        end
-        if save_predictions
-            _out_pred = string(out, "-predictions-rep_", rep, "-fold_", fold, ".tsv") ### Only used if we want to save all the predictions
-            _file_pred = open(_out_pred, "a")
-            for k in 1:length(ŷ)
-                write(_file_pred, string(join([rep, fold, y[idx_validate][k], ŷ[k]], "\t"), "\n"))
-            end
-            close(_file_pred)
-        else
-            _out_pred = ""
-        end
-        ### Vectorise for hcat-ing
-        [rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, _out_pred]
-    end
-    ### Consolidate metrics
-    for j in 1:size(vec_vec_metrics,2)
-        rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, _out_pred = vec_vec_metrics[:, j]
+    t = size(vec_vec_metrics,2)
+    for j in 1:t
+        rep, fold, correlation_pearson, correlation_spearman, correlation_kendall, R2, R2_adj, MAE, MBE, RAE, MSE, RMSE, RRMSE, RMSLE, y_true, y_pred = vec_vec_metrics[:, j]
         append!(vec_rep, rep)
         append!(vec_fold, fold)
         append!(vec_correlation_pearson, correlation_pearson)
@@ -3117,7 +3346,8 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
         append!(vec_RRMSE, RRMSE)
         append!(vec_RMSLE, RMSLE)
         if save_predictions
-            push!(vec_predictions, _out_pred)
+            push!(vec_true, y_true)
+            push!(vec_pred, y_pred)
         end
     end
     ### Output
@@ -3125,10 +3355,14 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
         out_pred = string(out, "-predictions.tsv")
         f = open(out_pred, "a")
         write(f, string(join(["rep", "fold", "true", "pred"], "\t"), "\n"))
+        for i in 1:t
+            y_true = parse.(Float64, split(vec_true[i], ","))
+            y_pred = parse.(Float64, split(vec_pred[i], ","))
+            for j in 1:length(y_true)
+                write(f, string(join([vec_rep[i], vec_fold[i], y_true[j], y_pred[j]], "\t"), "\n"))
+            end
+        end
         close(f)
-        vec_predictions = string.(vec_predictions)
-        sort!(vec_predictions)
-        MERGE(vec_predictions, out_pred)
     end
     if save_summary_plot
         vec_y = []; vec_ŷ = []
