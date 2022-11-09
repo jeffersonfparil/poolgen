@@ -250,10 +250,12 @@ end
 # MM_method = ["ML", "REML"][1]
 # inner_optimizer = ["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
 # optim_trace = false
-# mat_models = hcat(["OLS", "GLMNET", "GLMNET", "MM"],
-#                   ["", "", "", "GBLUP"],
-#                   [0, 0.0, 1.0, 0])
-
+# # mat_models = hcat(["OLS", "GLMNET", "GLMNET", "MM"],
+# #                   ["", "", "", "GBLUP"],
+# #                   [0, 0.0, 1.0, 0])
+# mat_models = hcat(["OLS", "GLMNET", "GLMNET"],
+#                   ["", "", ""],
+#                   [0, 0.0, 1.0])
 # vec_phenotype_cols = vcat(collect(10:18), collect(20:22), collect(28:33))
 # Y = poolgen.user_functions.functions.LOAD(phenotype, ",", true, 1, vec_phenotype_cols)
 # for j in 1:length(vec_phenotype_cols)
