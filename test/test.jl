@@ -155,7 +155,7 @@ FE_method = ["CANONICAL", "N<<P"][2]
 alpha = 1.0
 covariate = ["", "XTX", "COR"][2]
 MM_method = ["ML", "REML"][1]
-inner_optimizer = ["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
+inner_optimizer = ["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1]
 optim_trace = false
 mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[1]], length(vec_models)), vec_MM_models[end]))
 # for i in 1:size(mat_models, 1)
@@ -176,36 +176,36 @@ mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[
 #                                            optim_trace=optim_trace)
 # end
 
-println("##########################################")
-println("GP cross-validation")
-println("##########################################")
-nfold = 2
-nrep = 3
-save_plots = false
-save_predictions = true
-save_summary_plot = false
-for i in 1:size(mat_models, 1)
-    model = mat_models[i, 1]
-    MM_model = mat_models[i, 2]
-    println(model)
-    model == "LMM" ? println(MM_model) : nothing
-    @time out = poolgen.genomic_prediction_CV(nfold=nfold,
-                                              nrep=nrep,
-                                              model=model,
-                                              syncx=syncx,
-                                              maf=maf,
-                                              phenotype=csv,
-                                              FE_method=FE_method,
-                                              alpha=alpha,
-                                              GBLUP_K=covariate,
-                                              MM_model=MM_model,
-                                              MM_method=MM_method,
-                                              inner_optimizer=inner_optimizer,
-                                              optim_trace=optim_trace,
-                                              save_plots=save_plots,
-                                              save_predictions=save_predictions,
-                                              save_summary_plot=save_summary_plot)
-end
+# println("##########################################")
+# println("GP cross-validation")
+# println("##########################################")
+# nfold = 2
+# nrep = 3
+# save_plots = false
+# save_predictions = true
+# save_summary_plot = false
+# for i in 1:size(mat_models, 1)
+#     model = mat_models[i, 1]
+#     MM_model = mat_models[i, 2]
+#     println(model)
+#     model == "LMM" ? println(MM_model) : nothing
+#     @time out = poolgen.genomic_prediction_CV(nfold=nfold,
+#                                               nrep=nrep,
+#                                               model=model,
+#                                               syncx=syncx,
+#                                               maf=maf,
+#                                               phenotype=csv,
+#                                               FE_method=FE_method,
+#                                               alpha=alpha,
+#                                               GBLUP_K=covariate,
+#                                               MM_model=MM_model,
+#                                               MM_method=MM_method,
+#                                               inner_optimizer=inner_optimizer,
+#                                               optim_trace=optim_trace,
+#                                               save_plots=save_plots,
+#                                               save_predictions=save_predictions,
+#                                               save_summary_plot=save_summary_plot)
+# end
 
 # println("##########################################")
 # println("GP cross-validation - WeedOmics data")
@@ -233,36 +233,31 @@ end
 # # # poolgen.user_functions.functions.SAVE(Φ, replace(phenotype, "Lolium_phenotype_data-READY.csv" => "Lolium_glyphosate_resistance_populations_only.csv"), ",", ["id", "Glyphosate_resistance"])
 # # # phenotype = "/data-weedomics-2/2.d_40_populations_model_validation/Lolium_glyphosate_resistance_populations_only.csv"
 # # # phenotype_col=2
-
 # # nfold = 10
 # nrep = 1
 # save_plots = false
 # save_predictions = true
 # save_summary_plot = true
 # maf = 1/(42*4)
-# # filter_genotype = true
-# filter_genotype = false
-# # transform_phenotype = true
+# filter_genotype = true
 # transform_phenotype = false
 # standardise = false
 # FE_method = ["CANONICAL", "N<<P"][2]
 # GBLUP_K = ["", "XTX", "COR"][2]
 # MM_method = ["ML", "REML"][1]
-# inner_optimizer = ["LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1]
+# inner_optimizer = ["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1]
 # optim_trace = false
-# # mat_models = hcat(["OLS", "GLMNET", "GLMNET", "MM"],
-# #                   ["", "", "", "GBLUP"],
-# #                   [0, 0.0, 1.0, 0])
-# mat_models = hcat(["OLS", "GLMNET", "GLMNET"],
-#                   ["", "", ""],
-#                   [0, 0.0, 1.0])
+# mat_models = hcat(["OLS", "GLMNET", "GLMNET", "MM", "MM"],
+#                   ["", "", "", "GBLUP", "RRBLUP"],
+#                   [0, 0.0, 1.0, 0, 0])
 # vec_phenotype_cols = vcat(collect(10:18), collect(20:22), collect(28:33))
 # Y = poolgen.user_functions.functions.LOAD(phenotype, ",", true, 1, vec_phenotype_cols)
-# for j in 1:length(vec_phenotype_cols)
+# @time for j in 1:length(vec_phenotype_cols)
 #     # j = 1
 #     pheno = Y.tid[j]
 #     phenotype_col = vec_phenotype_cols[j]
-#     nfold = sum(.!ismissing.(Y.phe[:,j]))
+#     # nfold = sum(.!ismissing.(Y.phe[:,j]))
+#     nfold = 10
 #     for i in 1:size(mat_models, 1)
 #         # i = 1
 #         model = mat_models[i, 1]
