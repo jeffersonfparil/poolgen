@@ -10,7 +10,7 @@ using Distributed
 using ProgressMeter
 
 include("functions.jl")
-using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window
+using .functions: PileupLine, SyncxLine, LocusAlleleCounts, Window, MinimisationError
 using .functions: PARSE, SAVE, SPLIT, MERGE, CONVERT, PILEUP2SYNCX, FILTER, IMPUTE, GWALPHA
 using .functions: GWAS_PLOT_MANHATTAN, ESTIMATE_LOD
 using .functions: SIMULATE, POOL, EXPORT_SIMULATED_DATA

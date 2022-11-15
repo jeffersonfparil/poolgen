@@ -6,6 +6,7 @@ if githubci
     using Pkg
     Pkg.add(url="https://github.com/jeffersonfparil/poolgen.git")
     using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
+    using Distributed
     Distributed.addprocs(length(Sys.cpu_info())-1)
     @everywhere using poolgen ### Load poolgen for each process
 else
@@ -253,13 +254,12 @@ mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[
 # vec_phenotype_cols = vcat(collect(10:18), collect(20:22), collect(28:33))
 # Y = poolgen.user_functions.functions.LOAD(phenotype, ",", true, 1, vec_phenotype_cols)
 # @time for j in 1:length(vec_phenotype_cols)
-#     # j = 1
+#     # j = 2
 #     pheno = Y.tid[j]
 #     phenotype_col = vec_phenotype_cols[j]
-#     # nfold = sum(.!ismissing.(Y.phe[:,j]))
-#     nfold = 10
+#     nfold = sum(.!ismissing.(Y.phe[:,j]))
 #     for i in 1:size(mat_models, 1)
-#         # i = 1
+#         # i = 5
 #         model = mat_models[i, 1]
 #         MM_model = mat_models[i, 2]
 #         alpha = mat_models[i, 3]
@@ -299,3 +299,6 @@ mat_models = hcat(vcat(vec_models, vec_models[end]), vcat(repeat([vec_MM_models[
 #                                                 out=out)
 #     end
 # end
+# ## Use counts instead of frequencies: expansion for resistance gene track
+# ## Binomial classifier - trees
+# ## Use notebooks

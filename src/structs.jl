@@ -53,4 +53,10 @@ struct Phenotype
     phe::Matrix{Any}    ### n x m matrix of phenotype values
 end
 
+struct MinimisationError
+    minimizer::Vector{Float64}
+    f_converged::Bool
+    g_converged::Bool
+end
+
 end
