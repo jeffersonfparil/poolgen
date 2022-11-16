@@ -17,9 +17,9 @@ end
 println("##########################################")
 println("Pileup to syncx conversion")
 println("##########################################")
-@time poolgen.pileup2syncx("test/test_1.pileup")
+@time poolgen.pileup2syncx("test/test.pileup")
 
-@time poolgen.pileup2syncx("test/test_2.pileup")
+@time poolgen.pileup2syncx("test/test.syncx")
 
 println("##########################################")
 println("Filtering")
@@ -29,7 +29,7 @@ alpha1 = 0.05
 maf = 0.001
 alpha2 = 0.50
 minimum_coverage = 10
-@time poolgen.filter("test/test_1.pileup",
+@time poolgen.filter("test/test.pileup",
                      "pileup",
                      maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
@@ -38,7 +38,7 @@ minimum_coverage = 10
                      minimum_coverage=minimum_coverage,
                      out="")
 
-@time poolgen.filter("test/test_1.pileup",
+@time poolgen.filter("test/test.pileup",
                      "syncx",
                      maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
@@ -47,9 +47,7 @@ minimum_coverage = 10
                      minimum_coverage=minimum_coverage,
                      out="")
 
-# mv(string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx"),
-#    string("test/test_1-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, "-FROM_PILEUP.syncx"))
-@time poolgen.filter("test/test_1.syncx",
+@time poolgen.filter("test/test.syncx",
                      alpha1=alpha1,
                      maf=maf,
                      alpha2=alpha2,
@@ -61,7 +59,7 @@ alpha1 = 0.01
 maf = 0.001
 alpha2 = 0.50
 minimum_coverage = 1
-@time poolgen.filter("test/test_2.pileup",
+@time poolgen.filter("test/test.pileup",
                      "pileup",
                      maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
@@ -70,7 +68,7 @@ minimum_coverage = 1
                      minimum_coverage=minimum_coverage,
                      out="")
 
-@time poolgen.filter("test/test_2.pileup",
+@time poolgen.filter("test/test.pileup",
                      "syncx",
                      maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
@@ -79,9 +77,7 @@ minimum_coverage = 1
                      minimum_coverage=minimum_coverage,
                      out="")
 
-# mv(string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx"),
-#    string("test/test_2-FILTERED-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, "-FROM_PILEUP.syncx"))
-@time poolgen.filter("test/test_2.syncx",
+@time poolgen.filter("test/test.syncx",
                      maximum_missing_fraction=maximum_missing_fraction,
                      alpha1=alpha1,
                      maf=maf,
@@ -95,13 +91,13 @@ println("##########################################")
 window_size=20
 model=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
 distance=true
-@time poolgen.impute("test/test_1.pileup",
+@time poolgen.impute("test/test.pileup",
                     window_size=window_size,
                     model=model,
                     distance=distance,
                     out="")
 
-@time poolgen.impute("test/test_2.pileup",
+@time poolgen.impute("test/test.syncx",
                     window_size=window_size,
                     model=model,
                     distance=distance,
