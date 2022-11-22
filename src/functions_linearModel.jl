@@ -1,16 +1,23 @@
 ### LINEAR MODELS
 
-####### TEST ########
+# ####### TEST ########
 # include("structs.jl")
 # using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
 # include("functions_io.jl")
 # using ProgressMeter, Distributions
 # include("functions_filterTransform.jl")
-# using LinearAlgebra, GLMNet, Optim
+# using LinearAlgebra, MultivariateStats, GLMNet, Optim
 #####################
 
 ### HELPER FUNCTIONS
 function GENERATE_COVARIATE(X::Array{T}, df::Int64=1, covariate::String=["XTX", "COR"][2])::Array{T} where T <: Number
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # χ = LOAD(syncx, false)
+    # X = convert(Array{Float64}, χ.cou')
+    # df = 1
+    # covariate = "XTX"
+    #####################
     n, p = size(X)
     ### Calculate covariate
     if covariate == "XTX"
@@ -19,13 +26,6 @@ function GENERATE_COVARIATE(X::Array{T}, df::Int64=1, covariate::String=["XTX", 
     elseif covariate == "COR"
         ### (2) Pearson's product-moment correlation
         C = cor(X')
-    elseif covariate == "DIST"
-        C = zeros(Int, n, n)
-        for i in 1:n
-            for j in 1:n
-                C[i,j] = abs(vec_pos[i] - vec_pos[j])
-            end
-        end
     end
     ### Use the PCs if the we're asking for columns (i.e. df) less than the number of columns in C
     if (df < n)
@@ -34,32 +34,20 @@ function GENERATE_COVARIATE(X::Array{T}, df::Int64=1, covariate::String=["XTX", 
     return(C)
 end
 
-function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95, df::Int64=1, covariate::String=["XTX", "COR"][2])::Matrix{Float64}
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # npools = 5
-    # @time X, y = POOL(_X, _y, npools)
-    # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # nloci = 1_000       ### number of equally-consecutively-spaced loci to include
-    # θ = 0.95 ### maximum correlation between alleles/locus (Pearson's product moment correlation)
+function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, df::Int64=1, covariate::String=["XTX", "COR"][2], maf::Float64=0.001, δ::Float64=1e-10, remove_insertions::Bool=true, remove_minor_alleles::Bool=false, remove_correlated_alleles::Bool=false, θ::Float64=0.95, centre::Bool=true)::Array{T} where T <: Number
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # nloci = 100
     # df = 1
-    # covariate = "COR"
-    ### Extract allele frequencies
+    # covariate = "XTX"
+    # maf = 0.0001
+    # δ = 1e-10
+    # remove_insertions = true
+    # remove_minor_alleles = false
+    # remove_correlated_alleles = true
+    # θ = 0.99
+    # centre = true
+    #####################
     ### Include nloci where the default is zero corresponding to all loci
     file = open(syncx, "r")
     m = countlines(file) ### total number of loci
@@ -83,19 +71,16 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, θ::Float64=0.95,
         χ = PARSE(convert(Vector{LocusAlleleCounts}, loci))
     end
     ### Filter
-    maf = 0.0001
-    δ = 1e-10
-    remove_insertions = true
-    remove_minor_alleles = false
-    remove_correlated_alleles = true
-    θ = 0.99
-    centre = true
     X, vec_chr, vec_pos, vec_ref = FILTER(χ, maf, δ, remove_insertions, remove_minor_alleles, remove_correlated_alleles, θ, centre)
+    ### Generate covariate
     C = GENERATE_COVARIATE(X, df, covariate)
     return(C)
 end
 
 function INVERSE(A::Array{T})::Matrix{Float64} where T <: Number
+    ####### TEST ########
+    # A = rand(10, 10)
+    #####################
     try
         inv(A)
     catch
@@ -105,28 +90,15 @@ end
 
 ### BASIC LINEAR MODEL FITTING FUNCTIONS
 function OLS(X::Array{T}, y::Array{T}, FE_method::String)::Vector{Float64} where T <: Number
-    ### OLS using various methods and only outputting the effect estimates
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # X = hcat(ones(o), X)
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # csv = "../test/test.csv"
+    # χ = LOAD(syncx, false)
+    # X, vec_chr, vec_pos, vec_ref = FILTER(χ)
+    # ϕ = LOAD(csv, ",", true, 1, [2])
+    # y = ϕ.phe[:,1]
     # FE_method = ["CANONICAL", "MULTIALGORITHMIC", "N<<P"][3]
-    # @time β̂ = OLS(X, y, FE_method)
-    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    #####################
     n, p = size(X)
     if isa(X, Vector)
         X = reshape(X, n)
@@ -148,27 +120,15 @@ function OLS(X::Array{T}, y::Array{T}, FE_method::String)::Vector{Float64} where
 end
 
 function OLS(X::Array{T}, y::Array{T})::Tuple{Vector{Float64}, Matrix{Float64}, Float64} where T <: Number
-    ### Canonical OLS outputting estimates of the effects and variances
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # X = hcat(ones(o), X)
-    # @time β̂, Vβ̂, σ2ϵ̂ = OLS(X, y)
-    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # csv = "../test/test.csv"
+    # χ = LOAD(syncx, false)
+    # X, vec_chr, vec_pos, vec_ref = FILTER(χ)
+    # X = X[:, 1:100]
+    # ϕ = LOAD(csv, ",", true, 1, [2])
+    # y = ϕ.phe[:,1]
+    #####################
     n, p = size(X)
     if isa(X, Vector)
         X = reshape(X, n)
@@ -185,29 +145,15 @@ function OLS(X::Array{T}, y::Array{T})::Tuple{Vector{Float64}, Matrix{Float64}, 
 end
 
 function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0)::Vector{T} where T <: Number
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # npools = 5
-    # @time X, y = POOL(_X, _y, npools)
-    # X = hcat(ones(npools), X)
-    # alpha = 1.0
-    # β̂ = GLMNET(X, y, alpha)
-    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+    ####### TEST ########
+    # syncx = "../test/test_Lr.syncx"
+    # csv = "../test/test_Lr.csv"
+    # χ = LOAD(syncx, false)
+    # X, vec_chr, vec_pos, vec_ref = FILTER(χ, 0.01, 1e-3, true, false, true)
+    # ϕ = LOAD(csv, ",", true, 1, [2])
+    # y = Float64.(ϕ.phe[:,1])
+    # alpha = 0.50
+    #####################
     ### Elastic net regularisation, where ridge if alpha=0.0, and LASSO if alpha=1.0
     n, _ = size(X)
     ### Remove inercept because we want the intercept to be unpenalised and to do that we let GLMNet.glmnetcv to automatically fit the intercept
@@ -227,61 +173,28 @@ function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0)::Vector{T} where T
     return(β̂)
 end
 
-function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Union{Array{T}, UniformScaling{T}}, R::Array{T}, FE_method::String)::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # npools = 5
-    # @time X, y = POOL(_X, _y, npools)
-    # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # @time K = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
-    # X = hcat(ones(npools), X)
-    # ### GBLUP: y = Xβ + g + ϵ,
-    # ###     where g = Zμ = μ,
-    # ###         where Z = I(nxn), and (μ==g)~MVN(0, D),
-    # ###             where D = σ2u * K
-    # ###                 where K ≈ (X'X)/n
-    # ###     and ϵ~MVN(0, R)
-    # ###         where R = σ2e * I
-    # ### SNP effects are fixed and we're controlling for random genotype effects.
-    # Z = diagm(repeat([1.0], npools))    
-    # σ2u = 2.0                           ### random effects variance
-	# σ2e = 1.0                           ### error variance
-    # D = σ2u * K                         ### random effects variance-covariance matrix
-    # R = diagm(repeat([σ2e], npools))    ### homoscedastic error variance-covariance matrix
-    # FE_method = "N<<P"
-    # @time β̂, μ̂ = MM(X, y, Z, D, R, FE_method)
-    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
-    # ### RR-BLUP: y = Xβ + Zμ + ϵ,
-    # ###     where Z are the SNPs,
-    # ###     and μ~MVN(0, D),
-    # ###         where D = σ2u * I
-    # ###     and ϵ~MVN(0, R)
-    # ###         where R = σ2e * I
-    # ### Kinship effects are fixed and we're interested in random SNP effects with spherical variance.
-    # Z = X[:, 2:end]                     ### SNPs with random effects
-    # X = hcat(X[:,1], K)                 ### Intercept and kinship with fixed effects
-    # σ2u = 2.0                           ### random effects variance
-	# σ2e = 1.0                           ### error variance
-    # D = diagm(repeat([σ2u], m))         ### homoscedastic random SNP effects variance-covariance matrix
-    # R = diagm(repeat([σ2e], npools))    ### homoscedastic error variance-covariance matrix
-    # FE_method = "N<<P"
-    # @time β̂, μ̂ = MM(X, y, Z, D, R, FE_method)
-    # p2 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, FE_method::String)::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
+    ####### TEST ########
+    # syncx = "../test/test_Lr.syncx"
+    # csv = "../test/test_Lr.csv"
+    # χ = LOAD(syncx, false)
+    # G, vec_chr, vec_pos, vec_ref = FILTER(χ, 0.01, 1e-3, true, false, true)
+    # ϕ = LOAD(csv, ",", true, 1, [2])
+    # y = Float64.(ϕ.phe[:,1])
+    # K = GENERATE_COVARIATE(G, size(G,1))
+    # ### gBLUP
+    # X = G
+    # Z = 1.0*I
+    # D = 0.1*K
+    # R = 0.01*I
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    # ### rrBLUP
+    # X = hcat(ones(size(G,1)))
+    # Z = G
+    # D = 0.1*I
+    # R = 0.01*I
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    #####################
     n, p = size(X)
     if isa(X, Vector)
         X = reshape(X, n)
@@ -308,60 +221,26 @@ function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Union{Array{T}, UniformSca
     return(β̂, μ̂)
 end
 
-function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Union{Array{T}, UniformScaling{T}}, R::Array{T})::Tuple{Vector{Float64}, Vector{Float64}, Array{T}} where T <: Number
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # npools = 5
-    # @time X, y = POOL(_X, _y, npools)
-    # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # @time K = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
-    # X = hcat(ones(npools), X[:, Int(round(rand()*size(X,2)))])
-    # ### GBLUP: y = Xβ + g + ϵ,
-    # ###     where g = Zμ = μ,
-    # ###         where Z = I(nxn), and (μ==g)~MVN(0, D),
-    # ###             where D = σ2u * K
-    # ###                 where K ≈ (X'X)/n
-    # ###     and ϵ~MVN(0, R)
-    # ###         where R = σ2e * I
-    # ### SNP effects are fixed and we're controlling for random genotype effects.
-    # Z = diagm(repeat([1.0], npools))    
-    # σ2u = 2.0                           ### random effects variance
-	# σ2e = 1.0                           ### error variance
-    # D = σ2u * K                         ### random effects variance-covariance matrix
-    # R = diagm(repeat([σ2e], npools))    ### homoscedastic error variance-covariance matrix
-    # @time β̂, μ̂, Σ̂ = MM(X, y, Z, D, R)
-    # p1 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(β̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
-    # ### RR-BLUP: y = Xβ + Zμ + ϵ,
-    # ###     where Z are the SNPs,
-    # ###     and μ~MVN(0, D),
-    # ###         where D = σ2u * I
-    # ###     and ϵ~MVN(0, R)
-    # ###         where R = σ2e * I
-    # ### Kinship effects are fixed and we're interested in random SNP effects with spherical variance.
-    # Z = X[:, 2:end]                     ### SNPs with random effects
-    # X = hcat(X[:,1], K)                 ### Intercept and kinship with fixed effects
-    # σ2u = 2.0                           ### random effects variance
-	# σ2e = 1.0                           ### error variance
-    # D = diagm(repeat([σ2u], m))         ### homoscedastic random SNP effects variance-covariance matrix
-    # R = diagm(repeat([σ2e], npools))    ### homoscedastic error variance-covariance matrix
-    # _method_ = "N<<P"
-    # @time β̂, μ̂, Σ̂ = MM(X, y, Z, D, R)
-    # p2 = Plots.scatter(b, title="True", legend=false);; p2 = Plots.scatter(abs.(μ̂), title="Estimated", legend=false);; Plots.plot(p1, p2, layout=(2,1))
+function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}})::Tuple{Vector{Float64}, Vector{Float64}, Array{T}} where T <: Number
+    ####### TEST ########
+    # syncx = "../test/test_Lr.syncx"
+    # csv = "../test/test_Lr.csv"
+    # χ = LOAD(syncx, false)
+    # G, vec_chr, vec_pos, vec_ref = FILTER(χ, 0.01, 1e-3, true, false, true)
+    # ϕ = LOAD(csv, ",", true, 1, [2])
+    # y = Float64.(ϕ.phe[:,1])
+    # K = GENERATE_COVARIATE(G, size(G,1))
+    # ### gBLUP
+    # X = G
+    # Z = 1.0*I
+    # D = 0.1*K
+    # R = 0.01*I
+    # ### rrBLUP
+    # X = hcat(ones(size(G,1)))
+    # Z = G
+    # D = 0.1*I
+    # R = 0.01*I
+    #####################
     ### Linear mixed model fitting which outputs the fixed effects variances for iterative regression
     n, p = size(X)
     if isa(X, Vector)
@@ -380,57 +259,26 @@ function MM(X::Array{T}, y::Array{T}, Z::Array{T}, D::Union{Array{T}, UniformSca
     return(β̂, μ̂, Σ̂)
 end
 
-function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Union{Array{T}, T}, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1])::Float64 where T <: Number
-    # n = 5                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 135_000_000       ### total genome length
-    # k = 5                 ### number of chromosomes
-    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
-    # a = 2                 ### number of alleles per locus
-    # vec_chr_lengths = [0] ### chromosome lengths
-    # vec_chr_names = [""]  ### chromosome names 
-    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
-    # o = 100               ### total number of simulated individuals
-    # t = 10                ### number of random mating constant population size generation to simulate
-    # nQTL = 10             ### number of QTL to simulate
-    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
-    # LD_chr = ""           ### chromosome to calculate LD decay from
-    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = false       ### simulate# plot simulated LD decay
-    # @time vec_chr, vec_pos, _X, _y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
-    # npools = 5
-    # @time X, y = POOL(_X, _y, npools)
-    # @time syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
-    # K = zeros(2,2)
-    # X = hcat(ones(npools), X)
-    # ### GBLUP: y = Xβ + g + ϵ,
-    # ###     where g = Zμ = μ,
-    # ###         where Z = I(nxn), and (μ==g)~MVN(0, D),
-    # ###             where D = σ2u * K
-    # ###                 where K ≈ (X'X)/n
-    # ###     and ϵ~MVN(0, R)
-    # ###         where R = σ2e * I
-    # ### SNP effects are fixed and we're controlling for random genotype effects.
-    # Z = diagm(repeat([1.0], npools))
-    # K = GENERATE_COVARIATE(syncx, 1_000, 0.95, npools)
-    # FE_method = "N<<P"
-    # method = "ML"
-    # θ = [2.0, 1.0]
-    # @time ll = NLL_MM(θ, X, y, Z, K, FE_method, method)
-    # ### RR-BLUP: y = Xβ + Zμ + ϵ, (NOTE: CANNOT BE USED WITH REML SINCE Z IS NOT SQUARE!)
-    # ###     where Z are the SNPs,
-    # ###     and μ~MVN(0, D),
-    # ###         where D = σ2u * I
-    # ###     and ϵ~MVN(0, R)
-    # ###         where R = σ2e * I
-    # ### Kinship effects are fixed and we're interested in random SNP effects with spherical variance.
-    # Z = X[:, 2:end]                     ### SNPs with random effects
-    # X = hcat(X[:,1], K)                 ### Intercept and kinship with fixed effects
-    # K = zeros(2, 2)
-    # FE_method = "N<<P"
-    # method = "ML"
-    # θ = [2.0, 1.0]
-    # @time ll = NLL_MM(θ, X, y, Z, K, FE_method, method)
+function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K::Union{Array{T}, T}, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1])::Float64 where T <: Number
+    ####### TEST ########
+    # syncx = "../test/test_Lr.syncx"
+    # csv = "../test/test_Lr.csv"
+    # θ = [0.1, 0.01]
+    # χ = LOAD(syncx, false)
+    # G, vec_chr, vec_pos, vec_ref = FILTER(χ, 0.01, 1e-3, true, false, true)
+    # ϕ = LOAD(csv, ",", true, 1, [2])
+    # y = Float64.(ϕ.phe[:,1])
+    # K = GENERATE_COVARIATE(G, size(G,1))
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    # ### gBLUP
+    # X = G
+    # Z = 1.0*I
+    # K = 1
+    # ### rrBLUP
+    # X = hcat(ones(size(G,1)))
+    # Z = G
+    # K = K
+    #####################
     n, p = size(X)
     if isa(X, Vector)
         X = reshape(X, n)
@@ -451,7 +299,8 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Union{A
         D = σ2u .* K
     end
     ### Error variance-covariance matrix (homoscedastic)
-    R = diagm(repeat([σ2e], n));
+    # R = diagm(repeat([σ2e], n));
+    R = σ2e*I;
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
     V = (Z * D * Z') + R;
     β̂, μ̂ = MM(X, y, Z, D, R, FE_method);
@@ -489,7 +338,7 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Array{T}, K::Union{A
     return(neg_log_lik)
 end
 
-function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Array{T}, K, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
+function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
     # l = 135_000_000       ### total genome length

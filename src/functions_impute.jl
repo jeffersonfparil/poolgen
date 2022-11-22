@@ -7,10 +7,11 @@
 # using ProgressMeter, Distributions
 # include("functions_filterTransform.jl")
 # using LinearAlgebra, GLMNet, Optim
+# using MultivariateStats
 #####################
 
 function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "GLMNET"][2], distance::Bool=true)::Window
-    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_4.syncx"
+    # syncx = "../test/test.syncx"
     # file = open(syncx, "r")
     # model = "OLS"
     # distance = true
@@ -21,10 +22,16 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
     #     push!(window, locus)
     # end
     # window = PARSE(Array{LocusAlleleCounts}(window))
+    # close(file)
+    # ### Simulate missing
+    # p, n = size(window.cou)
+    # vec_idx = collect(1:p)
+    # s = 20
+    # idx_alleles = sample(vec_idx[mean(window.cou, dims=2)[:,1] .> 0], s)
+    # idx_pools = sample(repeat([1, 3], inner=10), s)
+    # window.cou[idx_alleles, idx_pools] .= missing
     # model = ["Mean", "OLS", "RR", "LASSO", "GLMNET"][2]
     # distance = true
-    # close(file)
-    _, p = size(window.cou)
     ### Find the indices of pools with missing data.
     ### These will be used independently and iteratively as our response variables
     idx_pools = sum(ismissing.(window.cou), dims=1)[1,:] .> 0
@@ -69,11 +76,7 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
             elseif (model == "RR") | (model == "LASSO") | (model == "GLMNET")
                 model=="RR" ? alpha1=0 : model=="LASSO" ? alpha1=1 : alpha1=0.5
                 β = try
-                    try
-                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-7)) # equivalend to mod.path.betas[:, argmin(mod)]
-                    catch
-                        GLMNet.coef(GLMNet.glmnetcv(hcat(ones(nf), X_train), y_train, alpha1=alpha1, tol=1e-3)) # equivalend to mod.path.betas[:, argmin(mod)]
-                    end
+                        GLMNET(X_train, y_train, alpha1)
                 catch
                     β = missing
                 end
