@@ -1,14 +1,14 @@
 ### IMPUTATION
 
 ####### TEST ########
-include("structs.jl")
-using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
-include("functions_io.jl")
-using ProgressMeter, Distributions
-include("functions_filterTransform.jl")
-using LinearAlgebra, GLMNet, Optim
-using MultivariateStats
-include("functions_linearModel.jl")
+# include("structs.jl")
+# using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
+# include("functions_io.jl")
+# using ProgressMeter, Distributions
+# include("functions_filterTransform.jl")
+# using LinearAlgebra, GLMNet, Optim
+# using MultivariateStats
+# include("functions_linearModel.jl")
 #####################
 
 function SIMULATE_MISSING!(window::Window, rate::Float64=0.01)::Window
