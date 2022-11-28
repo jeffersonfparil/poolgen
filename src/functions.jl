@@ -25,8 +25,8 @@ using ProgressMeter, Distributions
 include("functions_filterTransform.jl")
 using Plots
 include("functions_simulate.jl")
-include("functions_impute.jl")
 include("functions_linearModel.jl")
+include("functions_impute.jl")
 include("functions_gp.jl")
 include("functions_gwas.jl")
 

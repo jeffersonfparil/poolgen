@@ -89,7 +89,7 @@ function INVERSE(A::Union{Array{T}, UniformScaling{T}, Cholesky{T, Matrix{T}}}):
 end
 
 ### BASIC LINEAR MODEL FITTING FUNCTIONS
-function OLS(X::Array{T}, y::Array{T}, FE_method::String)::Vector{Float64} where T <: Number
+function OLS(X::Array{T}, y::Array{T}, FE_method::String)::Array{Float64} where T <: Number
     ####### TEST ########
     # syncx = "../test/test.syncx"
     # csv = "../test/test.csv"
@@ -119,7 +119,7 @@ function OLS(X::Array{T}, y::Array{T}, FE_method::String)::Vector{Float64} where
     return(β̂)
 end
 
-function OLS(X::Array{T}, y::Array{T})::Tuple{Vector{Float64}, Matrix{Float64}, Float64} where T <: Number
+function OLS(X::Array{T}, y::Array{T})::Tuple{Array{Float64}, Array{Float64}, Float64} where T <: Number
     ####### TEST ########
     # syncx = "../test/test.syncx"
     # csv = "../test/test.csv"
@@ -139,9 +139,9 @@ function OLS(X::Array{T}, y::Array{T})::Tuple{Vector{Float64}, Matrix{Float64}, 
     V = INVERSE(X' * X)
     β̂ = V * (X' * y)
     ε̂ = y - (X * β̂)
-    σ2ϵ̂ = (ε̂' * ε̂) / (n-p)
-    Vβ̂ = σ2ϵ̂ * V
-    return(β̂, Vβ̂, σ2ϵ̂)
+    Vϵ̂ = (ε̂' * ε̂) / (n-p)
+    Vβ̂ = Vϵ̂ * V
+    return(β̂, Vβ̂, Vϵ̂)
 end
 
 function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0)::Vector{T} where T <: Number
@@ -350,7 +350,7 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, Unif
     return(neg_log_lik)
 end
 
-function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], inner_optimizer=[LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
+function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"

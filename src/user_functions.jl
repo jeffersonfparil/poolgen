@@ -48,6 +48,7 @@ sync_out = poolgen.convert(syncx, out="test.syncx")
 2. Multi-core conversion
 ```julia
 using Distributed
+using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
 n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
@@ -123,6 +124,7 @@ close(f)
 2. Multi-core parsing
 ```julia
 using Distributed
+using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
 pileup = "test.pileup"
@@ -200,6 +202,7 @@ close(f)
 2. Multi-core filtering
 ```julia
 using Distributed
+using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
 pileup = "test.pileup"
@@ -286,6 +289,7 @@ map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a
 2. Multi-core conversion
 ```julia
 using Distributed
+using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
 n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
@@ -375,6 +379,7 @@ syncx = poolgen.pileup2syncx(pileup)
 2. Multi-core conversion
 ```julia
 using Distributed
+using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
 pileup = "test.pileup"
@@ -567,6 +572,7 @@ Compatible with the original implementation published and reposited in:
 ```julia
 using StatsBase
 using Distributed
+using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
 n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
@@ -803,6 +809,7 @@ end
 # Example
 ```julia
 using Distributed
+using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
 Distributed.addprocs(length(Sys.cpu_info())-1)
 @everywhere using poolgen
 n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=1_000; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=50

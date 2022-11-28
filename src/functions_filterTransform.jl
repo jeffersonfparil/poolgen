@@ -340,39 +340,39 @@ function UNTRANSFORM(y::Vector{T}, vec_fun::Vector{String}, vec_max::Vector{T}):
     return(y)
 end
 
-function TRANSFORM(y::Vector{T}, centred::Bool, scaled::Bool, boxed::Bool)::Tuple{Vector{T}, Vector{String}, Vector{T}} where T <: Number
-    ####### TEST ########
-    # using UnicodePlots
-    # y_untransformed = rand(100)
-    # UnicodePlots.histogram(y_untransformed)
-    # centred = true
-    # scaled = true
-    # boxed = true
-    #####################
-    ### centred: subtract the mean
-    ### scaled: divide by the standard deviation
-    ### boxed: scaled between zero and one, i.e. (y - min(y)) / (max(y) - min(y))
-    vec_fun = []
-    vec_par = []
-    if centred
-        μ = mean(y)
-        y = y .- μ
-        push!(vec_fun, "centre")
-        push!(vec_par, μ)
-    end
-    if scaled
-        σ = std(y)
-        y = y ./ σ
-        push!(vec_fun, "scale")
-        push!(vec_par, σ)
-    end
-    if boxed
-        m = minimum(y)
-        M = maximum(y)
-        y = (y .- m) ./ (M - m)
-        push!(vec_fun, "box")
-        push!(vec_par, m)
-        push!(vec_par, M)
-    end
-    return(y, vec_fun, vec_par)
-end
+# function TRANSFORM(y::Vector{T}, centred::Bool, scaled::Bool, boxed::Bool)::Tuple{Vector{T}, Vector{String}, Vector{T}} where T <: Number
+#     ####### TEST ########
+#     # using UnicodePlots
+#     # y_untransformed = rand(100)
+#     # UnicodePlots.histogram(y_untransformed)
+#     # centred = true
+#     # scaled = true
+#     # boxed = true
+#     #####################
+#     ### centred: subtract the mean
+#     ### scaled: divide by the standard deviation
+#     ### boxed: scaled between zero and one, i.e. (y - min(y)) / (max(y) - min(y))
+#     vec_fun = []
+#     vec_par = []
+#     if centred
+#         μ = mean(y)
+#         y = y .- μ
+#         push!(vec_fun, "centre")
+#         push!(vec_par, μ)
+#     end
+#     if scaled
+#         σ = std(y)
+#         y = y ./ σ
+#         push!(vec_fun, "scale")
+#         push!(vec_par, σ)
+#     end
+#     if boxed
+#         m = minimum(y)
+#         M = maximum(y)
+#         y = (y .- m) ./ (M - m)
+#         push!(vec_fun, "box")
+#         push!(vec_par, m)
+#         push!(vec_par, M)
+#     end
+#     return(y, vec_fun, vec_par)
+# end
