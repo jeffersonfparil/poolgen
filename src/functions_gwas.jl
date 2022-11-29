@@ -1,14 +1,15 @@
 ### GENOME-WIDE ASSOCIATION
 
 ####### TEST ########
-include("structs.jl")
-using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
-include("functions_io.jl")
-using ProgressMeter, Distributions
-include("functions_filterTransform.jl")
-using LinearAlgebra, MultivariateStats, GLMNet, Optim
-include("functions_linearModel.jl")
-using Plots
+# include("structs.jl")
+# using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
+# include("functions_io.jl")
+# using ProgressMeter, Distributions
+# include("functions_filterTransform.jl")
+# using LinearAlgebra, MultivariateStats, GLMNet, Optim
+# include("functions_linearModel.jl")
+# using Plots
+# include("functions_simulate.jl")
 #####################
 
 ### PARALLELISABLE WRAPPER FUNCTIONS
@@ -181,7 +182,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
         end
     end
     seek(file, init)
-    ### Prepare covariate and variance-covariance matrix
+    ### Prepare covariate or variance-covariance matrix
     nloci = 1_000
     maf = 0.001
     δ = 1e-10
@@ -195,18 +196,17 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
         catch
             GENERATE_COVARIATE(syncx, 100, n, covariate, maf, δ, remove_insertions, remove_minor_alleles, remove_correlated_alleles, θ, centre)
         end
+    ### Assign fixed or random or variance-covariance matrices
     if model == "GBLUP"
+        # Assign within the loop: _X_ = hcat(ones(n), x)  ### SNPs have fixed effects
         Z = 1.0*I ### Genotypes have random effects...
-        K = C                       ### ... and are distributed normally μ=0, and Σ=σ2g*K
+        K = C ### ... and are distributed normally μ=0, and Σ=σ2g*K
+    elseif model == "RRBLUP"
+        _X_ = hcat(ones(n), C)  ### Kinships have effects
+        # Assign within the loop: Z = x                   ### SNPs have random effects
+        K = 1.0*I
     end
     ### Regress
-    # vec_chr = []
-    # vec_pos = []
-    # vec_allele = []
-    # vec_β̂ = []
-    # vec_σβ̂ = []
-    # vec_t = []
-    # vec_pval = []
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     pos = init
     while (pos < term) & (!eof(file))
@@ -239,10 +239,12 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 ### Add the intercept and covariate
                 if model == "GBLUP"
                     _X_ = hcat(ones(n), x)  ### SNPs have fixed effects
+                    # Assigned outside the loop: Z = 1.0*I ### Genotypes have random effects...
+                    # Assigned outside the loop: K = C ### ... and are distributed normally μ=0, and Σ=σ2g*K
                 elseif model == "RRBLUP"
+                    # Assigned outside the loop: _X_ = hcat(ones(n), C)  ### Kinships have effects
                     Z = x                   ### SNPs have random effects
-                    _X_ = hcat(ones(n), C)  ### Kinships have effects
-                    K = diagm(repeat([1.0], size(Z,2)))
+                    # Assigned outside the loop: K = 1.0*I
                 end
                 n, p = size(_X_)
                 ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
@@ -260,7 +262,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                     b = μ̂[end]
                     W = b^2 / D[end, end] ### Wald's test statistic
                 end
-                pval = Distributions.ccdf(Distributions.Chisq(1), W)
+                pval = Distributions.ccdf(Distributions.Chisq(p-1), W)
                 ### Output
                 line = join([locus.chr[1],
                              locus.pos[1],
@@ -285,18 +287,21 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
 end
 
 function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, maf::Float64, penalty::Bool=true, out::String="")::String
-    # syncx = "/home/jeffersonfparil/Documents/poolgen/test/test_3.syncx"
-    # py_phenotype = "/home/jeffersonfparil/Documents/poolgen/test/test_3-pheno-any-filename.py"
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # py_phenotype = "../test/test.py"
     # file = open(syncx, "r")
     # seekend(file)
-    # threads = 4
-    # vec_positions = Int.(round.(collect(0:(position(file)/threads):position(file))))
+    # final_position = position(file)
     # close(file)
-    # init = vec_positions[2] # init = 0
-    # term = vec_positions[3] # file = open(syncx, "r"); seekend(file); term = position(file);  close(file)
-    # maf = 0.001
+    # threads = 4
+    # vec_positions = Int.(round.(collect(0:(final_position/threads):final_position)))
+    # init = vec_positions[2]
+    # term = vec_positions[3]
+    # maf = 0.01
     # penalty = true
     # out = ""
+    #####################
     ### Output syncx
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWAlpha.tsv")
@@ -316,12 +321,6 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     end
     seek(file, init)
     ### GWAlpha iteratively
-    # vec_alpha = []
-    # vec_chr = []
-    # vec_pos = []
-    # vec_allele = []
-    # vec_1 = []
-    # vec_pA = []
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     i = init
     while (i < term) & (!eof(file))
@@ -342,8 +341,8 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
                         binB = ( (1 .- freqA) .* bins ) ./ (1-pA)
                         percA = cumsum(binA)
                         percB = cumsum(binB)
-                        ### optimize (minimize) -log-likelihood of these major allele frequencies modelled as a beta distribution
-                        # using Nelder-Mead optimization or Box minimisation (try-catch if one or the other fails with preference to Nelder-Mead)
+                        ### Optimize (minimize) -log-likelihood of these major allele frequencies modelled as a beta distribution
+                        ### using Nelder-Mead optimization or Box minimisation (try-catch if one or the other fails with preference to Nelder-Mead)
                         lower_limits = [1e-20, 1e-20, 1e-20, 1e-20]
                         upper_limits = [1.0, 1.0, 1.0, 1.0]
                         initial_values = [0.1, 0.1, 0.1, 0.1]
@@ -395,10 +394,22 @@ end
 
 ### HYPOTHESIS TESTING
 function BEST_FITTING_DISTRIBUTION(vec_b::Vector{Float64})
-    DIST_NAMES =   [Distributions.Bernoulli, Distributions.Beta, Distributions.Binomial, Distributions.Categorical,
-                    Distributions.DiscreteUniform, Distributions.Exponential, Distributions.Normal, Distributions.Gamma,
-                    Distributions.Geometric, Distributions.Laplace, Distributions.Pareto, Distributions.Poisson,
-                    Distributions.InverseGaussian, Distributions.Uniform]
+    ####### TEST ########
+    # vec_b = rand(Distributions.Beta(1.0, 1.5), 100)
+    # vec_b = rand(Distributions.Exponential(3.3), 100)
+    # vec_b = rand(Distributions.Gamma(1.0, 0.5), 100)
+    # vec_b = rand(Distributions.Poisson(1.0), 100)
+    # vec_b = rand(Distributions.Normal(0.0, 4.2), 100)
+    # vec_b = rand(Distributions.Laplace(0.0, 1.5), 100)
+    # vec_b = rand(Distributions.InverseGaussian(0.5, 1.5), 100)
+    # vec_b = rand(Distributions.Pareto(4.2, 6.9), 100)
+    # vec_b = rand(Distributions.Uniform(-1.5, +2.5), 100)
+    # using UnicodePlots
+    # UnicodePlots.histogram(vec_b)
+    #####################
+    DIST_NAMES =   [Distributions.Beta, Distributions.Exponential, Distributions.Gamma, Distributions.Poisson,
+                    Distributions.Normal, Distributions.Laplace, Distributions.InverseGaussian,
+                    Distributions.Pareto, Distributions.Uniform]
     DIST_INSTANCES = [try Distributions.fit_mle(D, vec_b); catch nothing; end for D in DIST_NAMES]
     NEG_LOGLIK = [try -sum(Distributions.logpdf.(D, vec_b)); catch nothing; end for D in DIST_INSTANCES]
     DISTRIBUTIONS_DF = hcat((DIST_NAMES[NEG_LOGLIK .!= nothing],
@@ -413,6 +424,21 @@ function BEST_FITTING_DISTRIBUTION(vec_b::Vector{Float64})
 end
 
 function ESTIMATE_LOD(vec_b::Vector{Float64})::Vector{Float64}
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # py_phenotype = "../test/test.py"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # tsv = GWALPHA(syncx, py_phenotype, 0, final_position, 0.001)
+    # vec_chr, vec_pos, vec_allele, vec_freq, vec_alpha = LOAD_OUT(tsv, false)
+    # vec_b = vec_alpha
+    # using UnicodePlots
+    # UnicodePlots.histogram(vec_b)
+    # UnicodePlots.histogram(pval)
+    # UnicodePlots.scatterplot(lod)
+    #####################
     D, D_name = BEST_FITTING_DISTRIBUTION(vec_b)
     println(string("Distribution used: ", D_name))
     if (D == nothing) | (std(vec_b) == 0)
@@ -426,10 +452,24 @@ function ESTIMATE_LOD(vec_b::Vector{Float64})::Vector{Float64}
 end
 
 function ESTIMATE_LOD(vec_b::Vector{Float64}, D)::Vector{Float64}
-    # D = [Distributions.Bernoulli, Distributions.Beta, Distributions.Binomial, Distributions.Categorical,
-    #      Distributions.DiscreteUniform, Distributions.Exponential, Distributions.Normal, Distributions.Gamma,
-    #      Distributions.Geometric, Distributions.Laplace, Distributions.Pareto, Distributions.Poisson,
-    #      Distributions.InverseGaussian, Distributions.Uniform][7]
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # py_phenotype = "../test/test.py"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # tsv = GWALPHA(syncx, py_phenotype, 0, final_position, 0.001)
+    # vec_chr, vec_pos, vec_allele, vec_freq, vec_alpha = LOAD_OUT(tsv, false)
+    # vec_b = vec_alpha
+    # D = [Distributions.Beta, Distributions.Exponential, Distributions.Gamma, Distributions.Poisson,
+    #      Distributions.Normal, Distributions.Laplace, Distributions.InverseGaussian,
+    #      Distributions.Pareto, Distributions.Uniform][5]
+    # using UnicodePlots
+    # UnicodePlots.histogram(vec_b)
+    # UnicodePlots.histogram(pval)
+    # UnicodePlots.scatterplot(lod)
+    #####################
     distribution = Distributions.fit_mle(D, vec_b)
     pval = [Distributions.cdf(distribution, x) <= Distributions.ccdf(distribution, x) ? 2*Distributions.cdf(distribution, x) : 2*Distributions.ccdf(distribution, x) for x in vec_b]
     lod = -log.(10, pval)
@@ -438,13 +478,19 @@ end
 
 ### PLOTTING FUNCTIONS
 function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, vec_lod::Vector{Float64}, title::String="")::Tuple{Plots.Plot{Plots.GRBackend}, Vector{String}, Vector{Int64}, Vector{Int64}}
-    # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5; heritability=0.9
-    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
-    # npools = 5
-    # G, p = POOL(X, y, npools)
-    # b_hat = G \ p
-    # vec_lod = ESTIMATE_LOD(b_hat)
-    # title = ""
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # py_phenotype = "../test/test.py"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # tsv = GWALPHA(syncx, py_phenotype, 0, final_position, 0.001)
+    # vec_chr, vec_pos, vec_allele, vec_freq, vec_alpha = LOAD_OUT(tsv, false)
+    # vec_b = vec_alpha
+    # vec_lod = ESTIMATE_LOD(vec_b)
+    # title = "test"
+    #####################
     ### Find the cummulative locus coordinates across chromosomes for the whole genome and the total number of loci
     chr_names = sort(unique(vec_chr))
     pos_init = [1]
@@ -478,17 +524,35 @@ function GWAS_PLOT_MANHATTAN(vec_chr::Vector{String}, vec_pos::Vector{Int64}, ve
 end
 
 function GWAS_PLOT_SIMULATED_QTL!(p::Plots.Plot{Plots.GRBackend}, vec_chr_QTL::Vector{String}, vec_pos_QTL::Vector{Int64}, b::Vector{Float64}, chr_names::Vector{String}, pos_init::Vector{Int64}, pos_term::Vector{Int64})::Plots.Plot{Plots.GRBackend}
-    # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[]; vec_chr_names=[]; dist_noLD=500_000; o=100; t=10; nQTL=5; heritability=0.9
-    # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
+    ####### TEST ########
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulated LD decay
+    # vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
     # npools = 5
     # G, p = POOL(X, y, npools)
-    # b_hat = G \ p
-    # vec_lod = ESTIMATE_LOD(b_hat)
+    # θ̂ = GLMNET(G, p, 1.00)
+    # vec_b = θ̂[2:end]
+    # vec_lod = ESTIMATE_LOD(vec_b)
     # p, chr_names, pos_init, pos_term = GWAS_PLOT_MANHATTAN(vec_chr, vec_pos, vec_lod)
     # idx = b .!= 0.0
     # vec_chr_QTL = vec_chr[idx]
     # vec_pos_QTL = vec_pos[idx]
     # b = b[idx]
+    #####################
     ### Append positions of the QTL into the manhattan plot
     q = length(vec_chr_QTL)
     for i in 1:q
@@ -504,6 +568,31 @@ function GWAS_PLOT_SIMULATED_QTL!(p::Plots.Plot{Plots.GRBackend}, vec_chr_QTL::V
 end
 
 function GWAS_PLOT_QQ(vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Plots.GRBackend}
+    ####### TEST ########
+    # n = 5                 ### number of founders
+    # m = 10_000            ### number of loci
+    # l = 135_000_000       ### total genome length
+    # k = 5                 ### number of chromosomes
+    # ϵ = Int(1e+15)        ### some arbitrarily large number to signify the distance at which LD is nil
+    # a = 2                 ### number of alleles per locus
+    # vec_chr_lengths = [0] ### chromosome lengths
+    # vec_chr_names = [""]  ### chromosome names 
+    # dist_noLD = 500_000   ### distance at which LD is nil (related to ϵ)
+    # o = 100               ### total number of simulated individuals
+    # t = 10                ### number of random mating constant population size generation to simulate
+    # nQTL = 10             ### number of QTL to simulate
+    # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
+    # LD_chr = ""           ### chromosome to calculate LD decay from
+    # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
+    # plot_LD = false       ### simulated LD decay
+    # vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    # npools = 5
+    # G, p = POOL(X, y, npools)
+    # θ̂ = GLMNET(G, p, 1.00)
+    # vec_b = θ̂[2:end]
+    # vec_lod = ESTIMATE_LOD(vec_b)
+    # title = "test"
+    #####################
     m = length(vec_lod)
     LOD_expected  = -log10.(cdf(Distributions.Uniform(0, 1), (collect(1:m) .- 0.5) ./ m))
     p2 = Plots.scatter(sort(LOD_expected), sort(vec_lod), markerstrokewidth=0.001, markeralpha=0.4, legend=false)
@@ -512,9 +601,17 @@ function GWAS_PLOT_QQ(vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Pl
 end
 
 function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plot{Plots.GRBackend}
-    # tsv_gwalpha = "/home/jeffersonfparil/Documents/poolgen/test/test_3-GWAlpha-maf_0.001.tsv"
+    ####### TEST ########
+    # syncx = "../test/test.syncx"
+    # py_phenotype = "../test/test.py"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # tsv_gwalpha = GWALPHA(syncx, py_phenotype, 0, final_position, 0.001)
     # estimate_empirical_lod = true
-    vec_chr, vec_pos, vec_allele, vec_freq, vec_alpha = LOAD_OUT(tsv_gwalpha)
+    #####################
+    vec_chr, vec_pos, vec_allele, vec_freq, vec_alpha = LOAD_OUT(tsv_gwalpha, false)
     if estimate_empirical_lod
         vec_lod = ESTIMATE_LOD(vec_alpha)
     end
