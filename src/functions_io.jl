@@ -107,7 +107,7 @@ function PARSE(line::SyncxLine)::LocusAlleleCounts
     chr = lin[1]
     pos = parse(Int, lin[2])
     vco = map(x -> x=="missing" ? missing : parse(Int, x), vcat(split.(lin[3:end], ":")...))
-    cou = (convert(Matrix{Any}, reshape(vco, 7, Int(length(vco)/7))))
+    cou = (Base.convert(Matrix{Any}, reshape(vco, 7, Int(length(vco)/7))))
     cou[ismissing.(cou)] .= 0
     ref = 'N'
     dep = sum(cou, dims=1)[1,:]
@@ -131,7 +131,7 @@ function PARSE(window::Vector{LocusAlleleCounts})::Window
     #     push!(window, PARSE(PileupLine(1, readline(file))))
     # end
     # close(file)
-    # window = convert(Vector{LocusAlleleCounts}, window)
+    # window = Base.convert(Vector{LocusAlleleCounts}, window)
     #####################
     n = length(window)
     p = length(window[1].dep)
@@ -172,7 +172,7 @@ function PARSE(line::PhenotypeLine, trait_names::Vector{String}=[""], missing_st
     if trait_names==[""]
         trait_names = repeat([""], length(y))
     end
-    Y = convert(Array{Any}, reshape(y, 1, length(y)))
+    Y = Base.convert(Array{Any}, reshape(y, 1, length(y)))
     return(Phenotype(ids, trait_names, Y))
 end
 
@@ -216,7 +216,7 @@ function EXTRACT(window::Window, locus::Int)::Window
     #     push!(window, PARSE(PileupLine(1, readline(file))))
     # end
     # close(file)
-    # window = PARSE(convert(Vector{LocusAlleleCounts}, window))
+    # window = PARSE(Base.convert(Vector{LocusAlleleCounts}, window))
     # locus = 1
     #####################
     Window([window.chr[locus]],
@@ -235,7 +235,7 @@ function EXTRACT(window::Window, loci::UnitRange{Int})::Window
     #     push!(window, PARSE(PileupLine(1, readline(file))))
     # end
     # close(file)
-    # window = PARSE(convert(Vector{LocusAlleleCounts}, window))
+    # window = PARSE(Base.convert(Vector{LocusAlleleCounts}, window))
     # loci = 1:5
     #####################
     Window(window.chr[loci],
@@ -253,7 +253,7 @@ function SLIDE!(window::Window, locus::LocusAlleleCounts)::Window
     # for i in 1:10
     #     push!(window, PARSE(PileupLine(1, readline(file))))
     # end
-    # window = PARSE(convert(Vector{LocusAlleleCounts}, window))
+    # window = PARSE(Base.convert(Vector{LocusAlleleCounts}, window))
     # locus = PARSE(PileupLine(1, readline(file)))
     # close(file)
     #####################
@@ -282,7 +282,7 @@ function LOAD(syncx::String, count::Bool)::Window
         push!(loci, PARSE(SyncxLine(1, readline(file))))
     end
     close(file)
-    GENOTYPE = PARSE(convert(Vector{LocusAlleleCounts}, loci))
+    GENOTYPE = PARSE(Base.convert(Vector{LocusAlleleCounts}, loci))
     if !count
         for i in 1:7:size(GENOTYPE.cou,1)
             # i = 1
@@ -305,7 +305,7 @@ function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::I
     #####################
     file = open(phenotype, "r")
     if header
-        header_line = convert(Vector{String}, split(readline(file), delimiter))
+        header_line = Base.convert(Vector{String}, split(readline(file), delimiter))
     end
     lines = []
     while !eof(file)
@@ -317,7 +317,7 @@ function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::I
         push!(lines, PARSE(PhenotypeLine(1, l, delimiter, id_col, phenotype_cols), header_line[phenotype_cols], missing_strings))
     end
     close(file)
-    return(PARSE(convert(Vector{Phenotype}, lines), header_line[phenotype_cols]))
+    return(PARSE(Base.convert(Vector{Phenotype}, lines), header_line[phenotype_cols]))
 end
 
 function LOAD_OUT(tsv_gwalpha::String, include_all_sites::Bool)::Tuple{Vector{String}, Vector{Int64}, Vector{String}, Vector{Float64}, Vector{Float64}}
@@ -425,7 +425,7 @@ function CONVERT(syncx_or_sync::String, init::Int, term::Int, out::String="")::S
     if p == 7
         ### SYNCX to SYNC
         seek(file, init)
-        idx = [1, 2, 3, 4, 6, 7] ### Remove column 5, i.e. INSERTION COUNT COLUMN
+        idx = [1, 2, 3, 4, 7, 6] ### Remove column 5, i.e. INSERTION COUNT COLUMN: from A:T:C:G:I:DEL:N into A:T:C:G:N:DEL
         while position(file) < term
             line = split(readline(file), "\t")
             n = length(line) - 2
@@ -633,7 +633,7 @@ function SAVE(window::Window, filename::String)
     #     push!(window, PARSE(PileupLine(1, readline(file))))
     # end
     # close(file)
-    # window = PARSE(convert(Vector{LocusAlleleCounts}, window))
+    # window = PARSE(Base.convert(Vector{LocusAlleleCounts}, window))
     # filename = "../test/test-SAVE_WINDOW.syncx"
     #####################
     OUT = hcat(window.chr, window.pos)

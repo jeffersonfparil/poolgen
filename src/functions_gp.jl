@@ -8,7 +8,7 @@
 # include("functions_filterTransform.jl")
 # using LinearAlgebra, MultivariateStats, GLMNet, Optim
 # include("functions_linearModel.jl")
-# using StatsBase, Plots, Distributed
+# using StatsBase, Plots, Distributed, Dates
 #####################
 
 function FIT(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, model::Function=[OLS, GLMNET, MM][1], params=[["N<<P"], [0.5], ["RRBLUP", "ML", "GradientDescent", true, "N<<P", "XTX"]][1], out::String="")::String
@@ -284,6 +284,9 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
         else    
             out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_CV.tsv")
         end
+    end
+    if isfile(out)
+        out = string(out, "-", Dates.now(Dates.UTC))
     end
     ### Load genotype data
     χ = LOAD(syncx, true)

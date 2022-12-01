@@ -6,11 +6,11 @@ if githubci
     using Pkg
     Pkg.add(url="https://github.com/jeffersonfparil/poolgen.git")
     using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
-    Distributed.addprocs(length(Sys.cpu_info())-1)
+    Distributed.addprocs(length(Sys.cpu_info()))
     @everywhere using poolgen ### Load poolgen for each process
 else
     include("/data-weedomics-2/poolgen/src/poolgen.jl")  ### Load poolgen first so we can compile now and no precompilation for each process
-    Distributed.addprocs(length(Sys.cpu_info())-1)
+    Distributed.addprocs(length(Sys.cpu_info()))
     @everywhere include("/data-weedomics-2/poolgen/src/poolgen.jl") ### Load poolgen for each process
 end
 

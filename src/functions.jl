@@ -7,6 +7,7 @@
 module functions
 
 using Distributed
+using Dates
 using Random
 using GLMNet
 using MultivariateStats
@@ -15,7 +16,6 @@ using LinearAlgebra; BLAS.set_num_threads(1) ### Set the number of threads used 
 using Distributions
 using Optim
 using StatsBase
-using Dates
 using Plots
 
 include("structs.jl")
@@ -81,6 +81,9 @@ function convert(syncx_or_sync::String; out::String="")::String
     if out == ""
         extension = [split(syncx_or_sync, ".")[end][end] == 'x' ? ".sync" : ".syncx"][1]
         out = string(join(split(syncx_or_sync, ".")[1:(end-1)], "."), extension)
+    end
+    if isfile(out)
+        out = string(out, "-", Dates.now(Dates.UTC))
     end
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
@@ -152,6 +155,9 @@ function pileup2syncx(pileup::String; out::String="")::String
     ### Define output file if not specified
     if out == ""
         out = string(join(split(pileup, ".")[1:(end-1)], "."), ".syncx")
+    end
+    if isfile(out)
+        out = string(out, "-", Dates.now(Dates.UTC))
     end
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
@@ -251,6 +257,9 @@ function filter(pileup::String, outype::String; maximum_missing_fraction::Float6
             out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-missing_", maximum_missing_fraction, "-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
         end
     end
+    if isfile(out)
+        out = string(out, "-", Dates.now(Dates.UTC))
+    end
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, pileup)
@@ -328,6 +337,9 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     ### Define output file if not specified
     if out == ""
         out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-missing_", maximum_missing_fraction, "-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
+    end
+    if isfile(out)
+        out = string(out, "-", Dates.now(Dates.UTC))
     end
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
@@ -428,6 +440,9 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     ### Define output file if not specified
     if out == ""
         out = string(join(split(filename, '.')[1:(end-1)], '.'), "-IMPUTED-window_", window_size, "-model_", model, "-distance_", distance, ".syncx")
+    end
+    if isfile(out)
+        out = string(out, "-", Dates.now(Dates.UTC))
     end
     ### Define the full path to the input and output files since calling functions within @distributed loop will revert back to the root directory from where julia was executed from
     if dirname(filename) == ""
@@ -626,6 +641,9 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
     ### Define output file if not specified
     if out == ""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWAlpha-maf_", round(maf, digits=5), ".tsv")
+    end
+    if isfile(out)
+        out = string(out, "-", Dates.now(Dates.UTC))
     end
     ### Define the full path to the input and output files since calling functions within @distributed loop will revert back to the root directory from where julia was executed from
     if dirname(syncx) == ""
