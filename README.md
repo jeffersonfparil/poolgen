@@ -29,36 +29,6 @@ using poolgen
 ?poolgen.genomic_prediction
 ?poolgen.genomic_prediction_CV
 ```
-
-## Checklist
-- [X] Types: pileup line
-- [X] Types: syncx line
-- [X] Types: phenotype line
-- [X] Types: locus
-- [X] Types: window
-- [X] Types: phenotype
-- [X] pileup I/O
-- [X] syncx I/O
-- [X] pileup filtering: pileup to pileup and pileup to syncx
-- [X] syncx filtering
-- [X] imputation pileup to syncx
-- [X] simple genotype and phenotype simulation framework (with LD)
-- [X] OLS
-- [X] Elastic-net
-- [X] LMM: gBLUP
-- [X] LMM: rrBLUP
-- [X] GP cross-validation and plotting
-- [X] GWAlpha
-- [X] iterative OLS
-- [X] iterative elastic-net
-- [X] iterative LMM: gBLUP
-- [X] iterative LMM: rrBLUP
-- [ ] Empirical p-values via bootstrapping
-- [ ] Empirical p-values via maximum likelihood
-- [ ] GWAS plotting
-- [ ] Machine-learning: random forest
-- [ ] Machine-learning: multilayer perceptron
-
 ## File formats
 
 ### Pileup
@@ -92,59 +62,79 @@ Spiritual successor to [popoolation2's](https://academic.oup.com/bioinformatics/
 
 ## Details
 
-### GWAlpha details (needs updating)
-The GWAlpha model is defined as **α = W(μₐₗₗₑₗₑ-μₐₗₜₑᵣₙₐₜᵢᵥₑ)/σᵧ**, where:
-- **μ** is the mean of the beta distribution, **Beta(θ)** where **θ={θ₁,θ₂}**
-- **θ** is estimated via maximum likelihood **L(θ|Q) ∝ πᵢ₌₁₋ₖf(qᵢ|θ)**
-- **Q = {q₁,...,qₖ}** is the cumulative sum of allele frequencies across increasing-phenotypic-value-sorted pools where **k** is the number of pools
-- **E(allele|θ) = Beta_cdf(yᵢ',θ) - Beta_cdf(yᵢ₋₁',θ)**, where **yᵢ' ∈ Y'**
-- **Y'** is the inverse quantile-normalized into phenotype data such that **Y' ∈ [0,1]**
-- **W = 2√{E(allele)*(1-E(allele))}** is the penalization for low allele frequency
-Cite: Fournier-Level A, Robin C, Balding DJ (2016). [GWAlpha: Genome-Wide estimation of additive effects (Alpha) based on trait quantile distribution from pool-sequencing experiments.](https://doi.org/10.1093/bioinformatics/btw805)
+### Ordinary least squares regression
 
-### Linear mixed models (needs updating)
-The linear mixed model is defined as **y = Xb + Zu + e**, where:
-- **X** [n,p] is the centered matrix of allele frequencies
-- **Z** [n,n] is the square symmetric matrix of relatedness
-- **y** [n,1] is the centered vector of phenotypic values
-- no intercept is explicitly fitted but implicitly set at the mean phenotypic value as a consequence of centering **y**
-- **u ~ N(0, σ²uI)**
-- **e ~ N(0, σ²eI)**
-- **y ~ N(0, V)**
-- **V = (Z (σ²uI) Z') + (σ²eI)**
-- variance components (**σ²e**, **σ²u**) are estimated via maximum likelihood (ML) or restricted maximum likelihood (REML)
-- fixed effects (**b**) are estimated by solving: **(X' * V⁻¹) * (X * X' * V⁻¹)⁻¹ * y**
-- random effects (**u**) are estimated by solving: **(σ²uI) * Z' * V⁻¹ * (y - (X*b))**
+The simplest regression model implemented is the ordinary least squares (OLS), where the allele effects are estimated as $\hat{\beta} = (X^{T}X)^{-1} X^{T} y$, where: $X$ consists of a vector of ones and a vector or matrix of allele frequences, and $y$ is the vector of phenotype values.
 
-Empirical p-values were calculated by modelling the additive allelic effects (α) using a normal distribution with mean and variance estimated using maximum likelihood.
+### GWAlpha: genome-wide estimation of additive effects based on quantile distributions from pool-sequencing experiments
 
-### Elastic-net details (needs updating)
-- ridge regression at α = 0.0
-- LASSO regression at α = 0.0
-- See: Friedman, Jerome, Trevor Hastie, and Robert Tibshirani. 2010. “Regularization Paths for Generalized Linear Models via Coordinate Descent.” Journal of Statistical Software, Articles 33 (1): 1–22. https://doi.org/10.18637/jss.v033.i01.
+GWAlpha ([Fournier-Level, et al, 2016](https://doi.org/10.1093/bioinformatics/btw805)) iteratively estimates for each locus the effect of each allele on the phenotypic ranking of each pool. This allele effect is defined as $\hat{\alpha} = W \frac{(\hat{\mu}_{0} - \hat{\mu}_{1})} {\sigma_{y}}$, where:
+- let $a$ be the allele in question, and $q$ be the frequency of $a$, then
+- $W = 2 \sqrt{q*(1-q)}$ is the penalisation for low allele frequency,
+- $\mu_{0}$ is the mean of the beta distribution representing $a$ across pools,
+- $\mu_{1}$ is the mean of the beta distribution representing $1-a$ (i.e. additive inverse of $a$) across pools,
+- $\sigma_{y}$ is the standard deviation of the phenotype,
+- $\Beta(\Theta=\{\theta_{1}, \theta_{2}\})$ is used to model the distributions of $a$ and $1-a$ across pools, where:
+  + $\Theta$ is estimated via maximum likelihood, i.e. $L(\Theta \mid Q) \propto \Pi^{k}_{i=1} \Beta_{pdf}(q_{i} \mid \Theta)$ for the $i^{th}$ pool,
+  + $Q = \{q_{1},...,q_{k}\}$ is the cumulative sum of allele frequencies across increasing-phenotypic-value-sorted pools where $k$ is the number of pools, and
+  + $\Beta_{pdf}(q_{i} \mid \Theta)$ is the probability density function for the $\Beta$ distribution.
+  + $q_{i} = \Beta_{cdf}(y'_{i},\Theta) - \Beta_{cdf}(y'_{i-1},\Theta)$, where $y'_{i} ∈ Y'$
+ + $Y'$ is the inverse quantile-normalized into phenotype data such that $Y' \in [0,1]$.
+
+### Linear mixed models
+
+The linear mixed model is defined as $y = X\beta + Zu + \epsilon$, where:
+- $y$ isthe vector of phenotype values;
+- $X\beta$ are the fixed effects, where in:
+  + **GBLUP** (genomic linear unbiased prediction): $X$ consists of a column of ones and allele frequencies matrix or vector, and $\beta$ is the vector of **intercept and allele effects**, and in
+  + **RRBLUP** (ridge regression best linear unbiased prediction): $X$ consists of a column of ones and non-genomic covariates, if available e.g. kinship/pool relationship matrix, testing environments, time, and blocks, and $\beta$ is the vector of **intercept and covariate effects**, if available;
+- $Zu$ are the random effects, where in:
+  + **GBLUP**: $Z$ is an identity matrix, and $u$ are the effects of each pool, where:
+    - $u \sim N(0, D=\sigma^{2}_{g}K)$, and
+    - $\sigma^{2}_{g}K$ relationship matrix between pools; and in
+  + **RRBLUP**: $Z$ is the allele frequencies matrix, and $u$ is the vector of allele effects, where:
+    - $u \sim N(0, D=\sigma^{2}_{a}I)$, and 
+    - $\sigma^{2}_{a}I$ is the additive variance-covarince matrix showing identicaly and independently distributed allele effects;
+- $\epsilon$ is the identically and independently distributed residual effects vector, i.e. $\epsilon \sim N(0, R=\sigma^{2}I)$
+- variance components ($\sigma^{2}$, and $\sigma^{2}_{g}$ in GBLUP, or $\sigma^{2}_{a}$ in RRBLUP) are estimated via maximum likelihood (ML) or restricted maximum likelihood (REML);
+- let $n$ be the number of pools, $m$ be the number if fixed effects to estimate, $p$ be the number of random effects to estmate, and $V = (Z D Z^{T}) + R$;
+- fixed effects are estimated by solving:
+  + $\hat{\beta} = (X^{T} V^{-1} X)^{-1} (X^{T} V^{-1} y)$, if $n > m$, while
+  + $\hat{\beta} = (X^{T} V^{-1}) (X X^{T} V^{-1})^{-1} y$, if $n << m$ which is the default as most pool sequencing experiments have this dimensionality problem; and finally
+- random effects are estimated by solving $\hat{\mu} = (D Z^{T} V^{-1}) (y - X\hat{\beta})$.
+
+### Elastic-net regression using glmnet
+
+Elastic net performs penalised maximum likelihood and is implemented on the glmnet package ([Friedman et al, 2010](https://doi.org/10.18637/jss.v033.i01)), where ridge regression is implemented if $\alpha = 0$, and lasso if $\alpha = 1$. For details see: Friedman, Jerome, Trevor Hastie, and Robert Tibshirani. 2010. “Regularization Paths for Generalized Linear Models via Coordinate Descent.” Journal of Statistical Software, Articles 33 (1): 1–22. [https://doi.org/10.18637/jss.v033.i01](https://doi.org/10.18637/jss.v033.i01).
 
 ### Imputation details
-Performs simple linear regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
 
-- For each pool with missing data we estimate β̂ as:
-```
-          yₚ = Xₚβ
-        → β̂ = inverse(XₚᵀXₚ) (Xₚᵀyₚ).
-```
+Performs OLS or elastic-net regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
 
-- For each pool with missing data, imputation is achieved by predicting the missing allele counts:
-```
-          ŷₘ = XₘB̂.
-```
-- Where:
-    + **yₚ** is the vector of allele counts of one of the pools with missing data at the loci without missing data (length: mₚ non-missing loci × 7 alleles);
-    + **Xₚ** is the matrix of allele counts of pools without missing data at the loci without missing data in the other pools (dimensions: mₚ non-missing loci × 7 alleles, nₚ pools without missing loci);
-    + **β̂** is the vector of estimates of the effects of each pool without missing data on the allele counts of one of the pools with missing data (length: nₚ pools without missing loci);
-    + **inverse()** is the Moore-Penrose pseudoinverse if the automatic Julia solver fails;
-    + **ŷₘ** is the vector of imputed allele counts of one of the pools with missing data (length: mₘ missing loci × 7 alleles); and
-    + **Xₘ** is the matrix of allele counts of pools without missing data at the loci with missing data in the other pools (dimensions: mₘ non-missing loci × 7 alleles, nₚ pools without missing loci).
+For each pool with missing data we model the allele frequencies in the locus with some missing data as:
+$$
+y_{p} = X_{p}\beta + \epsilon.
+$$
 
-- The imputed allele counts are averaged across the windows sliding one locus at a time.
+We then estimate unbiased estimators, $\beta$ as:
+$$
+\hat{\beta} = f(X_{p}, y_{p{}}),
+$$
+
+where $f$ can be OLS or elastic-net regression. Imputation is achieved by predicting the missing allele counts:
+$$
+\hat{y_{m}} = X_{m} \hat{\beta},
+$$
+
+where:
+
+- $y_{p}$ is the vector of allele counts of one of the pools with missing data at the loci without missing data (length: mₚ non-missing loci × 7 alleles);
+- $X_{p}$ is the matrix of allele counts of pools without missing data at the loci without missing data in the other pools (dimensions: mₚ non-missing loci × 7 alleles, nₚ pools without missing loci);
+- $\hat{\beta}$ is the vector of estimates of the effects of each pool without missing data on the allele counts of one of the pools with missing data (length: nₚ pools without missing loci);
+- $\hat{y_{m}}$ is the vector of imputed allele counts of one of the pools with missing data (length: mₘ missing loci × 7 alleles); and
+- $X_{m}$ is the matrix of allele counts of pools without missing data at the loci with missing data in the other pools (dimensions: mₘ non-missing loci × 7 alleles, nₚ pools without missing loci).
+
+Finally, the imputed allele counts are averaged across the windows sliding one locus at a time.
 
 ## Acknowledgements
 
@@ -154,3 +144,32 @@ Performs simple linear regression to predict missing allele counts per window fo
 
 - [Adaptive Evolution lab](https://adaptive-evolution.biosciences.unimelb.edu.au)
 - [Grains Research & Development Corporation](https://grdc.com.au/)
+
+## To do list
+- [X] Types: pileup line
+- [X] Types: syncx line
+- [X] Types: phenotype line
+- [X] Types: locus
+- [X] Types: window
+- [X] Types: phenotype
+- [X] pileup I/O
+- [X] syncx I/O
+- [X] pileup filtering: pileup to pileup and pileup to syncx
+- [X] syncx filtering
+- [X] imputation pileup to syncx
+- [X] simple genotype and phenotype simulation framework (with LD)
+- [X] OLS
+- [X] Elastic-net
+- [X] LMM: gBLUP
+- [X] LMM: rrBLUP
+- [X] GP cross-validation and plotting
+- [X] GWAlpha
+- [X] iterative OLS
+- [X] iterative elastic-net
+- [X] iterative LMM: gBLUP
+- [X] iterative LMM: rrBLUP
+- [X] Empirical p-values via bootstrapping
+- [X] Empirical p-values via maximum likelihood
+- [X] GWAS plotting
+- [ ] Machine-learning: random forest
+- [ ] Machine-learning: multilayer perceptron

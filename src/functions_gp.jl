@@ -29,6 +29,11 @@ function FIT(syncx::String, maf::Float64, phenotype::String, delimiter::String, 
     # params = ["N<<P"]
     # out = ""
     # FIT(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, filter_genotype, transform_phenotype, standardise, model, params, out)
+    # ### GLMNET
+    # model = GLMNET
+    # params = [0.51]
+    # out = ""
+    # FIT(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, filter_genotype, transform_phenotype, standardise, model, params, out)
     # ### MM
     # model = MM
     # MM_model = ["GBLUP", "RRBLUP"][2]
@@ -43,10 +48,17 @@ function FIT(syncx::String, maf::Float64, phenotype::String, delimiter::String, 
     #####################
     if out==""
         if string(model) == "MM"
-            out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_", params[2], "_FIT.tsv")
-        else    
+            out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_", join(params[1:2], "_"), "_FIT.tsv")
+        elseif string(model) == "GLMNET"
+            out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_", params[1], "_FIT.tsv")
+        else
             out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-", string(model), "_FIT.tsv")
         end
+    end
+    if isfile(out)
+        out_basename = join(split(out, ".")[1:(end-1)], ".")
+        out_extension = split(out, ".")[end]
+        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
     end
     ### Load enotype data
     χ = LOAD(syncx, true)
@@ -286,7 +298,9 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
         end
     end
     if isfile(out)
-        out = string(out, "-", Dates.now(Dates.UTC))
+        out_basename = join(split(out, ".")[1:(end-1)], ".")
+        out_extension = split(out, ".")[end]
+        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
     end
     ### Load genotype data
     χ = LOAD(syncx, true)
