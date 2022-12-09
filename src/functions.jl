@@ -574,6 +574,8 @@ end
     15. `LD_chr` [String]: chromosome to use in linkage disequillibrium (LD) estimation (default: first chromosome)
     16. `LD_n_pairs` [Int64]: number of randomly sampled loci pairs to use in LD estimation (default=10_000)
     17. `plot_LD` [Bool]: plot the LD decay (default=true)
+    18. `out_geno` [String]: basename of simulated genotype files
+    19. `out_pheno` [String]: basename of simulated phenotype files
 
     # Outputs
     1. [String]: filename of map file ([plink1.9 map format](https://www.cog-genomics.org/plink/1.9/formats#map))
@@ -590,7 +592,7 @@ end
     @time map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
 ```
 """
-function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{String, String, String, String, String, String}
+function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, npools::Int64=5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true, out_geno::String="", out_pheno::String="")::Tuple{String, String, String, String, String, String}
     ####### TEST ########
     # using ProgressMeter
     # using Distributions
@@ -615,10 +617,12 @@ function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15),
     # LD_chr = ""           ### chromosome to calculate LD decay from
     # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
     # plot_LD = true        ### simulated LD decay
+    # out_geno = ""         ### simulated genotype output basename of files
+    # out_pheno = ""        ### simulated phenotype output basename of files
     #####################
     vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
     G, p = POOL(X, y, npools)
-    map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y)
+    map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y, out_geno, out_pheno)
     syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p, replace(fam, ".fam"=>".syncx"), replace(fam, ".fam"=>".csv"))
     return(map, bim, ped, fam, syncx, csv)
 end
@@ -826,7 +830,7 @@ end
     @time poolgen.genomic_prediction(syncx=syncx, phenotype=csv, model="LMM", MM_model="GBLUP", MM_method="ML")
 ```
 """
-function genomic_prediction(;syncx::String, phenotype::String, model::String=["OLS", "GLMNET", "MM"][1], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["", "XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], inner_optimizer::String=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "GradientDescent", "NelderMead"][1], optim_trace::Bool=false, out::String="")::String
+function genomic_prediction(;syncx::String, phenotype::String, model::String=["OLS", "GLMNET", "MM"][1], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], MM_inner_optimizer::String=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], MM_optim_trace::Bool=false, GBLUP_K::String=["", "XTX", "COR"][2], out::String="")::String
     ####### TEST ########
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -874,7 +878,7 @@ function genomic_prediction(;syncx::String, phenotype::String, model::String=["O
     # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
     # FE_method = ["CANONICAL", "N<<P"][2]
     # alpha = 1.0
-    # GBLUP_K = ["", "XTX", "COR"][2]
+    # GBLUP_K = ["XTX", "COR"][2]
     # MM_model = ["GBLUP", "RRBLUP"][2]
     # MM_method = ["ML", "REML"][1]
     # MM_inner_optimizer = ["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing","NelderMead"][1]

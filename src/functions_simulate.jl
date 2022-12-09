@@ -337,14 +337,14 @@ function EXPORT_SIMULATED_DATA(vec_chr::Vector{String}, vec_pos::Vector{Int64}, 
         out_bim = string.("Simulated-", id, ".bim")
         out_ped = string.("Simulated-", id, ".ped")
     else
-        out_map = out_geno[1]
-        out_bim = out_geno[2]
-        out_ped = out_geno[3]
+        out_map = string(out_geno, ".map")
+        out_bim = string(out_geno, ".bim")
+        out_ped = string(out_geno, ".ped")
     end
     if out_pheno==""
         out_fam = string("Simulated-", id, ".fam")
     else
-        out_fam = out_pheno
+        out_fam = string(out_pheno, ".fam")
     end
     n, m = size(X)
     ################################
