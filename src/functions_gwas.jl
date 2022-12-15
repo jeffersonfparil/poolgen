@@ -111,7 +111,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 n, p = size(x)
                 β̂, Vβ̂, Vϵ̂ = OLS(x, y) ### In β̂ the last element refers to the estimated allele effect
                 ### Test if we have reasonable residual variance estimate then proceed to output
-                if ((Vϵ̂ < 0.0) | (Vϵ̂ == Inf)) == false
+                if ((Vϵ̂ < 0.0) | (Vϵ̂ == Inf) | (Vβ̂[end, end] < 0.0)) == false
                     σβ̂ = []
                     for j in 1:p
                         # j = 1
@@ -598,6 +598,101 @@ function GWAS_PLOT_QQ(vec_lod::Vector{Float64}, title::String="")::Plots.Plot{Pl
     p2 = Plots.scatter(sort(LOD_expected), sort(vec_lod), markerstrokewidth=0.001, markeralpha=0.4, legend=false)
     Plots.plot!([0,1], [0,1], seriestype=:straightline, legend=false, title=title)
     return(p2)
+end
+
+function GWAS_SHOW_ANNOTATIONS_OF_TOP_HITS(tsv::String, gff::String, heuristic_pvalue::Bool=false, pvalue::Float64=0.01, size_flanks::Int64=10_000)::Tuple{Vector{String}, Vector{Int64}, Vector{String}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Vector{String}}, Vector{Vector{Int64}}, Vector{Vector{Int64}}}
+    ####### TEST ########
+    # syncx = "../test/test_Lr.syncx"
+    # csv_phenotype = "../test/test_Lr.csv"
+    # file = open(syncx, "r")
+    # seekend(file)
+    # final_position = position(file)
+    # close(file)
+    # tsv = OLS_ITERATIVE(syncx, 0, final_position, 0.001, csv_phenotype, ",")
+    # gff = "../test/test_Lr.gff"
+    # heuristic_pvalue = false
+    # pvalue = 0.01
+    # size_flanks = 10_000 # in bases
+    #####################
+
+    ### Load Pool-GWAS output
+    vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval = try
+        LOAD_OUT(tsv)
+    catch
+        LOAD_OUT(tsv, false)
+    end
+    vec_loci = unique(string.(vec_chr, "-", vec_pos))
+    p = length(vec_loci)
+
+    ### Find p-values and/or logarithm of odds (LOD)
+    if heuristic_pvalue
+        vec_lod = ESTIMATE_LOD(vec_beta)
+    else
+        vec_lod = -log10.(vec_pval)
+    end
+    # using UnicodePlots
+    # UnicodePlots.scatterplot(vec_lod)
+
+    ### Load annotations
+    vec_gff_chr, vec_gff_ini, vec_gff_fin, vec_gff_ann = LOAD_GFF(gff)
+    
+    ### Find putative QTL using Bonferroni's correction for multiple testing
+    Bonferroni_threshold = -log10(pvalue / p)
+    idx = collect(1:length(vec_chr))[vec_lod .>= Bonferroni_threshold]
+    vec_chr = vec_chr[idx]
+    vec_pos = vec_pos[idx]
+    vec_allele = vec_allele[idx]
+    vec_freq = vec_freq[idx]
+    vec_beta = vec_beta[idx]
+    vec_pval = vec_pval[idx]
+    vec_lod = vec_lod[idx]
+
+    ### Find gene annotations within <size_flank> of each locus using in GWAS
+    vec_idx = collect(1:length(vec_chr))
+    vec_ann = []
+    vec_ann_pos_ini = []
+    vec_ann_pos_fin = []
+    for i in 1:length(vec_chr)
+        push!(vec_ann, [])
+        push!(vec_ann_pos_ini, [])
+        push!(vec_ann_pos_fin, [])
+    end
+    @showprogress for i in 1:length(vec_gff_chr)
+        # i = 162; i = 31578
+        # println(i)
+        chr = vec_gff_chr[i]
+        ini = vec_gff_ini[i]
+        fin = vec_gff_fin[i]
+        ann = vec_gff_ann[i]
+        idx1 = (vec_chr .== chr)
+        sub_vec_pos = vec_pos[idx1]
+        idx2 = (sub_vec_pos .>= (ini-size_flanks)) .& (sub_vec_pos .<= (fin+size_flanks))
+        if sum(idx2) > 0
+            idx = vec_idx[idx1][idx2]
+            for j in idx
+                # j = idx[1]
+                if (vec_ann[j] == []) | (sum(match.(Regex(replace(replace(ann, "[" => "{"), "]" => "}")), vec_ann[j]) .== nothing) == length(vec_ann[j]))
+                    push!(vec_ann[j], ann)
+                    push!(vec_ann_pos_ini[j], ini)
+                    push!(vec_ann_pos_fin[j], fin)
+                end
+            end
+        end
+    end
+
+    ### Prepate annotation output for putative QTL
+    for i in 1:length(vec_ann)
+        # i = 1
+        if vec_ann[i] == []
+            vec_ann[i] = ["Unknown"]
+            vec_ann_pos_ini[i] = [vec_pos[i]-size_flanks]
+            vec_ann_pos_fin[i] = [vec_pos[i]+size_flanks]
+        end
+    end
+    vec_ann = convert(Vector{Vector{String}}, vec_ann)
+    vec_ann_pos_ini = convert(Vector{Vector{Int64}}, vec_ann_pos_ini)
+    vec_ann_pos_fin = convert(Vector{Vector{Int64}}, vec_ann_pos_fin)
+    return(vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval, vec_lod, vec_ann, vec_ann_pos_ini, vec_ann_pos_fin)
 end
 
 function GWAS_PLOT(tsv_gwalpha::String, estimate_empirical_lod::Bool)::Plots.Plot{Plots.GRBackend}

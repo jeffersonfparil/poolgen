@@ -285,11 +285,12 @@ function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
     return(vec_chr_updated, vec_pos_updated, X, y, b)
 end
 
-function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5)::Tuple{Matrix{Float64}, Vector{Float64}}
+function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5, py_phenotype::String="")::Tuple{Matrix{Float64}, Vector{Float64}}
     ####### TEST ########
     # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=5; heritability=0.9
     # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
     # npools = 5
+    # py_phenotype = ""
     ####################
     ### Sort the individuals into equally-sized npools pools
     idx = sortperm(y)
@@ -307,11 +308,37 @@ function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5)::Tuple{Matr
     G = zeros(Float64, npools, m)
     p = zeros(Float64, npools)
     for i in 1:npools
+        # i = 1
         init = vec_idx_pools[i] + 1
         term = vec_idx_pools[i+1]
         ϵ = rand(D)
         G[i, :] = mean(X[init:term, :], dims=1) ./ 2
         p[i] = mean(y[init:term])
+    end
+    if py_phenotype != ""
+        sig = std(y)
+        MIN = minimum(y)
+        MAX = maximum(y)
+        perc = [0.0]
+        q = [0.0]
+        for i in 1:npools
+            # i = 1
+            init = vec_idx_pools[i] + 1
+            term = vec_idx_pools[i+1]
+            ϕ = y[init:term]
+            push!(perc, perc[end] + (length(ϕ)/n))
+            push!(q, mean(ϕ))
+        end
+        perc = perc[2:(end-1)]
+        q = q[2:(end-1)]
+        file = open(py_phenotype, "a")
+        write(file, string("Pheno_name=\"Phenotype\";\n"))
+        write(file, string("sig=", sig, ";\n"))
+        write(file, string("MIN=", MIN, ";\n"))
+        write(file, string("MAX=", MAX, ";\n"))
+        write(file, string("perc=[", join(perc, ","), "];\n"))
+        write(file, string("q=[", join(q, ","), "];\n"))
+        close(file)
     end
     return(G, p)
 end

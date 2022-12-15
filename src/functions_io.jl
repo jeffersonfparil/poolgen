@@ -294,7 +294,7 @@ function LOAD(syncx::String, count::Bool)::Window
     return(GENOTYPE)
 end
 
-function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[8,9], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])::Phenotype
+function LOAD(phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_cols::Vector{Int}=[2], missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""])::Phenotype
     ####### TEST ########
     # phenotype = "../test/test.csv"
     # delimiter = ","
@@ -389,6 +389,38 @@ function LOAD_PY(py_phenotype::String)::Tuple{String, Float64, Float64, Float64,
     close(file)
     return(phenotype_name, sigma, min, max, perc, q, bins)
 end
+
+function LOAD_GFF(gff::String)::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, Vector{String}}
+    ####### TEST ########
+    # gff = "../test/test_Lr.gff"
+    #####################
+    ### Extract annotations
+    file = open(gff, "r")
+    vec_gff_chr = []
+    vec_gff_ini = []
+    vec_gff_fin = []
+    vec_gff_ann = []
+    while !eof(file)
+        line = readline(file)
+        if line[1] == '#'
+            continue
+        end
+        line = split(line, "\t")
+        chr = line[1]
+        pos_ini = parse.(Int64, line[4])
+        pos_fin = parse.(Int64, line[5])
+        ann = line[end]
+        if (match(Regex(";genome=chromosome;"), ann) == nothing) & ( match(Regex(";model_evidence="), ann) != nothing)
+            push!(vec_gff_chr, chr)
+            push!(vec_gff_ini, pos_ini)
+            push!(vec_gff_fin, pos_fin)
+            push!(vec_gff_ann, ann)
+        end
+    end
+    close(file)
+    # hcat(vec_gff_chr, vec_gff_ini, vec_gff_fin, vec_gff_ann)
+    return(vec_gff_chr, vec_gff_ini, vec_gff_fin, vec_gff_ann)
+end  
 
 function CONVERT(syncx_or_sync::String, init::Int, term::Int, out::String="")::String
     ####### TEST ########
