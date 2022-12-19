@@ -74,11 +74,11 @@ GWAlpha ([Fournier-Level, et al, 2016](https://doi.org/10.1093/bioinformatics/bt
 - $\mu_{0}$ is the mean of the beta distribution representing $a$ across pools,
 - $\mu_{1}$ is the mean of the beta distribution representing $1-a$ (i.e. additive inverse of $a$) across pools,
 - $\sigma_{y}$ is the standard deviation of the phenotype,
-- $\Beta(\Theta=\{\theta_{1}, \theta_{2}\})$ is used to model the distributions of $a$ and $1-a$ across pools, where:
-  + $\Theta$ is estimated via maximum likelihood, i.e. $L(\Theta \mid Q) \propto \Pi^{k}_{i=1} \Beta_{pdf}(q_{i} \mid \Theta)$ for the $i^{th}$ pool,
+- $\beta(\Theta=\{\theta_{1}, \theta_{2}\})$ is used to model the distributions of $a$ and $1-a$ across pools, where:
+  + $\Theta$ is estimated via maximum likelihood, i.e. $L(\Theta \mid Q) \propto \Pi^{k}_{i=1} \beta_{pdf}(q_{i} \mid \Theta)$ for the $i^{th}$ pool,
   + $Q = \{q_{1},...,q_{k}\}$ is the cumulative sum of allele frequencies across increasing-phenotypic-value-sorted pools where $k$ is the number of pools, and
-  + $\Beta_{pdf}(q_{i} \mid \Theta)$ is the probability density function for the $\Beta$ distribution.
-  + $q_{i} = \Beta_{cdf}(y'_{i},\Theta) - \Beta_{cdf}(y'_{i-1},\Theta)$, where $y'_{i} ∈ Y'$
+  + $\beta_{pdf}(q_{i} \mid \Theta)$ is the probability density function for the $\beta$ distribution.
+  + $q_{i} = \beta_{cdf}(y'_{i},\Theta) - \beta_{cdf}(y'_{i-1},\Theta)$, where $y'_{i} ∈ Y'$
  + $Y'$ is the inverse quantile-normalized into phenotype data such that $Y' \in [0,1]$.
 
 ### Linear mixed models

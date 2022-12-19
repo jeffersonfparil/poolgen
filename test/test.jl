@@ -1,4 +1,5 @@
 githubci = parse(Bool, ARGS[1])
+# githubci = false
 
 ### Load libraries
 using Distributed
@@ -9,9 +10,11 @@ if githubci
     Distributed.addprocs(length(Sys.cpu_info()))
     @everywhere using poolgen ### Load poolgen for each process
 else
-    include("src/poolgen.jl")  ### Load poolgen first so we can compile now and no precompilation for each process
     Distributed.addprocs(length(Sys.cpu_info()))
-    @everywhere include("src/poolgen.jl") ### Load poolgen for each process
+    @everywhere DIR_SRC = string(join(split(@__DIR__, "/")[1:(end-1)], "/"), "/src")
+    # @everywhere DIR_SRC = "/data-weedomics-2/poolgen"
+    include(string(DIR_SRC, "/poolgen.jl"))  ### Load poolgen first so we can compile now and no precompilation for each process
+    @everywhere include(string(DIR_SRC, "/poolgen.jl")) ### Load poolgen for each process
 end
 
 poolgen.convert("test/test.sync")
@@ -30,6 +33,10 @@ end
 poolgen.simulate(n=5, m=10_000, l=135_000_000, k=5, ϵ=Int(1e+15), a=2, vec_chr_lengths=[0], vec_chr_names=[""], dist_noLD=500_000, o=100, t=10, nQTL=10, heritability=0.5, npools=5, LD_chr="", LD_n_pairs=10_000, plot_LD=true, out_geno="test/test-SIMULATED-GENOTYPES", out_pheno="test/test-SIMULATED-PHENOTYPES")
 
 poolgen.gwalpha(syncx="test/test.syncx", py_phenotype="test/test.py", maf=0.001, penalty=false, out="")
+
+poolgen.gwas(syncx="test/test.syncx", phenotype="test/test.csv", model="OLS")
+poolgen.gwas(syncx="test/test.syncx", phenotype="test/test.csv", model="GBLUP")
+poolgen.gwas(syncx="test/test.syncx", phenotype="test/test.csv", model="RRBLUP")
 
 for model in ["OLS", "GLMNET", "MM"]
     for GBLUP_K in ["XTX", "COR"]
@@ -64,8 +71,8 @@ for model in ["OLS", "GLMNET", "MM"]
     for GBLUP_K in ["XTX", "COR"]
         for MM_model in ["GBLUP", "RRBLUP"]
             for MM_method in ["ML", "REML"]
-                poolgen.genomic_prediction_CV(nrep=10,
-                                              nfold=10,
+                poolgen.genomic_prediction_CV(nrep=2,
+                                              nfold=2,
                                               syncx="test/test_Lr.syncx",
                                               phenotype="test/test_Lr.csv",
                                               model=model,

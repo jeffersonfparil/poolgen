@@ -7,6 +7,7 @@ using .functions: filter
 using .functions: impute
 using .functions: simulate
 using .functions: gwalpha
+using .functions: gwas
 using .functions: genomic_prediction
 using .functions: genomic_prediction_CV
 

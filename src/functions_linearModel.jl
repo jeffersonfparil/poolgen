@@ -14,7 +14,7 @@ function GENERATE_COVARIATE(X::Array{T}, df::Int64=1, covariate::String=["XTX", 
     ####### TEST ########
     # syncx = "../test/test.syncx"
     # χ = LOAD(syncx, false)
-    # X = convert(Array{Float64}, χ.cou')
+    # X = Base.convert(Array{Float64}, χ.cou')
     # df = 1
     # covariate = "XTX"
     #####################
@@ -68,7 +68,7 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, df::Int64=1, cova
             end
         end
         close(file)
-        χ = PARSE(convert(Vector{LocusAlleleCounts}, loci))
+        χ = PARSE(Base.convert(Vector{LocusAlleleCounts}, loci))
     end
     ### Filter
     X, vec_chr, vec_pos, vec_ref = FILTER(χ, maf, δ, remove_insertions, remove_minor_alleles, remove_correlated_alleles, θ, centre)

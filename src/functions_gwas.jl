@@ -260,7 +260,12 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                     W = b^2 / Σ̂[end, end] ### Wald's test statistic
                 elseif model == "RRBLUP"
                     b = μ̂[end]
-                    W = b^2 / D[end, end] ### Wald's test statistic
+                    ### Wald's test statistic:
+                    W = try
+                            b^2 / D[end, end] ### If K is a matrix
+                        catch
+                            b^2 / D.λ ### If K is I
+                        end
                 end
                 pval = Distributions.ccdf(Distributions.Chisq(p-1), W)
                 ### Output
@@ -689,9 +694,9 @@ function GWAS_SHOW_ANNOTATIONS_OF_TOP_HITS(tsv::String, gff::String, heuristic_p
             vec_ann_pos_fin[i] = [vec_pos[i]+size_flanks]
         end
     end
-    vec_ann = convert(Vector{Vector{String}}, vec_ann)
-    vec_ann_pos_ini = convert(Vector{Vector{Int64}}, vec_ann_pos_ini)
-    vec_ann_pos_fin = convert(Vector{Vector{Int64}}, vec_ann_pos_fin)
+    vec_ann = Base.convert(Vector{Vector{String}}, vec_ann)
+    vec_ann_pos_ini = Base.convert(Vector{Vector{Int64}}, vec_ann_pos_ini)
+    vec_ann_pos_fin = Base.convert(Vector{Vector{Int64}}, vec_ann_pos_fin)
     return(vec_chr, vec_pos, vec_allele, vec_freq, vec_beta, vec_pval, vec_lod, vec_ann, vec_ann_pos_ini, vec_ann_pos_fin)
 end
 

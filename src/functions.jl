@@ -620,7 +620,15 @@ function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15),
     # out_geno = ""         ### simulated genotype output basename of files
     # out_pheno = ""        ### simulated phenotype output basename of files
     #####################
-    vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs, plot_LD)
+    vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs)
+    ### Assess LD
+    if plot_LD
+        time_id = Dates.now(Dates.UTC)
+        LD_window_size = 2*dist_noLD
+        vec_r2, vec_dist = LD(P, vec_chr, vec_pos, LD_chr, LD_window_size, LD_n_pairs)
+        p = Plots.scatter(vec_dist, vec_r2, legend=false, xlab="Distance (bp)", ylab="r²")
+        Plots.savefig(p, string(join(split(out_geno, ".")[1:(end-1)], "."), "-LD_decay.png"))
+    end
     G, p = POOL(X, y, npools)
     map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y, out_geno, out_pheno)
     syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p, replace(fam, ".fam"=>".syncx"), replace(fam, ".fam"=>".csv"))
@@ -762,6 +770,161 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
         id = lpad(i, (digit+1)-length(string(i)), "0")
         tmp = string(syncx, "-GWAlpha-", id, ".tsv.tmp")
         filename = GWALPHA(syncx, py_phenotype, init, term, maf, penalty, tmp)
+        [filename]
+    end
+    ### Merge the chunks
+    MERGE(filenames_out, out)
+    return(out)
+end
+
+"""
+# ___________________________________
+# Pool-genome-wide association analysis
+
+    `gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", "RRBLUP"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], covariate_df::Int64=1, method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], optim_trace::Bool=false, out::String="")::String`
+
+    # Inputs
+    1.  `syncx` [String]: extended synchronised pileup file
+    2.  `phenotype` [String]: phenotype data (comma-separated file; with a header where column 1 refers to the pool IDs, and column 2 is the phenotype values)
+    3.  `model` [String]: linear model to use iteratively. Choose from "OLS", "GBLUP", and "RRBLUP"]. Note that "GBLUP" and "RRBLUP" uses GradientDescent() during optimisation. (default="OLS")
+        - OLS: `y = Xβ + ϵ`,
+            where `X` are the intercept and SNPs
+        - GBLUP: `y = Xβ + g + ϵ`,
+            where `X` are the intercept and SNPs,
+            `g = Zμ = μ` are the individual genotype effects,
+                where `Z = I(nxn)`, and `(μ==g)~MVN(0, D),`
+                    where `D = σ2u * K`
+                        where `K ≈ (X'X)/n`
+            and `ϵ~MVN(0, R)`
+                where `R = σ2e * I`
+        - RR-BLUP: `y = Xβ + Zμ + ϵ`,
+            where `X` are the intercept and covariates, if any,
+            `Z` are the SNPs,
+            μ~MVN(0, D),
+                where D = σ2u * I
+            and ϵ~MVN(0, R)
+                where R = σ2e * I
+    4.  `maf` [Float64]: minimum allele frequency (default=0.001)
+    5.  `delimiter` [String]: delimited of the `phenotype` (default=",")
+    6.  `header` [Bool]: header of the `phenotype` (default=true)
+    7.  `id_col` [Int]: column of the `phenotype` containing the pool IDs (default=1)
+    8.  `phenotype_col` [Int]: column of the `phenotype` containing the phenotype values (default=2)
+    9.  `missing_strings` [Vector{String}]: missing phenotype data encoding (default=["NA", "NAN", "NaN", "missing", ""])
+    10. `covariate` [String]: covarate to use in linear mixed models. Choose from "" (none), "XTX" (unscaled kinship matrix or squared Euclidean distance between indvidual), and "COR" (Pearson's correlation matrix) (default: "XTX")
+    11. `covariate_df` [Int64]: using the OLS model, this is the number of principal components of the `covariate` to use in the linear regression (default=1)
+    11. `method` [String]: linear mixed model parameter estimation method. Choose from "ML" (maximum likelihood), and "REML" (restricted maximum likelihood) (default="ML")
+    12. `FE_method` [String]: fixed effect estimation method. Choose from "CANONICAL" (inverse(XᵀX)(Xᵀy)), and "N<<P" ((Xᵀ)inverse(XXᵀ)(y)) (default="N<<P")
+    13. `optim_trace` [Bool]: print out optimisation progress (default=false)
+    14. `out` [String]: output filename (default: `syncx` with the extension converted to `.tsv`)
+
+    # Output
+    1. [String]: filename of the output in tab-delimited format
+    - *Column 1*: chromosome names
+    - *Column 2*: position
+    - *Column 3*: allele name
+    - *Column 4*: allele frequency
+    - *Column 5*: allele effect
+    - *Column 6*: p-value
+
+    # Example
+    ```julia
+    using StatsBase
+    using Distributed
+    using poolgen ### Load poolgen first so we can compile now and no precompilation for each process
+    Distributed.addprocs(length(Sys.cpu_info())-1)
+    @everywhere using poolgen
+    n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=10; heritability=0.5; LD_chr=""; LD_n_pairs=10_000; plot_LD=false; npools=5
+    map, bim, ped, fam, syncx, csv = poolgen.simulate(n=n, m=m, l=l, k=k, ϵ=ϵ, a=a, vec_chr_lengths=vec_chr_lengths, vec_chr_names=vec_chr_names, dist_noLD=dist_noLD, o=o, t=t, nQTL=nQTL, heritability=heritability, npools=npools, LD_chr=LD_chr, LD_n_pairs=LD_n_pairs, plot_LD=plot_LD)
+    model = ["OLS", "GBLUP", "RRBLUP"][1]
+    @time poolgen.gwas(syncx=syncx, phenotype=csv, model="OLS")
+```
+"""
+function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", "RRBLUP"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2],covariate_df::Int64=1, method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], optim_trace::Bool=false, out::String="")::String
+    ####### TEST ########
+    # using Distributed
+    # Distributed.addprocs(length(Sys.cpu_info())-1)
+    # using Dates
+    # using ProgressMeter
+    # using MultivariateStats
+    # using Distributions
+    # using Optim
+    # using Plots
+    # using LinearAlgebra
+    # include("structs.jl")
+    # using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
+    # include("functions_io.jl")
+    # include("functions_filterTransform.jl")
+    # include("functions_linearModel.jl")
+    # include("functions_gwas.jl")
+    # @everywhere using Dates
+    # @everywhere using ProgressMeter
+    # @everywhere using MultivariateStats
+    # @everywhere using Distributions
+    # @everywhere using Optim
+    # @everywhere using Plots
+    # @everywhere using LinearAlgebra
+    # @everywhere include("structs.jl")
+    # @everywhere using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
+    # @everywhere include("functions_io.jl")
+    # @everywhere include("functions_filterTransform.jl")
+    # @everywhere include("functions_linearModel.jl")
+    # @everywhere include("functions_gwas.jl")
+    # syncx = "../test/test.syncx"
+    # phenotype = "../test/test.csv"
+    # model = ["OLS", "GBLUP", "RRBLUP"][1]
+    # maf = 0.01
+    # delimiter = ","
+    # header = true
+    # id_col = 1
+    # phenotype_col = 2
+    # missing_strings = ["NA", "NAN", "NaN", "missing", ""]
+    # covariate = ["", "XTX", "COR"][2]
+    # covariate_df = 1
+    # method = ["ML", "REML"][1]
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    # optim_trace = true
+    # out = ""
+    #####################
+    ### Define output file if not specified
+    if out == ""
+        out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWAS-", model, "-maf_", round(maf, digits=5), ".tsv")
+    end
+    if isfile(out)
+        out_basename = join(split(out, ".")[1:(end-1)], ".")
+        out_extension = split(out, ".")[end]
+        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
+    end
+    ### Define the full path to the input and output files since calling functions within @distributed loop will revert back to the root directory from where julia was executed from
+    if dirname(syncx) == ""
+        syncx = string(pwd(), "/", syncx)
+    end
+    if dirname(out) == ""
+        out = string(pwd(), "/", out)
+    end
+    ### Setup the linear model to use
+    if model == "OLS"
+        parameters = [covariate_df]
+    elseif (model == "GBLUP") | (model == "RRBLUP")
+        parameters = [model, method, FE_method, GradientDescent(), optim_trace]
+    else
+        println("Sorry, ", model, " model is not implemented.")
+        println("Please choose from: \"OLS\", \"GBLUP\", and \"RRBLUP\".")
+    end
+    ### Find file positions for parallel processing
+    threads = length(Distributed.workers())
+    positions_init, positions_term = SPLIT(threads, syncx)
+    digit = length(string(length(positions_init)))
+    ### Impute
+    @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
+        init = positions_init[i]
+        term = positions_term[i]
+        id = lpad(i, (digit+1)-length(string(i)), "0")
+        tmp = string(syncx, "-GWAS-", id, ".tsv.tmp")
+        if model == "OLS"
+            filename = OLS_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, parameters..., tmp)
+        elseif (model == "GBLUP") | (model == "RRBLUP")
+            filename = LMM_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, parameters..., tmp)
+        end        
         [filename]
     end
     ### Merge the chunks

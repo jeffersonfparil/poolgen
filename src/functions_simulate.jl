@@ -211,7 +211,7 @@ function LD(P::Array{Int64, 3}, vec_chr::Vector{String}, vec_pos::Vector{Int64},
     return(vec_r2, vec_dist)
 end
 
-function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, LD_chr::String="", LD_n_pairs::Int64=10_000, plot_LD::Bool=true)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}}
+function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, LD_chr::String="", LD_n_pairs::Int64=10_000)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}}
     ####### TEST ########
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
@@ -228,21 +228,12 @@ function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
     # heritability = 0.5    ### narrow(broad)-sense heritability as only additive effects are simulated
     # LD_chr = ""           ### chromosome to calculate LD decay from
     # LD_n_pairs = 10_000   ### number of randomly sampled pairs of loci to calculate LD
-    # plot_LD = true        ### simulated LD decay
     #####################
     ### Instatiante founder genome/s
     vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
     ### Simulate random mating with constatnt population sizes for t genrations
     P = SIMULATE_GENOMES(G, vec_dist, dist_noLD, o, t) ### A 3-dimensional array of Int64 where the largest number, e.g.x, means that we have a macimum of x+1 alleles per locus
     _, n, m  = size(P)
-    ### Assess LD
-    if plot_LD
-        time_id = replace(join(collect(string(time()))[1:12], ""), "."=> "")
-        LD_window_size = 2*dist_noLD
-        vec_r2, vec_dist = LD(P, vec_chr, vec_pos, LD_chr, LD_window_size, LD_n_pairs)
-        p = Plots.scatter(vec_dist, vec_r2, legend=false, xlab="Distance (bp)", ylab="r²")
-        Plots.savefig(p, string("Simulated_genome_LD-", time_id, ".png"))
-    end
     ### Define genotype counts (fixed alleles/loci are all kept)
     vec_allele_counts_minus_one = maximum(P, dims=[1, 2])[1, 1, :]
     vec_alleles = collect(0:maximum(vec_allele_counts_minus_one)) ### e.g. [0, 1] for biallelic and [0, 1, 2] for triallelic
@@ -285,12 +276,11 @@ function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
     return(vec_chr_updated, vec_pos_updated, X, y, b)
 end
 
-function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5, py_phenotype::String="")::Tuple{Matrix{Float64}, Vector{Float64}}
+function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5)::Tuple{Matrix{Float64}, Vector{Float64}}
     ####### TEST ########
     # n=5; m=100_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=100; t=10; nQTL=5; heritability=0.9
     # @time vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
     # npools = 5
-    # py_phenotype = ""
     ####################
     ### Sort the individuals into equally-sized npools pools
     idx = sortperm(y)
@@ -314,31 +304,6 @@ function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5, py_phenotyp
         ϵ = rand(D)
         G[i, :] = mean(X[init:term, :], dims=1) ./ 2
         p[i] = mean(y[init:term])
-    end
-    if py_phenotype != ""
-        sig = std(y)
-        MIN = minimum(y)
-        MAX = maximum(y)
-        perc = [0.0]
-        q = [0.0]
-        for i in 1:npools
-            # i = 1
-            init = vec_idx_pools[i] + 1
-            term = vec_idx_pools[i+1]
-            ϕ = y[init:term]
-            push!(perc, perc[end] + (length(ϕ)/n))
-            push!(q, mean(ϕ))
-        end
-        perc = perc[2:(end-1)]
-        q = q[2:(end-1)]
-        file = open(py_phenotype, "a")
-        write(file, string("Pheno_name=\"Phenotype\";\n"))
-        write(file, string("sig=", sig, ";\n"))
-        write(file, string("MIN=", MIN, ";\n"))
-        write(file, string("MAX=", MAX, ";\n"))
-        write(file, string("perc=[", join(perc, ","), "];\n"))
-        write(file, string("q=[", join(q, ","), "];\n"))
-        close(file)
     end
     return(G, p)
 end
