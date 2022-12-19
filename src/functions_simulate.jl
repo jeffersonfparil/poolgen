@@ -211,7 +211,7 @@ function LD(P::Array{Int64, 3}, vec_chr::Vector{String}, vec_pos::Vector{Int64},
     return(vec_r2, vec_dist)
 end
 
-function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, LD_chr::String="", LD_n_pairs::Int64=10_000)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}}
+function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=Int64.([0]), vec_chr_names::Vector{String}=[""], dist_noLD::Int64=10_000, o::Int64=1_000, t::Int64=10, nQTL::Int64=10, heritability::Float64=0.5, LD_chr::String="", LD_n_pairs::Int64=10_000)::Tuple{Vector{String}, Vector{Int64}, Matrix{Int64}, Vector{Float64}, Vector{Float64}, Array{Int64, 3}}
     ####### TEST ########
     # n = 5                 ### number of founders
     # m = 10_000            ### number of loci
@@ -232,7 +232,7 @@ function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
     ### Instatiante founder genome/s
     vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
     ### Simulate random mating with constatnt population sizes for t genrations
-    P = SIMULATE_GENOMES(G, vec_dist, dist_noLD, o, t) ### A 3-dimensional array of Int64 where the largest number, e.g.x, means that we have a macimum of x+1 alleles per locus
+    P = SIMULATE_GENOMES(G, vec_dist, dist_noLD, o, t) ### A 3-dimensional array of Int64 where the largest number, e.g. x, means that we have a macimum of x+1 alleles per locus
     _, n, m  = size(P)
     ### Define genotype counts (fixed alleles/loci are all kept)
     vec_allele_counts_minus_one = maximum(P, dims=[1, 2])[1, 1, :]
@@ -273,7 +273,7 @@ function SIMULATE(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), 
     V_residual = (V_additive / heritability) - V_additive
     e = rand(Distributions.Normal(0, sqrt(V_residual)), n)
     y = g + e
-    return(vec_chr_updated, vec_pos_updated, X, y, b)
+    return(vec_chr_updated, vec_pos_updated, X, y, b, P)
 end
 
 function POOL(X::Matrix{Int64}, y::Vector{Float64}, npools::Int64=5)::Tuple{Matrix{Float64}, Vector{Float64}}

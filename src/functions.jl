@@ -620,7 +620,7 @@ function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15),
     # out_geno = ""         ### simulated genotype output basename of files
     # out_pheno = ""        ### simulated phenotype output basename of files
     #####################
-    vec_chr, vec_pos, X, y, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs)
+    vec_chr, vec_pos, X, y, b, P = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs)
     ### Assess LD
     if plot_LD
         time_id = Dates.now(Dates.UTC)
