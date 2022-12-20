@@ -83,25 +83,27 @@ GWAlpha ([Fournier-Level, et al, 2016](https://doi.org/10.1093/bioinformatics/bt
 
 ### Linear mixed models
 
-The linear mixed model is defined as $y = X\beta + Zu + \epsilon$, where:
+The linear mixed model is defined by [Henderson in 1975](https://doi.org/10.2307/2529430) is $y = X\beta + Zu + \epsilon$, where:
 - $y$ isthe vector of phenotype values;
 - $X\beta$ are the fixed effects, where in:
-  + **GBLUP** (genomic linear unbiased prediction): $X$ consists of a column of ones and allele frequencies matrix or vector, and $\beta$ is the vector of **intercept and allele effects**, and in
-  + **RRBLUP** (ridge regression best linear unbiased prediction): $X$ consists of a column of ones and non-genomic covariates, if available e.g. kinship/pool relationship matrix, testing environments, time, and blocks, and $\beta$ is the vector of **intercept and covariate effects**, if available;
+  + **GBLUP** (genomic best linear unbiased prediction): $X$ consists of a column of ones and allele frequencies matrix or vector, and $\beta$ is the vector of **intercept and allele effects**, and in
+  + **ABLUP** (additive genetic effects best linear unbiased prediction) and **RRBLUP** (ridge regression best linear unbiased prediction): $X$ consists of a column of ones and non-genomic covariates, if available e.g. kinship/pool relationship matrix, testing environments, time, and blocks, and $\beta$ is the vector of **intercept and covariate effects**, if available;
 - $Zu$ are the random effects, where in:
   + **GBLUP**: $Z$ is an identity matrix, and $u$ are the effects of each pool, where:
-    - $u \sim N(0, D=\sigma^{2}_{g}K)$, and
+    - $u \sim N(0, G=\sigma^{2}_{g}K)$, and
     - $\sigma^{2}_{g}K$ relationship matrix between pools; and in
-  + **RRBLUP**: $Z$ is the allele frequencies matrix, and $u$ is the vector of allele effects, where:
-    - $u \sim N(0, D=\sigma^{2}_{a}I)$, and 
+  + **ABLUP** and **RRBLUP**: $Z$ is the allele frequencies matrix, and $u$ is the vector of allele effects, where:
+    - $u \sim N(0, G=\sigma^{2}_{a}I)$, and 
     - $\sigma^{2}_{a}I$ is the additive variance-covarince matrix showing identicaly and independently distributed allele effects;
 - $\epsilon$ is the identically and independently distributed residual effects vector, i.e. $\epsilon \sim N(0, R=\sigma^{2}I)$
-- variance components ($\sigma^{2}$, and $\sigma^{2}_{g}$ in GBLUP, or $\sigma^{2}_{a}$ in RRBLUP) are estimated via maximum likelihood (ML) or restricted maximum likelihood (REML);
-- let $n$ be the number of pools, $m$ be the number if fixed effects to estimate, $p$ be the number of random effects to estmate, and $V = (Z D Z^{T}) + R$;
+- variance components ($\sigma^{2}$, and $\sigma^{2}_{g}$ in GBLUP, or $\sigma^{2}_{a}$ in ABLUP and RRBLUP) are estimated via maximum likelihood (ML) or restricted maximum likelihood (REML);
+- let $n$ be the number of pools, $m$ be the number if fixed effects to estimate, $p$ be the number of random effects to estmate, and $V = (Z G Z^{T}) + R$;
 - fixed effects are estimated by solving:
   + $\hat{\beta} = (X^{T} V^{-1} X)^{-1} (X^{T} V^{-1} y)$, if $n > m$, while
   + $\hat{\beta} = (X^{T} V^{-1}) (X X^{T} V^{-1})^{-1} y$, if $n << m$ which is the default as most pool sequencing experiments have this dimensionality problem; and finally
-- random effects are estimated by solving $\hat{\mu} = (D Z^{T} V^{-1}) (y - X\hat{\beta})$.
+- random effects are estimated by solving:
+  + **GBLUP** and **ABLUP**: $\hat{\mu} = (G Z^{T} V^{-1}) (y - X\hat{\beta})$, or
+  + **RRBLUP**: $\hat{\mu} = (Z^{T}Z + \lambda I)^{-1} (Z^{T}y)$, where $\lambda = \sigma^{2}/\sigma^{2}_{a}$.
 
 ### Elastic-net regression using glmnet
 
@@ -112,19 +114,13 @@ Elastic net performs penalised maximum likelihood and is implemented on the glmn
 Performs OLS or elastic-net regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
 
 For each pool with missing data we model the allele frequencies in the locus with some missing data as:
-$$
-y_{p} = X_{p}\beta + \epsilon.
-$$
+$$ y_{p} = X_{p}\beta + \epsilon. $$
 
 We then estimate unbiased estimators, $\beta$ as:
-$$
-\hat{\beta} = f(X_{p}, y_{p{}}),
-$$
+$$ \hat{\beta} = f(X_{p}, y_{p{}}), $$
 
 where $f$ can be OLS or elastic-net regression. Imputation is achieved by predicting the missing allele counts:
-$$
-\hat{y_{m}} = X_{m} \hat{\beta},
-$$
+$$ \hat{y_{m}} = X_{m} \hat{\beta}, $$
 
 where:
 

@@ -176,7 +176,7 @@ function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0)::Vector{T} where T
     return(β̂)
 end
 
-function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, FE_method::String)::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
+function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, FE_method::String, ridge_regression::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -185,18 +185,28 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     # ϕ = LOAD(csv, ",", true, 1, [2])
     # y = Float64.(ϕ.phe[:,1])
     # K = GENERATE_COVARIATE(G, size(G,1))
-    # ### gBLUP
+    # ### GBLUP
     # X = G
     # Z = 1.00*I
     # D = 0.10*K
     # R = 0.01*I
     # FE_method = ["CANONICAL", "N<<P"][2]
-    # ### rrBLUP
+    # ridge_regression = false
+
+    # ### ABLUP
     # X = hcat(ones(size(G,1)))
     # Z = G
     # D = 0.10*I
     # R = 0.01*I
     # FE_method = ["CANONICAL", "N<<P"][2]
+    # ridge_regression = false
+    # ### RRBLUP
+    # X = hcat(ones(size(G,1)))
+    # Z = G
+    # D = 0.10*I
+    # R = 0.01*I
+    # FE_method = ["CANONICAL", "N<<P"][2]
+    # ridge_regression = true
     #####################
     if isa(X, Vector)
         X = reshape(X, length(X), 1)
@@ -220,11 +230,17 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
         return(1)
     end
 	###@@@ Random effects:
-    μ̂ = (D * Z' * VI) * (y - (X*β̂))
+    if ridge_regression == false
+        ### ABLUP: additive gene effects BLUP, i.e. canonical linear mixed model random effects estimation
+        μ̂ = (D * Z' * VI) * (y - (X*β̂))
+    else
+        ### RRBLUP: ridge regression BLUP as defined by Endelman, 2011
+        μ̂ = INVERSE(Z' * Z + (R.λ/D.λ)*I) * (Z' * y)
+    end
     return(β̂, μ̂)
 end
 
-function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}})::Tuple{Vector{Float64}, Vector{Float64}, Array{T}} where T <: Number
+function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, ridge_regression::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}, Array{T}} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -233,16 +249,24 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     # ϕ = LOAD(csv, ",", true, 1, [2])
     # y = Float64.(ϕ.phe[:,1])
     # K = GENERATE_COVARIATE(G, size(G,1))
-    # ### gBLUP
+    # ### GBLUP
     # X = G
     # Z = 1.00*I
     # D = 0.10*K
     # R = 0.01*I
-    # ### rrBLUP
+    # ridge_regression = false
+    # ### ABLUP
     # X = hcat(ones(size(G,1)))
     # Z = G
     # D = 0.10*I
     # R = 0.01*I
+    # ridge_regression = false
+    # ### RRBLUP
+    # X = hcat(ones(size(G,1)))
+    # Z = G
+    # D = 0.10*I
+    # R = 0.01*I
+    # ridge_regression = true
     #####################
     ### Linear mixed model fitting which outputs the fixed effects variances for iterative regression
     if isa(X, Vector)
@@ -258,11 +282,17 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     Σ̂ = INVERSE(X' * VI * X) ### Using canonical equations to estimate fixed effects so we estimate the fixed effect variances
 	### Mixed model equations
     β̂ = Σ̂ * (X' * VI * y)
-    μ̂ = (D * Z' * VI) * (y - (X*β̂))
+    if ridge_regression == false
+        ### ABLUP: additive gene effects BLUP, i.e. canonical linear mixed model random effects estimation
+        μ̂ = (D * Z' * VI) * (y - (X*β̂))
+    else
+        ### RRBLUP: ridge regression BLUP as defined by Endelman, 2011
+        μ̂ = INVERSE(Z' * Z + (R.λ/D.λ)*I) * (Z' * y)
+    end
     return(β̂, μ̂, Σ̂)
 end
 
-function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K::Union{Array{T}, UniformScaling{T}}, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1])::Float64 where T <: Number
+function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K::Union{Array{T}, UniformScaling{T}}, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], ridge_regression::Bool=false)::Float64 where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -275,14 +305,21 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, Unif
     # FE_method = ["CANONICAL", "N<<P"][2]
     # method = ["ML", "REML"][1]
     # T = Float64
-    # ### gBLUP
+    # ### GBLUP
     # X = G
     # Z = 1.0*I
     # K = 1.0*I
-    # ### rrBLUP
+    # ridge_regression = false
+    # ### ABLUP
     # X = hcat(ones(size(G,1)))
     # Z = G
     # K = K
+    # ridge_regression = false
+    # ### RRBLUP
+    # X = hcat(ones(size(G,1)))
+    # Z = G
+    # K = K
+    # ridge_regression = true
     #####################
     if isa(X, Vector)
         X = reshape(X, length(X), 1)
@@ -311,7 +348,7 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, Unif
     if typeof(V) == UniformScaling{T}
         V = diagm(repeat([V.λ], n))
     end
-    β̂, μ̂ = MM(X, y, Z, D, R, FE_method);
+    β̂, μ̂ = MM(X, y, Z, D, R, FE_method, ridge_regression);
     ### Calculation negative log-likelihoods of variance θ
     if method == "ML"
         ### The negative log-likelihood function y given σ2e and σ2u
@@ -350,11 +387,10 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, Unif
     return(neg_log_lik)
 end
 
-function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
+function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], ridge_regression::Bool=false, inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
-    # θ = [0.1, 0.01]
     # χ = LOAD(syncx, false)
     # G, vec_chr, vec_pos, vec_ref = FILTER(χ, 0.01, 1e-3, true, false, true)
     # ϕ = LOAD(csv, ",", true, 1, [2])
@@ -365,14 +401,21 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
     # inner_optimizer = [LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1]
     # optim_trace = true
     # T = Float64
-    # ### gBLUP
+    # ### GBLUP
     # X = G
     # Z = 1.0*I
     # K = 1.0*I
-    # ### rrBLUP
+    # ridge_regression = false
+    # ### ABLUP
     # X = hcat(ones(size(G,1)))
     # Z = G
     # K = K
+    # ridge_regression = false
+    # ### RRBLUP
+    # X = hcat(ones(size(G,1)))
+    # Z = G
+    # K = K
+    # ridge_regression = true
     #####################
     if isa(X, Vector)
         X = reshape(X, length(X), 1)
@@ -386,7 +429,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
     upper_limits = [1e+5, 1e+5]
     initial_values = [1.0, 1.0]
     θ = try
-            Optim.optimize(parameters->NLL_MM(parameters, X, y, Z, K, FE_method, method),
+            Optim.optimize(parameters->NLL_MM(parameters, X, y, Z, K, FE_method, method, ridge_regression),
                         lower_limits,
                         upper_limits,
                         initial_values,
@@ -397,7 +440,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
                                         store_trace = false,
                                         show_trace = optim_trace,
                                         show_every=1, 
-                                        time_limit=60))
+                                        time_limit=120))
         catch
             MinimisationError(initial_values, false, false)
         end
@@ -415,16 +458,15 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
     return(σ2u, σ2e)
 end
 
-function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2])::Array{T} where T <: Number
+function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2])::Array{T} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
-    # θ = [0.1, 0.01]
     # χ = LOAD(syncx, false)
     # X, vec_chr, vec_pos, vec_ref = FILTER(χ, 0.01, 1e-3, true, false, true)
     # ϕ = LOAD(csv, ",", true, 1, [2])
     # y = Float64.(ϕ.phe[:,1])
-    # model = ["GBLUP", "RRBLUP"][2]
+    # model = ["GBLUP", "ABLUP", "RRBLUP"][3]
     # method = ["ML", "REML"][1]
     # inner_optimizer = ["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1]
     # optim_trace = false
@@ -440,16 +482,22 @@ function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "RRBLUP"][1], meth
         X = hcat(ones(n), X)
     end
     if model == "GBLUP"
-        Z = 1.0*I                             ### Genotypes have random effects...
-        K = GENERATE_COVARIATE(X, n, GBLUP_K)    ### ... and are distributed normally μ=0, and Σ=σ2g*K
+        Z = 1.0*I                               ### Genotypes have random effects...
+        K = GENERATE_COVARIATE(X, n, GBLUP_K)   ### ... and are distributed normally μ=0, and Σ=σ2g*K
+        ridge_regression = false
+    elseif model == "ABLUP"
+        Z = X[:,2:end]                          ### SNPs have random effects
+        K = 1.0*I                               ### ... and are spherically normally μ=0, and Σ=σ2g*I
+        X = X[:,1:1]                            ### Intercept is the only fixed effect
+        ridge_regression = false
     elseif model == "RRBLUP"
-        Z = X[:,2:end]                               ### SNPs have random effects...
-        # K = diagm(repeat([1.0], size(Z,2))) ### ... and are spherically distributed proportional to σ2g
-        K = 1.0*I
-        X = X[:,1:1]                      ### Intercept is the only fixed effect
+        Z = X[:,2:end]                          ### SNPs have random effects
+        K = 1.0*I                               ### ... and are spherically normally μ=0, and Σ=σ2g*I
+        X = X[:,1:1]                            ### Intercept is the only fixed effect
+        ridge_regression = true
     else
         println(string("Sorry ", model, " is not implemented."))
-        println("Please choose from 'GBLUP' and 'RRBLUP'.")
+        println("Please choose from 'GBLUP' and 'ABLUP'.")
     end
     ### Define the inner optimiser
     if inner_optimizer == "LBFGS"
@@ -464,16 +512,16 @@ function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "RRBLUP"][1], meth
         inner_optimizer = Optim.NelderMead()
     end
     ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
-    σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
+    σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, ridge_regression, inner_optimizer, optim_trace)
     ### Random effects variance-covariance matrix
     D = σ2u*K
     ### Error variance-covariance matrix (homoscedastic)
     R = σ2e*I
     ### Solve the mixed model equations
-    β̂, μ̂ = MM(X, y, Z, D, R, FE_method)
+    β̂, μ̂ = MM(X, y, Z, D, R, FE_method, ridge_regression)
     if model == "GBLUP"
         θ̂ = β̂
-    elseif model == "RRBLUP"
+    elseif (model == "ABLUP") | (model == "RRBLUP")
         θ̂ = vcat(β̂, μ̂) # include the fixed intercept effect
     end
     return(θ̂)

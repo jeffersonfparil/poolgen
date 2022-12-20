@@ -839,7 +839,7 @@ end
     @time poolgen.gwas(syncx=syncx, phenotype=csv, model="OLS")
 ```
 """
-function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", "RRBLUP"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2],covariate_df::Int64=1, method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], optim_trace::Bool=false, out::String="")::String
+function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", "ABLUP", "RRBLUP"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2],covariate_df::Int64=1, method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], optim_trace::Bool=false, out::String="")::String
     ####### TEST ########
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -993,7 +993,7 @@ end
     @time poolgen.genomic_prediction(syncx=syncx, phenotype=csv, model="LMM", MM_model="GBLUP", MM_method="ML")
 ```
 """
-function genomic_prediction(;syncx::String, phenotype::String, model::String=["OLS", "GLMNET", "MM"][1], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["XTX", "COR"][2], MM_model::String=["GBLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], MM_inner_optimizer::String=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], MM_optim_trace::Bool=false, GBLUP_K::String=["", "XTX", "COR"][2], out::String="")::String
+function genomic_prediction(;syncx::String, phenotype::String, model::String=["OLS", "GLMNET", "MM"][1], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], FE_method::String=["CANONICAL", "N<<P"][2], alpha::Float64=1.0, covariate::String=["XTX", "COR"][2], MM_model::String=["GBLUP", "ABLUP", "RRBLUP"][1], MM_method::String=["ML", "REML"][1], MM_inner_optimizer::String=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], MM_optim_trace::Bool=false, GBLUP_K::String=["", "XTX", "COR"][2], out::String="")::String
     ####### TEST ########
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)

@@ -135,7 +135,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     return(out)
 end
 
-function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], model::String=["GBLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false, out::String="")::String
+function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], model::String=["GBLUP", "ABLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false, out::String="")::String
     ####### TEST ########
     # syncx = "../test/test.syncx"
     # file = open(syncx, "r")
@@ -201,7 +201,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
         # Assign within the loop: _X_ = hcat(ones(n), x)  ### SNPs have fixed effects
         Z = 1.0*I ### Genotypes have random effects...
         K = C ### ... and are distributed normally μ=0, and Σ=σ2g*K
-    elseif model == "RRBLUP"
+    elseif (model == "ABLUP") | (model == "RRBLUP")
         _X_ = hcat(ones(n), C)  ### Kinships have effects
         # Assign within the loop: Z = x                   ### SNPs have random effects
         K = 1.0*I
@@ -241,7 +241,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                     _X_ = hcat(ones(n), x)  ### SNPs have fixed effects
                     # Assigned outside the loop: Z = 1.0*I ### Genotypes have random effects...
                     # Assigned outside the loop: K = C ### ... and are distributed normally μ=0, and Σ=σ2g*K
-                elseif model == "RRBLUP"
+                elseif (model == "ABLUP") | (model == "RRBLUP")
                     # Assigned outside the loop: _X_ = hcat(ones(n), C)  ### Kinships have effects
                     Z = x                   ### SNPs have random effects
                     # Assigned outside the loop: K = 1.0*I
@@ -258,7 +258,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 if model == "GBLUP"
                     b = β̂[end]
                     W = b^2 / Σ̂[end, end] ### Wald's test statistic
-                elseif model == "RRBLUP"
+                elseif (model == "ABLUP") | (model == "RRBLUP")
                     b = μ̂[end]
                     ### Wald's test statistic:
                     W = try

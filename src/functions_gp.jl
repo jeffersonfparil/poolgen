@@ -1,14 +1,14 @@
 ### GENOMIC PREDICTION
 
 ####### TEST ########
-# include("structs.jl")
-# using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
-# include("functions_io.jl")
-# using ProgressMeter, Distributions
-# include("functions_filterTransform.jl")
-# using LinearAlgebra, MultivariateStats, GLMNet, Optim
-# include("functions_linearModel.jl")
-# using StatsBase, Plots, Distributed, Dates
+include("structs.jl")
+using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
+include("functions_io.jl")
+using ProgressMeter, Distributions
+include("functions_filterTransform.jl")
+using LinearAlgebra, MultivariateStats, GLMNet, Optim
+include("functions_linearModel.jl")
+using StatsBase, Plots, Distributed, Dates
 #####################
 
 function FIT(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, model::Function=[OLS, GLMNET, MM][1], params=[["N<<P"], [0.5], ["RRBLUP", "ML", "GradientDescent", true, "N<<P", "XTX"]][1], out::String="")::String
@@ -36,7 +36,7 @@ function FIT(syncx::String, maf::Float64, phenotype::String, delimiter::String, 
     # FIT(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, filter_genotype, transform_phenotype, standardise, model, params, out)
     # ### MM
     # model = MM
-    # MM_model = ["GBLUP", "RRBLUP"][2]
+    # MM_model = ["GBLUP", "ABLUP", "RRBLUP"][2]
     # MM_method = ["ML", "REML"][1]
     # MM_inner_optimizer = ["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1]
     # MM_optim_trace = false
@@ -476,3 +476,67 @@ function CV_MULTIVAR(nrep::Int64, nfold::Int64, syncx::String, maf::Float64, phe
     close(file_out)
     return(out)
 end
+
+
+# ### Test the idea of variance estimation using GBLUP and estimate effects using RRBLUP equations:
+
+# n = 100
+# m = 1_000
+# a = 10
+# X = rand(n, m)
+# b = zeros(m)
+# b_loc = sort(sample(collect(1:m), a))
+# b[b_loc] = rand(Distributions.Normal(0, 2.5), a)
+# y = X * b + rand(Distributions.Normal(0, 0.5), n)
+
+# ### Estimate variances and use the  σ2u and σ2e estimates to calculate the BLUEs and BLUPs
+# function test(X, y)
+#     n, p = size(X)
+#     K = GENERATE_COVARIATE(X, n, "COR")
+#     σ2u, σ2e = OPTIM_MM(ones(n),
+#                         y,
+#                         1.0*I,
+#                         K,
+#                         "N<<P",
+#                         "ML")
+
+#     ### Random effects variance-covariance matrix
+#     D = (σ2u/p)*I
+#     ### Error variance-covariance matrix (homoscedastic)
+#     R = σ2e*I
+#     ### Solve the mixed model equations
+#     Z = X
+#     X = ones(n)
+#     β̂, μ̂ = MM(X, y, Z, D, R, "N<<P", true)
+#     out = vcat(β̂[1], μ̂)
+#     return(out)
+# end
+
+# @time grrblup = test(X, y);
+# @time rrblup = MM(X, y, "RRBLUP");
+# @time ablup = MM(X, y, "ABLUP");
+# @time gblup = MM(X, y, "GBLUP");
+
+# using UnicodePlots
+# UnicodePlots.histogram(grrblup[2:end])
+# UnicodePlots.histogram(rrblup[2:end])
+# UnicodePlots.histogram(ablup[2:end])
+# UnicodePlots.histogram(gblup[2:end])
+
+# UnicodePlots.scatterplot(grrblup[2:end], rrblup[2:end])
+# UnicodePlots.scatterplot(grrblup[2:end], ablup[2:end])
+# UnicodePlots.scatterplot(grrblup[2:end], gblup[2:end])
+
+# cor(grrblup[2:end], rrblup[2:end])
+# cor(grrblup[2:end], ablup[2:end])
+# cor(grrblup[2:end], gblup[2:end])
+
+# UnicodePlots.histogram(y - hcat(ones(n), X) * grrblup)
+# UnicodePlots.histogram(y - hcat(ones(n), X) * rrblup)
+# UnicodePlots.histogram(y - hcat(ones(n), X) * ablup)
+# UnicodePlots.histogram(y - hcat(ones(n), X) * gblup)
+
+# sqrt(mean((y - hcat(ones(n), X) * grrblup).^2))
+# sqrt(mean((y - hcat(ones(n), X) * rrblup).^2))
+# sqrt(mean((y - hcat(ones(n), X) * ablup).^2))
+# sqrt(mean((y - hcat(ones(n), X) * gblup).^2))
