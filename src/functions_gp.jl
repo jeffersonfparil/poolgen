@@ -511,11 +511,14 @@ end
 #     out = vcat(β̂[1], μ̂)
 #     return(out)
 # end
+# vec_idx = sample(collect(1:n), Int(ceil(0.9*n)), replace=false);
+# idx_train = [x ∈ vec_idx for x in collect(1:n)];
+# idx_test = .!idx_train;
 
-# @time grrblup = test(X, y);
-# @time rrblup = MM(X, y, "RRBLUP");
-# @time ablup = MM(X, y, "ABLUP");
-# @time gblup = MM(X, y, "GBLUP");
+# @time grrblup = test(X[idx_train,:], y[idx_train]);
+# @time rrblup = MM(X[idx_train,:], y[idx_train], "RRBLUP");
+# @time ablup = MM(X[idx_train,:], y[idx_train], "ABLUP");
+# @time gblup = MM(X[idx_train,:], y[idx_train], "GBLUP");
 
 # using UnicodePlots
 # UnicodePlots.histogram(grrblup[2:end])
@@ -531,12 +534,12 @@ end
 # cor(grrblup[2:end], ablup[2:end])
 # cor(grrblup[2:end], gblup[2:end])
 
-# UnicodePlots.histogram(y - hcat(ones(n), X) * grrblup)
-# UnicodePlots.histogram(y - hcat(ones(n), X) * rrblup)
-# UnicodePlots.histogram(y - hcat(ones(n), X) * ablup)
-# UnicodePlots.histogram(y - hcat(ones(n), X) * gblup)
+# UnicodePlots.histogram(y[idx_test] - hcat(ones(n), X[idx_test, :]) * grrblup)
+# UnicodePlots.histogram(y[idx_test] - hcat(ones(n), X[idx_test, :]) * rrblup)
+# UnicodePlots.histogram(y[idx_test] - hcat(ones(n), X[idx_test, :]) * ablup)
+# UnicodePlots.histogram(y[idx_test] - hcat(ones(n), X[idx_test, :]) * gblup)
 
-# sqrt(mean((y - hcat(ones(n), X) * grrblup).^2))
-# sqrt(mean((y - hcat(ones(n), X) * rrblup).^2))
-# sqrt(mean((y - hcat(ones(n), X) * ablup).^2))
-# sqrt(mean((y - hcat(ones(n), X) * gblup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(n), X[idx_test, :]) * grrblup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(n), X[idx_test, :]) * rrblup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(n), X[idx_test, :]) * ablup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(n), X[idx_test, :]) * gblup).^2))

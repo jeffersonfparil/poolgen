@@ -206,6 +206,11 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
         # Assign within the loop: Z = x                   ### SNPs have random effects
         K = 1.0*I
     end
+    if model == "RRBLUP"
+        ridge_regression = true
+    else
+        ridge_regression = false
+    end
     ### Regress
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     pos = init
@@ -248,7 +253,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 end
                 n, p = size(_X_)
                 ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
-                σ2u, σ2e = OPTIM_MM(_X_, y, Z, K, FE_method, method, inner_optimizer, optim_trace)
+                σ2u, σ2e = OPTIM_MM(_X_, y, Z, K, FE_method, method, ridge_regression, inner_optimizer, optim_trace)
                 ### Random effects variance-covariance matrix
                 D = σ2u .* K
                 ### Error variance-covariance matrix (homoscedastic)
