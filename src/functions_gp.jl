@@ -7,8 +7,10 @@
 # using ProgressMeter, Distributions
 # include("functions_filterTransform.jl")
 # using LinearAlgebra, MultivariateStats, GLMNet, Optim
+# BLAS.set_num_threads(length(Sys.cpu_info()))
 # include("functions_linearModel.jl")
 # using StatsBase, Plots, Distributed, Dates
+# include("functions_simulate.jl")
 #####################
 
 function FIT(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, model::Function=[OLS, GLMNET, MM][1], params=[["N<<P"], [0.5], ["RRBLUP", "ML", "GradientDescent", true, "N<<P", "XTX"]][1], out::String="")::String
@@ -480,14 +482,11 @@ end
 
 # ### Test the idea of variance estimation using GBLUP and estimate effects using RRBLUP equations:
 
+# ### Simulate data
+# n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=1_000; t=10; nQTL=5; heritability=0.9
+# @time vec_chr, vec_pos, G, p, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
 # n = 100
-# m = 1_000
-# a = 10
-# X = rand(n, m)
-# b = zeros(m)
-# b_loc = sort(sample(collect(1:m), a))
-# b[b_loc] = rand(Distributions.Normal(0, 2.5), a)
-# y = X * b + rand(Distributions.Normal(0, 0.5), n)
+# X, y = POOL(G, p, n)
 
 # ### Estimate variances and use the  σ2u and σ2e estimates to calculate the BLUEs and BLUPs
 # function test(X, y)
@@ -514,6 +513,8 @@ end
 # vec_idx = sample(collect(1:n), Int(ceil(0.9*n)), replace=false);
 # idx_train = [x ∈ vec_idx for x in collect(1:n)];
 # idx_test = .!idx_train;
+# sum(idx_train)
+# sum(idx_test)
 
 # @time grrblup = test(X[idx_train,:], y[idx_train]);
 # @time rrblup = MM(X[idx_train,:], y[idx_train], "RRBLUP");
@@ -534,12 +535,17 @@ end
 # cor(grrblup[2:end], ablup[2:end])
 # cor(grrblup[2:end], gblup[2:end])
 
-# UnicodePlots.histogram(y[idx_test] - hcat(ones(n), X[idx_test, :]) * grrblup)
-# UnicodePlots.histogram(y[idx_test] - hcat(ones(n), X[idx_test, :]) * rrblup)
-# UnicodePlots.histogram(y[idx_test] - hcat(ones(n), X[idx_test, :]) * ablup)
-# UnicodePlots.histogram(y[idx_test] - hcat(ones(n), X[idx_test, :]) * gblup)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * grrblup)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * rrblup)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * ablup)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * gblup)
 
-# sqrt(mean((y[idx_test] - hcat(ones(n), X[idx_test, :]) * grrblup).^2))
-# sqrt(mean((y[idx_test] - hcat(ones(n), X[idx_test, :]) * rrblup).^2))
-# sqrt(mean((y[idx_test] - hcat(ones(n), X[idx_test, :]) * ablup).^2))
-# sqrt(mean((y[idx_test] - hcat(ones(n), X[idx_test, :]) * gblup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * grrblup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * rrblup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * ablup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * gblup).^2))
+
+# UnicodePlots.scatterplot(b,  grrblup[2:end])
+# UnicodePlots.scatterplot(b,  rrblup[2:end])
+# UnicodePlots.scatterplot(b,  ablup[2:end])
+# UnicodePlots.scatterplot(b,  gblup[2:end])

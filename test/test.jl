@@ -40,7 +40,7 @@ poolgen.gwas(syncx="test/test.syncx", phenotype="test/test.csv", model="RRBLUP")
 
 for model in ["OLS", "GLMNET", "MM"]
     for GBLUP_K in ["XTX", "COR"]
-        for MM_model in ["GBLUP", "RRBLUP"]
+        for MM_model in ["GBLUP", "ABLUP", "RRBLUP"]
             for MM_method in ["ML", "REML"]
                 poolgen.genomic_prediction(syncx="test/test.syncx",
                                         phenotype="test/test.csv",
@@ -69,7 +69,7 @@ end
 
 for model in ["OLS", "GLMNET", "MM"]
     for GBLUP_K in ["XTX", "COR"]
-        for MM_model in ["GBLUP", "RRBLUP"]
+        for MM_model in ["GBLUP", "ABLUP", "RRBLUP"]
             for MM_method in ["ML", "REML"]
                 poolgen.genomic_prediction_CV(nrep=2,
                                               nfold=2,
