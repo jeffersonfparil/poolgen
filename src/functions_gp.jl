@@ -1,14 +1,14 @@
 ### GENOMIC PREDICTION
 
 ####### TEST ########
-include("structs.jl")
-using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
-include("functions_io.jl")
-using ProgressMeter, Distributions
-include("functions_filterTransform.jl")
-using LinearAlgebra, MultivariateStats, GLMNet, Optim
-include("functions_linearModel.jl")
-using StatsBase, Plots, Distributed, Dates
+# include("structs.jl")
+# using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
+# include("functions_io.jl")
+# using ProgressMeter, Distributions
+# include("functions_filterTransform.jl")
+# using LinearAlgebra, MultivariateStats, GLMNet, Optim
+# include("functions_linearModel.jl")
+# using StatsBase, Plots, Distributed, Dates
 #####################
 
 function FIT(syncx::String, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], filter_genotype::Bool=true, transform_phenotype::Bool=true, standardise::Bool=false, model::Function=[OLS, GLMNET, MM][1], params=[["N<<P"], [0.5], ["RRBLUP", "ML", "GradientDescent", true, "N<<P", "XTX"]][1], out::String="")::String
