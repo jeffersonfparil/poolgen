@@ -259,7 +259,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 ### Error variance-covariance matrix (homoscedastic)
                 R = diagm(repeat([σ2e], n))
                 ### Solve the mixed model equations
-                β̂, μ̂, Σ̂ = MM(_X_, y, Z, D, R, method, ridge_regression)
+                β̂, μ̂, Σ̂ = MM(y, _X_, Z, D, R, method, ridge_regression)
                 if model == "GBLUP"
                     b = β̂[end]
                     W = b^2 / Σ̂[end, end] ### Wald's test statistic

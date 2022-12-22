@@ -1,5 +1,8 @@
-githubci = parse(Bool, ARGS[1])
-# githubci = false
+githubci = try 
+            parse(Bool, ARGS[1])
+        catch
+            false
+        end
 
 ### Load libraries
 using Distributed
@@ -12,7 +15,7 @@ if githubci
 else
     Distributed.addprocs(length(Sys.cpu_info()))
     @everywhere DIR_SRC = string(join(split(@__DIR__, "/")[1:(end-1)], "/"), "/src")
-    # @everywhere DIR_SRC = "/data-weedomics-2/poolgen"
+    # @everywhere DIR_SRC = "/data-weedomics-2/poolgen/src"
     include(string(DIR_SRC, "/poolgen.jl"))  ### Load poolgen first so we can compile now and no precompilation for each process
     @everywhere include(string(DIR_SRC, "/poolgen.jl")) ### Load poolgen for each process
 end

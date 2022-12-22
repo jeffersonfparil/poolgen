@@ -275,7 +275,7 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     return(β̂, μ̂)
 end
 
-function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, MM_method::String=["ML", "REML"][1], ridge_regression::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}, Array{T}} where T <: Number
+function MM(y::Array{T}, X::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, MM_method::String=["ML", "REML"][1], ridge_regression::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}, Array{T}} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
