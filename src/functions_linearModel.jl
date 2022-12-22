@@ -476,7 +476,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
     return(σ2u, σ2e)
 end
 
-function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2])::Tuple{Array{T}, Union{Array{T}, UniformScaling{T}}, UniformScaling{T}} where T <: Number
+function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2])::Array{T} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -542,7 +542,7 @@ function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"]
     elseif (model == "ABLUP") | (model == "RRBLUP")
         θ̂ = vcat(β̂, μ̂) # include the fixed intercept effect
     end
-    return(θ̂, D, R)
+    return(θ̂)
 end
 
 function NLL_BETA(beta::Array{T}, percA::Array{T}, percB::Array{T}) where T <: Number
