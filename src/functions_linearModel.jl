@@ -10,7 +10,7 @@
 #####################
 
 ### HELPER FUNCTIONS
-function GENERATE_COVARIATE(X::Array{T}, df::Int64=1, covariate::String=["XTX", "COR"][2])::Array{T} where T <: Number
+function GENERATE_COVARIATE(X::Array{T}, df::Int64=1, covariate::String=["XTX", "COR"][1])::Array{T} where T <: Number
     ####### TEST ########
     # syncx = "../test/test.syncx"
     # χ = LOAD(syncx, false)
@@ -34,7 +34,7 @@ function GENERATE_COVARIATE(X::Array{T}, df::Int64=1, covariate::String=["XTX", 
     return(C)
 end
 
-function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, df::Int64=1, covariate::String=["XTX", "COR"][2], maf::Float64=0.001, δ::Float64=1e-10, remove_insertions::Bool=true, remove_minor_alleles::Bool=false, remove_correlated_alleles::Bool=false, θ::Float64=0.95, centre::Bool=true)::Array{Float64}
+function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, df::Int64=1, covariate::String=["XTX", "COR"][1], maf::Float64=0.001, δ::Float64=1e-10, remove_insertions::Bool=true, remove_minor_alleles::Bool=false, remove_correlated_alleles::Bool=false, θ::Float64=0.95, centre::Bool=true)::Array{Float64}
     ####### TEST ########
     # syncx = "../test/test.syncx"
     # nloci = 100
@@ -176,7 +176,36 @@ function GLMNET(X::Array{T}, y::Array{T}, alpha::Float64=1.0)::Vector{T} where T
     return(β̂)
 end
 
-function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, FE_method::String, ridge_regression::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
+function REML(V::Union{Array{T}, UniformScaling{T}}, y::Array{T})::Tuple{Array{T}, Array{T}, Array{T}} where T <: Number
+    ####### TEST ########
+    # syncx = "../test/test_Lr.syncx"
+    # csv = "../test/test_Lr.csv"
+    # χ = LOAD(syncx, false)
+    # G, vec_chr, vec_pos, vec_ref = FILTER(χ, 0.01, 1e-3, true, false, true)
+    # ϕ = LOAD(csv, ",", true, 1, [2])
+    # y = Float64.(ϕ.phe[:,1])
+    # Z = 1.00*I
+    # D = 1.00*GENERATE_COVARIATE(G, size(G,1))
+    # R = 1.00*I
+    # V = (Z * D * Z') + R
+    # T = Float64
+    #####################
+    A = copy(V)
+    if typeof(A) == UniformScaling{T}
+        A = diagm(repeat([A.λ], n))
+    end
+    M = try
+          INVERSE(LinearAlgebra.cholesky(A)) ### Cholesky decomposition
+        catch
+          INVERSE(LinearAlgebra.lu(A).L) ### LU decomposition
+        end
+    V_new = M' * V * M
+    y_new = M' * y
+    μy_new = sum(M', dims=2)
+    return(V_new, y_new, μy_new)
+end
+
+function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, FE_method::String, MM_method::String=["ML", "REML"][1], ridge_regression::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -185,6 +214,7 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     # ϕ = LOAD(csv, ",", true, 1, [2])
     # y = Float64.(ϕ.phe[:,1])
     # K = GENERATE_COVARIATE(G, size(G,1))
+    # MM_method = ["ML", "REML"][1]
     # ### GBLUP
     # X = G
     # Z = 1.00*I
@@ -192,7 +222,6 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     # R = 0.01*I
     # FE_method = ["CANONICAL", "N<<P"][2]
     # ridge_regression = false
-
     # ### ABLUP
     # X = hcat(ones(size(G,1)))
     # Z = G
@@ -217,6 +246,11 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     end
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
     V = (Z * D * Z') + R
+    ### Rotate data if using REML estimation
+    if MM_method == "REML"
+        V, y, μy = REML(V, y)
+    end
+    ### Find the inverse of the variance-covariance matrix
 	VI = INVERSE(V)
 	### Mixed model equations
 	###@@@ Fixed effects:
@@ -235,12 +269,13 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
         μ̂ = (D * Z' * VI) * (y - (X*β̂))
     else
         ### RRBLUP: ridge regression BLUP as defined by Endelman, 2011
-        μ̂ = INVERSE(Z' * Z + (R.λ/D.λ)*I) * (Z' * y)
+        # μ̂ = INVERSE(Z' * Z + (R.λ/D.λ)*I) * (Z' * y)
+        μ̂ = INVERSE(Z' * Z + (R.λ/D.λ)*I) * (Z' * (y - (X*β̂))) ### Trying to render RRBLUP invariant to non-standard noraml y
     end
     return(β̂, μ̂)
 end
 
-function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, ridge_regression::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}, Array{T}} where T <: Number
+function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::Union{Array{T}, UniformScaling{T}}, R::Union{Array{T}, UniformScaling{T}}, MM_method::String=["ML", "REML"][1], ridge_regression::Bool=false)::Tuple{Vector{Float64}, Vector{Float64}, Array{T}} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -249,6 +284,7 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     # ϕ = LOAD(csv, ",", true, 1, [2])
     # y = Float64.(ϕ.phe[:,1])
     # K = GENERATE_COVARIATE(G, size(G,1))
+    # MM_method = ["ML", "REML"][1]
     # ### GBLUP
     # X = G
     # Z = 1.00*I
@@ -278,6 +314,11 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
     end
     ### Variance-covariance matrix of y (combined inverse of R and D in Henderson's mixed model equations)
     V = (Z * D * Z') + R
+    ### Rotate data if using REML estimation
+    if MM_method == "REML"
+        V, y, μy = REML(V, y)
+    end
+    ### Find the inverse of the variance-covariance matrix
 	VI = INVERSE(V)
     Σ̂ = INVERSE(X' * VI * X) ### Using canonical equations to estimate fixed effects so we estimate the fixed effect variances
 	### Mixed model equations
@@ -287,12 +328,13 @@ function MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, D::
         μ̂ = (D * Z' * VI) * (y - (X*β̂))
     else
         ### RRBLUP: ridge regression BLUP as defined by Endelman, 2011
-        μ̂ = INVERSE(Z' * Z + (R.λ/D.λ)*I) * (Z' * y)
+        # μ̂ = INVERSE(Z' * Z + (R.λ/D.λ)*I) * (Z' * y)
+        μ̂ = INVERSE(Z' * Z + (R.λ/D.λ)*I) * (Z' * (y - (X*β̂))) ### Trying to render RRBLUP invariant to non-standard noraml y
     end
     return(β̂, μ̂, Σ̂)
 end
 
-function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K::Union{Array{T}, UniformScaling{T}}, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], ridge_regression::Bool=false)::Float64 where T <: Number
+function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K::Union{Array{T}, UniformScaling{T}}, FE_method::String=["CANONICAL", "N<<P"][2], MM_method::String=["ML", "REML"][1], ridge_regression::Bool=false)::Float64 where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -303,7 +345,8 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, Unif
     # y = Float64.(ϕ.phe[:,1])
     # K = GENERATE_COVARIATE(G, size(G,1))
     # FE_method = ["CANONICAL", "N<<P"][2]
-    # method = ["ML", "REML"][1]
+    # MM_method = ["ML", "REML"][1]
+    # # MM_method = ["ML", "REML"][2]
     # T = Float64
     # ### GBLUP
     # X = G
@@ -348,42 +391,17 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, Unif
     if typeof(V) == UniformScaling{T}
         V = diagm(repeat([V.λ], n))
     end
-    β̂, μ̂ = MM(X, y, Z, D, R, FE_method, ridge_regression);
+    β̂, μ̂ = MM(X, y, Z, D, R, FE_method, MM_method, ridge_regression);
     ### Calculation negative log-likelihoods of variance θ
-    if method == "ML"
-        ### The negative log-likelihood function y given σ2e and σ2u
+    if MM_method == "ML"
         μy = (X * β̂)
-        neg_log_lik = 0.5 * ( log(abs(det(V))) + ((y - μy)' * INVERSE(V) * (y - μy)) + (n*log(2*pi)) )
-    elseif method == "REML"
-        if nz == pz
-            ### NOTE: Z MUST BE SQUARE!
-            A = σ2u*Z + R
-            if typeof(A) == UniformScaling{T}
-                A = diagm(repeat([A.λ], n))
-            end
-            M = try
-                    INVERSE(LinearAlgebra.cholesky(A)) ### Cholesky decomposition
-                catch
-                    INVERSE(LinearAlgebra.lu(A).L) ### LU decomposition
-                end
-            y_new = M' * y
-            intercept_new = sum(M', dims=2)
-            V_new = M' * V * M
-            n = length(y_new)
-            ### Negative log-likelihood of σ2e and σ2u given X, y, and Z
-            neg_log_lik = 0.5 * ( log(abs(det(V_new))) .+ ((y_new - intercept_new)' * INVERSE(V_new) * (y_new - intercept_new)) .+ (n*log(2*pi)) )[1,1]
-        else
-            if K == zeros(2, 2)
-                println("Sorry, REML cannot be used with random SNP effects (e.g. RR-BLUP). Try GBLUP where the SNP effects are fixed.")
-            else
-                println("Sorry, REML is not a valid for a non-square Z matrix.")
-            end
-            return(2)
-        end
+    elseif MM_method == "REML"
+        V, y, μy = REML(V, y)
     else
-        println(string("Sorry. ", method, " is not a valid method of estimating the variances of the random effects effects. Please pick ML or REML."))
+        println(string("Linear mixed model method: ", MM_method, " is not available. Please choose: \"ML\" and \"REML\"."))
         return(1)
     end
+    neg_log_lik = 0.5 * ( log(abs(det(V))) + ((y - μy)' * INVERSE(V) * (y - μy))[1,1] + (n*log(2*pi)) )
     return(neg_log_lik)
 end
 
@@ -458,7 +476,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
     return(σ2u, σ2e)
 end
 
-function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2])::Array{T} where T <: Number
+function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2])::Tuple{Array{T}, Union{Array{T}, UniformScaling{T}}, UniformScaling{T}} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -518,13 +536,13 @@ function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"]
     ### Error variance-covariance matrix (homoscedastic)
     R = σ2e*I
     ### Solve the mixed model equations
-    β̂, μ̂ = MM(X, y, Z, D, R, FE_method, ridge_regression)
+    β̂, μ̂ = MM(X, y, Z, D, R, FE_method, method, ridge_regression)
     if model == "GBLUP"
         θ̂ = β̂
     elseif (model == "ABLUP") | (model == "RRBLUP")
         θ̂ = vcat(β̂, μ̂) # include the fixed intercept effect
     end
-    return(θ̂)
+    return(θ̂, D, R)
 end
 
 function NLL_BETA(beta::Array{T}, percA::Array{T}, percB::Array{T}) where T <: Number

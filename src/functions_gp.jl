@@ -1,6 +1,6 @@
 ### GENOMIC PREDICTION
 
-####### TEST ########
+###### TEST ########
 # include("structs.jl")
 # using .structs: PileupLine, SyncxLine, LocusAlleleCounts, Window, PhenotypeLine, Phenotype, MinimisationError
 # include("functions_io.jl")
@@ -483,13 +483,19 @@ end
 # ### Test the idea of variance estimation using GBLUP and estimate effects using RRBLUP equations:
 
 # ### Simulate data
-# n=5; m=10_000; l=135_000_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=1_000; t=10; nQTL=5; heritability=0.9
+# n=5; m=5_000; l=135_000; k=5; ϵ=Int(1e+15); a=2; vec_chr_lengths=[0]; vec_chr_names=[""]; dist_noLD=500_000; o=1_000; t=10; nQTL=20; heritability=0.5
 # @time vec_chr, vec_pos, G, p, b = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability)
 # n = 100
 # X, y = POOL(G, p, n)
+# # mu = mean(y)
+# # sd = std(y)
+# # y = (y .- mu) ./ sd
+# # min = minimum(y)
+# # max = maximum(y)
+# # y = (y .- min) ./ (max - min)
 
 # ### Estimate variances and use the  σ2u and σ2e estimates to calculate the BLUEs and BLUPs
-# function test(X, y)
+# function GRRBLUP(X, y, MM_method=["ML", "REML"][1])
 #     n, p = size(X)
 #     K = GENERATE_COVARIATE(X, n, "COR")
 #     σ2u, σ2e = OPTIM_MM(ones(n),
@@ -497,7 +503,31 @@ end
 #                         1.0*I,
 #                         K,
 #                         "N<<P",
-#                         "ML")
+#                         MM_method)
+
+#     ### Random effects variance-covariance matrix
+#     # D = (σ2u/p)*I
+#     D = σ2u*I
+#     ### Error variance-covariance matrix (homoscedastic)
+#     R = σ2e*I
+#     ### Solve the mixed model equations
+#     Z = X
+#     X = ones(n)
+#     β̂, μ̂ = MM(X, y, Z, D, R, "N<<P", MM_method, true)
+#     out = vcat(β̂[1], μ̂)
+#     return(out, D, R)
+# end
+
+
+# function GABLUP(X, y, MM_method=["ML", "REML"][1])
+#     n, p = size(X)
+#     K = GENERATE_COVARIATE(X, n, "COR")
+#     σ2u, σ2e = OPTIM_MM(ones(n),
+#                         y,
+#                         1.0*I,
+#                         K,
+#                         "N<<P",
+#                         MM_method)
 
 #     ### Random effects variance-covariance matrix
 #     D = (σ2u/p)*I
@@ -506,46 +536,153 @@ end
 #     ### Solve the mixed model equations
 #     Z = X
 #     X = ones(n)
-#     β̂, μ̂ = MM(X, y, Z, D, R, "N<<P", true)
+#     β̂, μ̂ = MM(X, y, Z, D, R, "N<<P", MM_method, false)
 #     out = vcat(β̂[1], μ̂)
-#     return(out)
+#     return(out, D, R)
 # end
+
+
 # vec_idx = sample(collect(1:n), Int(ceil(0.9*n)), replace=false);
 # idx_train = [x ∈ vec_idx for x in collect(1:n)];
 # idx_test = .!idx_train;
 # sum(idx_train)
 # sum(idx_test)
 
-# @time grrblup = test(X[idx_train,:], y[idx_train]);
-# @time rrblup = MM(X[idx_train,:], y[idx_train], "RRBLUP");
-# @time ablup = MM(X[idx_train,:], y[idx_train], "ABLUP");
-# @time gblup = MM(X[idx_train,:], y[idx_train], "GBLUP");
+# # models = [grrblup, gablup, grrblup_reml, gablup_reml, rrblup, ablup, gblup, ablup_reml, gblup_reml, rr, lasso]
+# # for mod in models
+
+
+# @time grrblup, D_grrblup, R_grrblup = GRRBLUP(X[idx_train,:], y[idx_train]);
+# @time gablup, D_gablup, R_gablup = GABLUP(X[idx_train,:], y[idx_train]);
+# @time grrblup_reml, D_grrblup_reml, R_grrblup_reml = GRRBLUP(X[idx_train,:], y[idx_train], "REML");
+# @time gablup_reml, D_gablup_reml, R_gablup_reml = GABLUP(X[idx_train,:], y[idx_train], "REML");
+# @time rrblup, D_rrblup, R_rrblup = MM(X[idx_train,:], y[idx_train], "RRBLUP");
+# @time ablup, D_ablup, R_ablup = MM(X[idx_train,:], y[idx_train], "ABLUP");
+# @time gblup, D_gblup, R_gblup = MM(X[idx_train,:], y[idx_train], "GBLUP");
+# @time ablup_reml, D_ablup_reml, R_ablup_reml = MM(X[idx_train,:], y[idx_train], "ABLUP", "REML");
+# @time gblup_reml, D_gblup_reml, R_gblup_reml = MM(X[idx_train,:], y[idx_train], "GBLUP", "REML");
+# @time rr = GLMNET(X[idx_train,:], y[idx_train], 0.00);
+# @time lasso = GLMNET(X[idx_train,:], y[idx_train], 1.00);
 
 # using UnicodePlots
 # UnicodePlots.histogram(grrblup[2:end])
+# UnicodePlots.histogram(gablup[2:end])
 # UnicodePlots.histogram(rrblup[2:end])
 # UnicodePlots.histogram(ablup[2:end])
 # UnicodePlots.histogram(gblup[2:end])
+# UnicodePlots.histogram(ablup_reml[2:end])
+# UnicodePlots.histogram(gblup_reml[2:end])
+# UnicodePlots.histogram(rr[2:end])
+# UnicodePlots.histogram(lasso[2:end])
 
 # UnicodePlots.scatterplot(grrblup[2:end], rrblup[2:end])
+# UnicodePlots.scatterplot(grrblup[2:end], gablup[2:end])
 # UnicodePlots.scatterplot(grrblup[2:end], ablup[2:end])
 # UnicodePlots.scatterplot(grrblup[2:end], gblup[2:end])
+# UnicodePlots.scatterplot(grrblup[2:end], ablup_reml[2:end])
+# UnicodePlots.scatterplot(grrblup[2:end], gblup_reml[2:end])
+# UnicodePlots.scatterplot(grrblup[2:end], rr[2:end])
+# UnicodePlots.scatterplot(grrblup[2:end], lasso[2:end])
 
 # cor(grrblup[2:end], rrblup[2:end])
+# cor(grrblup[2:end], gablup[2:end])
 # cor(grrblup[2:end], ablup[2:end])
+# cor(grrblup[2:end], gablup_reml[2:end])
+# cor(grrblup[2:end], ablup_reml[2:end])
 # cor(grrblup[2:end], gblup[2:end])
+# cor(grrblup[2:end], ablup_reml[2:end])
+# cor(grrblup[2:end], gblup_reml[2:end])
+# cor(grrblup[2:end], rr[2:end])
+# cor(grrblup[2:end], lasso[2:end])
+# cor(ablup[2:end], ablup_reml[2:end])
+# cor(gblup[2:end], gblup_reml[2:end])
+# UnicodePlots.scatterplot(ablup[2:end], ablup_reml[2:end])
+# UnicodePlots.scatterplot(gblup[2:end], gblup_reml[2:end])
+# UnicodePlots.scatterplot(ablup[2:end], ablup_reml[2:end])
+# UnicodePlots.scatterplot(gblup[2:end], gblup_reml[2:end])
 
+
+# ### CV
 # UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * grrblup)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * gablup)
 # UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * rrblup)
 # UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * ablup)
 # UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * gblup)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * ablup_reml)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * gblup_reml)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * rr)
+# UnicodePlots.scatterplot(y[idx_test],  hcat(ones(sum(idx_test)), X[idx_test, :]) * lasso)
+
+# var(y)
 
 # sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * grrblup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * gablup).^2))
+# # sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * gablup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * grrblup_reml).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * gablup_reml).^2))
+# sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * gablup_reml).^2))
+
+# @time gablup_reml, D_gablup_reml, R_gablup_reml = GABLUP(X[idx_train,:], y[idx_train], "REML");
+# Z = X[idx_train, :]
+# A = (Z * D_gablup_reml * Z') + R_gablup_reml
+# M = try
+#     INVERSE(LinearAlgebra.cholesky(A)) ### Cholesky decomposition
+# catch
+#     INVERSE(LinearAlgebra.lu(A).L) ### LU decomposition
+# end
+# INVERSE(M * M') * (M * hcat(ones(sum(idx_train)), X[idx_train, :]) * gablup_reml)
+
+# Z = X[idx_test, :]
+# A = copy(V)
+# M = try
+#         INVERSE(LinearAlgebra.cholesky(A)) ### Cholesky decomposition
+#     catch
+#         INVERSE(LinearAlgebra.lu(A).L) ### LU decomposition
+#     end
+# y_transformed = INVERSE(M * M') * (M * hcat(ones(sum(idx_test)), X[idx_test, :]) * gablup_reml)
+
+
+
+
 # sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * rrblup).^2))
 # sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * ablup).^2))
 # sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * gblup).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * rr).^2))
+# sqrt(mean((y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * lasso).^2))
+
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * grrblup)
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * gablup)
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * grrblup_reml)
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * gablup_reml)
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * rrblup)
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * ablup)
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * gblup)
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * rr)
+# cor(y[idx_test] - hcat(ones(sum(idx_test)), X[idx_test, :]) * lasso)
+
+
+
+# ### WITHIN TRAINING VALIDATION
+# UnicodePlots.scatterplot(y[idx_train],  hcat(ones(sum(idx_train)), X[idx_train, :]) * grrblup)
+# UnicodePlots.scatterplot(y[idx_train],  hcat(ones(sum(idx_train)), X[idx_train, :]) * gablup)
+# UnicodePlots.scatterplot(y[idx_train],  hcat(ones(sum(idx_train)), X[idx_train, :]) * rrblup)
+# UnicodePlots.scatterplot(y[idx_train],  hcat(ones(sum(idx_train)), X[idx_train, :]) * ablup)
+# UnicodePlots.scatterplot(y[idx_train],  hcat(ones(sum(idx_train)), X[idx_train, :]) * gblup)
+# UnicodePlots.scatterplot(y[idx_train],  hcat(ones(sum(idx_train)), X[idx_train, :]) * rr)
+# UnicodePlots.scatterplot(y[idx_train],  hcat(ones(sum(idx_train)), X[idx_train, :]) * lasso)
+
+# sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * grrblup).^2))
+# sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * gablup).^2))
+# sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * rrblup).^2))
+# sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * ablup).^2))
+# sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * gblup).^2))
+# sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * rr).^2))
+# sqrt(mean((y[idx_train] - hcat(ones(sum(idx_train)), X[idx_train, :]) * lasso).^2))
 
 # UnicodePlots.scatterplot(b,  grrblup[2:end])
+# UnicodePlots.scatterplot(b,  gablup[2:end])
 # UnicodePlots.scatterplot(b,  rrblup[2:end])
 # UnicodePlots.scatterplot(b,  ablup[2:end])
 # UnicodePlots.scatterplot(b,  gblup[2:end])
+# UnicodePlots.scatterplot(b,  rr[2:end])
+# UnicodePlots.scatterplot(b,  lasso[2:end])
