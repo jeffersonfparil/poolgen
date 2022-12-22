@@ -627,7 +627,7 @@ function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15),
         LD_window_size = 2*dist_noLD
         vec_r2, vec_dist = LD(P, vec_chr, vec_pos, LD_chr, LD_window_size, LD_n_pairs)
         p = Plots.scatter(vec_dist, vec_r2, legend=false, xlab="Distance (bp)", ylab="r²")
-        Plots.savefig(p, string(join(split(out_geno, ".")[1:(end-1)], "."), "-LD_decay.png"))
+        Plots.savefig(p, string(out_geno, "-LD_decay.png"))
     end
     G, p = POOL(X, y, npools)
     map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y, out_geno, out_pheno)

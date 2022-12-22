@@ -255,9 +255,9 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
                 σ2u, σ2e = OPTIM_MM(_X_, y, Z, K, FE_method, method, ridge_regression, inner_optimizer, optim_trace)
                 ### Random effects variance-covariance matrix
-                D = σ2u .* K
+                D = σ2u * K
                 ### Error variance-covariance matrix (homoscedastic)
-                R = diagm(repeat([σ2e], n))
+                R = σ2e * I
                 ### Solve the mixed model equations
                 β̂, μ̂, Σ̂ = MM(y, _X_, Z, D, R, method, ridge_regression)
                 if model == "GBLUP"
