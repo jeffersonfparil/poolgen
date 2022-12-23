@@ -293,21 +293,22 @@ function TRANSFORM(y::Vector{T}, absolute_threshold::Float64=0.1, maxiter::Int=1
     iter = 0
     while ((skewness(y) > absolute_threshold) || (skewness(y) < -absolute_threshold)) && (iter < maxiter)
         iter += 1
+        min_abs = abs(minimum(vcat(y, 0.0)))
         if skewness(y) > 1.00
             push!(vec_fun, "++")
-            push!(vec_max, 0.00)
-            y = log.(y .+ 1)
+            push!(vec_max, min_abs)
+            y = log.(y .+ vec_max[end])
         elseif skewness(y) > 0.00
             push!(vec_fun, "+")
-            push!(vec_max, 0.00)
-            y = sqrt.(y)
+            push!(vec_max, min_abs)
+            y = sqrt.(y .+ vec_max[end])
         elseif skewness(y) < -1.00
             push!(vec_fun, "--")
-            push!(vec_max, maximum(y .+ 1))
+            push!(vec_max, maximum(y .+ min_abs))
             y = log.(vec_max[end] .- y)
         elseif skewness(y) < 0.00
             push!(vec_fun, "-")
-            push!(vec_max, maximum(y .+ 1))
+            push!(vec_max, maximum(y .+ min_abs))
             y = sqrt.(vec_max[end] .- y)
         else
             break
@@ -339,40 +340,3 @@ function UNTRANSFORM(y::Vector{T}, vec_fun::Vector{String}, vec_max::Vector{T}):
     end
     return(y)
 end
-
-# function TRANSFORM(y::Vector{T}, centred::Bool, scaled::Bool, boxed::Bool)::Tuple{Vector{T}, Vector{String}, Vector{T}} where T <: Number
-#     ####### TEST ########
-#     # using UnicodePlots
-#     # y_untransformed = rand(100)
-#     # UnicodePlots.histogram(y_untransformed)
-#     # centred = true
-#     # scaled = true
-#     # boxed = true
-#     #####################
-#     ### centred: subtract the mean
-#     ### scaled: divide by the standard deviation
-#     ### boxed: scaled between zero and one, i.e. (y - min(y)) / (max(y) - min(y))
-#     vec_fun = []
-#     vec_par = []
-#     if centred
-#         μ = mean(y)
-#         y = y .- μ
-#         push!(vec_fun, "centre")
-#         push!(vec_par, μ)
-#     end
-#     if scaled
-#         σ = std(y)
-#         y = y ./ σ
-#         push!(vec_fun, "scale")
-#         push!(vec_par, σ)
-#     end
-#     if boxed
-#         m = minimum(y)
-#         M = maximum(y)
-#         y = (y .- m) ./ (M - m)
-#         push!(vec_fun, "box")
-#         push!(vec_par, m)
-#         push!(vec_par, M)
-#     end
-#     return(y, vec_fun, vec_par)
-# end
