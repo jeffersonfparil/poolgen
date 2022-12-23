@@ -33,20 +33,22 @@ for model in ["Mean", "OLS", "RR", "LASSO", "GLMNET"]
     end
 end
 
-poolgen.simulate(n=5, m=10_000, l=135_000_000, k=5, ϵ=Int(1e+15), a=2, vec_chr_lengths=[0], vec_chr_names=[""], dist_noLD=500_000, o=100, t=10, nQTL=10, heritability=0.5, npools=5, LD_chr="", LD_n_pairs=10_000, plot_LD=true, out_geno="test/test-SIMULATED-GENOTYPES", out_pheno="test/test-SIMULATED-PHENOTYPES")
+poolgen.simulate(n=5, m=1_000, l=135_000_000, k=5, ϵ=Int(1e+15), a=2, vec_chr_lengths=[0], vec_chr_names=[""], dist_noLD=500_000, o=1_000, t=10, nQTL=10, heritability=0.5, npools=50, LD_chr="", LD_n_pairs=10_000, plot_LD=true, out_geno="test/test-SIMULATED-GENOTYPES", out_pheno="test/test-SIMULATED-PHENOTYPES")
 
 poolgen.gwalpha(syncx="test/test.syncx", py_phenotype="test/test.py", maf=0.001, penalty=false, out="")
 
-poolgen.gwas(syncx="test/test.syncx", phenotype="test/test.csv", model="OLS")
-poolgen.gwas(syncx="test/test.syncx", phenotype="test/test.csv", model="GBLUP")
-poolgen.gwas(syncx="test/test.syncx", phenotype="test/test.csv", model="RRBLUP")
+### poolgen.gwas
+for model in ["OLS", "GBLUP", "ABLUP", "RRBLUP", "G-ABLUP", "G-RRBLUP"]
+    poolgen.gwas(syncx="test/test-SIMULATED-GENOTYPES.syncx", phenotype="test/test-SIMULATED-PHENOTYPES.csv", model=model)
+end
 
+### poolgen.genomic_prediction
 for model in ["OLS", "GLMNET", "MM"]
     for GBLUP_K in ["XTX", "COR"]
-        for MM_model in ["GBLUP", "ABLUP", "RRBLUP"]
+        for MM_model in ["GBLUP", "ABLUP", "RRBLUP", "G-ABLUP", "G-RRBLUP"]
             for MM_method in ["ML", "REML"]
-                poolgen.genomic_prediction(syncx="test/test.syncx",
-                                        phenotype="test/test.csv",
+                poolgen.genomic_prediction(syncx="test/test-SIMULATED-GENOTYPES.syncx",
+                                        phenotype="test/test-SIMULATED-PHENOTYPES.csv",
                                         model=model,
                                         filter_genotype=true,
                                         transform_phenotype=true,
@@ -63,21 +65,22 @@ for model in ["OLS", "GLMNET", "MM"]
                                         MM_model=MM_model,
                                         MM_method=MM_method,
                                         MM_inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing","NelderMead"][1],
-                                        MM_optim_trace=true,
+                                        MM_optim_trace=false,
                                         out="")
             end
         end
     end
 end
 
+### poolgen.genomic_prediction_CV
 for model in ["OLS", "GLMNET", "MM"]
     for GBLUP_K in ["XTX", "COR"]
-        for MM_model in ["GBLUP", "ABLUP", "RRBLUP"]
+        for MM_model in ["GBLUP", "ABLUP", "RRBLUP", "G-ABLUP", "G-RRBLUP"]
             for MM_method in ["ML", "REML"]
                 poolgen.genomic_prediction_CV(nrep=2,
                                               nfold=2,
-                                              syncx="test/test_Lr.syncx",
-                                              phenotype="test/test_Lr.csv",
+                                              syncx="test/test-SIMULATED-GENOTYPES.syncx",
+                                              phenotype="test/test-SIMULATED-PHENOTYPES.csv",
                                               model=model,
                                               maf=0.001,
                                               delimiter=",",

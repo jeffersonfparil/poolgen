@@ -91,16 +91,13 @@ function convert(syncx_or_sync::String; out::String="")::String
         extension = [split(syncx_or_sync, ".")[end][end] == 'x' ? ".sync" : ".syncx"][1]
         out = string(join(split(syncx_or_sync, ".")[1:(end-1)], "."), extension)
     end
-    if isfile(out)
-        out_basename = join(split(out, ".")[1:(end-1)], ".")
-        out_extension = split(out, ".")[end]
-        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
-    end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx_or_sync)
     digit = length(string(length(positions_init)))
     ### Convert into syncx or sync format
+    println(string("Converting ", syncx_or_sync, " into ", out, ": "))
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
@@ -185,16 +182,13 @@ function pileup2syncx(pileup::String; out::String="")::String
     if out == ""
         out = string(join(split(pileup, ".")[1:(end-1)], "."), ".syncx")
     end
-    if isfile(out)
-        out_basename = join(split(out, ".")[1:(end-1)], ".")
-        out_extension = split(out, ".")[end]
-        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
-    end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, pileup)
     digit = length(string(length(positions_init)))
     ### Parse to convert from pileup to syncx format
+    println(string("Converting ", pileup, " into ", out, ": "))
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
@@ -297,16 +291,13 @@ function filter(pileup::String, outype::String; maximum_missing_fraction::Float6
             out = string(join(split(pileup, ".")[1:(end-1)], "."), "-FILTERED-missing_", maximum_missing_fraction, "-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
         end
     end
-    if isfile(out)
-        out_basename = join(split(out, ".")[1:(end-1)], ".")
-        out_extension = split(out, ".")[end]
-        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
-    end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, pileup)
     digit = length(string(length(positions_init)))
     ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and minimum_coverage)
+    println(string("Filtering ", pileup, " to generate ", out, ": "))
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
@@ -386,16 +377,13 @@ function filter(syncx::String; maximum_missing_fraction::Float64=0.10, alpha1::F
     if out == ""
         out = string(join(split(syncx, ".")[1:(end-1)], "."), "-FILTERED-missing_", maximum_missing_fraction, "-alpha1_", alpha1, "-maf_", maf, "-alpha2_", alpha2, "-cov_", minimum_coverage, ".syncx")
     end
-    if isfile(out)
-        out_basename = join(split(out, ".")[1:(end-1)], ".")
-        out_extension = split(out, ".")[end]
-        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
-    end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Find file positions for parallel processing
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx)
     digit = length(string(length(positions_init)))
     ### Filter loci by minimum allele frequency (alpha1 and maf) and minimum coverage (alpha2 and minimum_coverage)
+    println(string("Filtering ", syncx, " to generate ", out, ": "))
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
@@ -500,11 +488,7 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     if out == ""
         out = string(join(split(filename, '.')[1:(end-1)], '.'), "-IMPUTED-window_", window_size, "-model_", model, "-distance_", distance, ".syncx")
     end
-    if isfile(out)
-        out_basename = join(split(out, ".")[1:(end-1)], ".")
-        out_extension = split(out, ".")[end]
-        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
-    end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Define the full path to the input and output files since calling functions within @distributed loop will revert back to the root directory from where julia was executed from
     if dirname(filename) == ""
         filename = string(pwd(), "/", filename)
@@ -529,6 +513,7 @@ function impute(filename::String; window_size::Int=100, model::String=["Mean", "
     positions_term = positions_term[1:idx]
     digit = length(string(length(positions_init)))
     ### Impute
+    println(string("Imputing ", filename, " to generate ", out, ": "))
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
@@ -620,6 +605,7 @@ function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15),
     # out_geno = ""         ### simulated genotype output basename of files
     # out_pheno = ""        ### simulated phenotype output basename of files
     #####################
+    println("Simulating genotype and phenotype data: ")
     vec_chr, vec_pos, X, y, b, P = SIMULATE(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names, dist_noLD, o, t, nQTL, heritability, LD_chr, LD_n_pairs)
     ### Assess LD
     if plot_LD
@@ -627,11 +613,12 @@ function simulate(;n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15),
         LD_window_size = 2*dist_noLD
         vec_r2, vec_dist = LD(P, vec_chr, vec_pos, LD_chr, LD_window_size, LD_n_pairs)
         p = Plots.scatter(vec_dist, vec_r2, legend=false, xlab="Distance (bp)", ylab="r²")
-        Plots.savefig(p, string(out_geno, "-LD_decay.png"))
+        png_out = AVOID_FILE_OVERWRITE(string(out_geno, "-LD_decay.png"))
+        Plots.savefig(p, png_out)
     end
     G, p = POOL(X, y, npools)
     map, bim, ped, fam = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, X, y, out_geno, out_pheno)
-    syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p, replace(fam, ".fam"=>".syncx"), replace(fam, ".fam"=>".csv"))
+    syncx, csv = EXPORT_SIMULATED_DATA(vec_chr, vec_pos, G, p, replace(map, ".map"=>".syncx"), replace(fam, ".fam"=>".csv"))
     return(map, bim, ped, fam, syncx, csv)
 end
 
@@ -747,11 +734,7 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
     if out == ""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWAlpha-maf_", round(maf, digits=5), ".tsv")
     end
-    if isfile(out)
-        out_basename = join(split(out, ".")[1:(end-1)], ".")
-        out_extension = split(out, ".")[end]
-        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
-    end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Define the full path to the input and output files since calling functions within @distributed loop will revert back to the root directory from where julia was executed from
     if dirname(syncx) == ""
         syncx = string(pwd(), "/", syncx)
@@ -763,7 +746,8 @@ function gwalpha(;syncx::String, py_phenotype::String, maf::Float64=0.001, penal
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx)
     digit = length(string(length(positions_init)))
-    ### Impute
+    ### GWAlpha
+    println(string("Running GWAlpha using ", syncx, " and maximum likelihood estimation: "))
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
@@ -839,7 +823,7 @@ end
     @time poolgen.gwas(syncx=syncx, phenotype=csv, model="OLS")
 ```
 """
-function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", "ABLUP", "RRBLUP"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2],covariate_df::Int64=1, method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], optim_trace::Bool=false, out::String="")::String
+function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", "ABLUP", "RRBLUP", "G-ABLUP", "G-RRBLUP"][1], maf::Float64=0.001, delimiter::String=",", header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2],covariate_df::Int64=1, method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], optim_trace::Bool=false, out::String="")::String
     ####### TEST ########
     # using Distributed
     # Distributed.addprocs(length(Sys.cpu_info())-1)
@@ -871,7 +855,7 @@ function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", 
     # @everywhere include("functions_gwas.jl")
     # syncx = "../test/test.syncx"
     # phenotype = "../test/test.csv"
-    # model = ["OLS", "GBLUP", "RRBLUP"][1]
+    # model = ["OLS", "GBLUP", "ABLUP", "RRBLUP", "G-ABLUP", "G-RRBLUP"][1]
     # maf = 0.01
     # delimiter = ","
     # header = true
@@ -889,11 +873,7 @@ function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", 
     if out == ""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWAS-", model, "-maf_", round(maf, digits=5), ".tsv")
     end
-    if isfile(out)
-        out_basename = join(split(out, ".")[1:(end-1)], ".")
-        out_extension = split(out, ".")[end]
-        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
-    end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Define the full path to the input and output files since calling functions within @distributed loop will revert back to the root directory from where julia was executed from
     if dirname(syncx) == ""
         syncx = string(pwd(), "/", syncx)
@@ -904,7 +884,7 @@ function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", 
     ### Setup the linear model to use
     if model == "OLS"
         parameters = [covariate_df]
-    elseif (model == "GBLUP") | (model == "RRBLUP")
+    elseif (model == "GBLUP") || (model == "ABLUP") || (model == "RRBLUP") || (model == "G-ABLUP") || (model == "G-RRBLUP")
         parameters = [model, method, FE_method, GradientDescent(), optim_trace]
     else
         println("Sorry, ", model, " model is not implemented.")
@@ -914,7 +894,8 @@ function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", 
     threads = length(Distributed.workers())
     positions_init, positions_term = SPLIT(threads, syncx)
     digit = length(string(length(positions_init)))
-    ### Impute
+    ### GWAS
+    println(string("Running Pool-GWAS using ", syncx, " and ", model, " model: "))
     @time filenames_out = @sync @showprogress @distributed (append!) for i in eachindex(positions_init)
         init = positions_init[i]
         term = positions_term[i]
@@ -922,9 +903,9 @@ function gwas(;syncx::String, phenotype::String, model::String=["OLS", "GBLUP", 
         tmp = string(syncx, "-GWAS-", id, ".tsv.tmp")
         if model == "OLS"
             filename = OLS_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, parameters..., tmp)
-        elseif (model == "GBLUP") | (model == "RRBLUP")
+        elseif (model == "GBLUP") || (model == "ABLUP") || (model == "RRBLUP") || (model == "G-ABLUP") || (model == "G-RRBLUP")
             filename = LMM_ITERATIVE(syncx, init, term, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, covariate, parameters..., tmp)
-        end        
+        end
         [filename]
     end
     ### Merge the chunks
@@ -1050,14 +1031,17 @@ function genomic_prediction(;syncx::String, phenotype::String, model::String=["O
     #####################
     ### Fit
     if (model == "OLS")
+        println(string("Running genomic prediction using ", syncx, " and ordinary least squares regression: "))
         params = [FE_method]
         out = FIT(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, filter_genotype, transform_phenotype, standardise,
                   OLS, params, out)
     elseif model == "GLMNET"
+        println(string("Running genomic prediction using ", syncx, " and elastic-net regression: "))
         params = [alpha]
         out = FIT(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, filter_genotype, transform_phenotype, standardise,
                   GLMNET, params, out)
     elseif model == "MM"
+        println(string("Running genomic prediction using ", syncx, " and ", MM_model, " (", MM_method, ") model and estimation method: "))
         params = [MM_model, MM_method, MM_inner_optimizer, MM_optim_trace, FE_method, GBLUP_K]
         out = FIT(syncx, maf, phenotype, delimiter, header, id_col, phenotype_col, missing_strings, filter_genotype, transform_phenotype, standardise,
                   MM, params, out)

@@ -39,6 +39,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-OLS_ITERATIVE.tsv")
     end
+    out = AVOID_FILE_OVERWRITE(out)
     file_out = open(out, "a")
     ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
@@ -75,14 +76,14 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     ### Regress
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     pos = init
-    while (pos < term) & (!eof(file))
+    while (pos < term) && (!eof(file))
         # @show position(file)
         locus = PARSE([PARSE(SyncxLine(pos, readline(file)))])
         pos = position(file)
         X = locus.cou ./ sum(locus.cou, dims=1)
         X = X'
         ### Continue if allele frequences are larger that the minimum allele frequence (and vice-versa for 1-maf); and if the locus is polymorphic
-        if (minimum(X[X .!= 0.0]) .>= maf) & (maximum(X[X .!= 0.0]) .<= (1 - maf)) & (sum(var(X, dims=1)) > 0.0)
+        if (minimum(X[X .!= 0.0]) .>= maf) && (maximum(X[X .!= 0.0]) .<= (1 - maf)) && (sum(var(X, dims=1)) > 0.0)
             ### Keep p-1 alleles where p is the number of polymorphic alleles
             idx = collect(1:7)[(var(X, dims=1) .> 0.0)[1, :]]
             freqs = mean(X[:, idx], dims=1)[1,:]
@@ -111,7 +112,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 n, p = size(x)
                 β̂, Vβ̂, Vϵ̂ = OLS(x, y) ### In β̂ the last element refers to the estimated allele effect
                 ### Test if we have reasonable residual variance estimate then proceed to output
-                if ((Vϵ̂ < 0.0) | (Vϵ̂ == Inf) | (Vβ̂[end, end] < 0.0)) == false
+                if ((Vϵ̂ < 0.0) || (Vϵ̂ == Inf) || (Vβ̂[end, end] < 0.0)) == false
                     σβ̂ = []
                     for j in 1:p
                         # j = 1
@@ -135,7 +136,7 @@ function OLS_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     return(out)
 end
 
-function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], model::String=["GBLUP", "ABLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false, out::String="")::String
+function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, phenotype::String, delimiter::String, header::Bool=true, id_col::Int=1, phenotype_col::Int=2, missing_strings::Vector{String}=["NA", "NAN", "NaN", "missing", ""], covariate::String=["", "XTX", "COR"][2], model::String=["GBLUP", "ABLUP", "RRBLUP", "G-ABLUP", "G-RRBLUP"][1], method::String=["ML", "REML"][1], FE_method::String=["CANONICAL", "N<<P"][2], inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false, out::String="")::String
     ####### TEST ########
     # syncx = "../test/test.syncx"
     # file = open(syncx, "r")
@@ -165,6 +166,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-LMM_ITERATIVE.tsv")
     end
+    out = AVOID_FILE_OVERWRITE(out)
     file_out = open(out, "a")
     ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
@@ -201,12 +203,12 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
         # Assign within the loop: _X_ = hcat(ones(n), x)  ### SNPs have fixed effects
         Z = 1.0*I ### Genotypes have random effects...
         K = C ### ... and are distributed normally μ=0, and Σ=σ2g*K
-    elseif (model == "ABLUP") | (model == "RRBLUP")
+    elseif (model == "ABLUP") || (model == "RRBLUP") || (model == "G-ABLUP") || (model == "G-RRBLUP")
         _X_ = hcat(ones(n), C)  ### Kinships have effects
         # Assign within the loop: Z = x                   ### SNPs have random effects
         K = 1.0*I
     end
-    if model == "RRBLUP"
+    if (model == "RRBLUP") || (model == "G-RRBLUP")
         ridge_regression = true
     else
         ridge_regression = false
@@ -214,14 +216,14 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     ### Regress
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     pos = init
-    while (pos < term) & (!eof(file))
+    while (pos < term) && (!eof(file))
         # @show position(file)
         locus = PARSE([PARSE(SyncxLine(pos, readline(file)))])
         pos = position(file)
         X = locus.cou ./ sum(locus.cou, dims=1)
         X = X'
         ### Continue if allele frequences are larger that the minimum allele frequence (and vice-versa for 1-maf); and if the locus is polymorphic
-        if (minimum(X[X .!= 0.0]) .>= maf) & (maximum(X[X .!= 0.0]) .<= (1 - maf)) & (sum(var(X, dims=1)) > 0.0)
+        if (minimum(X[X .!= 0.0]) .>= maf) && (maximum(X[X .!= 0.0]) .<= (1 - maf)) && (sum(var(X, dims=1)) > 0.0)
             ### Keep p-1 alleles where p is the number of polymorphic alleles
             idx = collect(1:7)[(var(X, dims=1) .> 0.0)[1, :]]
             freqs = mean(X[:, idx], dims=1)[1,:]
@@ -246,7 +248,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                     _X_ = hcat(ones(n), x)  ### SNPs have fixed effects
                     # Assigned outside the loop: Z = 1.0*I ### Genotypes have random effects...
                     # Assigned outside the loop: K = C ### ... and are distributed normally μ=0, and Σ=σ2g*K
-                elseif (model == "ABLUP") | (model == "RRBLUP")
+                elseif (model == "ABLUP") || (model == "RRBLUP") || (model == "G-ABLUP") || (model == "G-RRBLUP")
                     # Assigned outside the loop: _X_ = hcat(ones(n), C)  ### Kinships have effects
                     Z = x                   ### SNPs have random effects
                     # Assigned outside the loop: K = 1.0*I
@@ -263,7 +265,7 @@ function LMM_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
                 if model == "GBLUP"
                     b = β̂[end]
                     W = b^2 / Σ̂[end, end] ### Wald's test statistic
-                elseif (model == "ABLUP") | (model == "RRBLUP")
+                elseif (model == "ABLUP") || (model == "RRBLUP") || (model == "G-ABLUP") || (model == "G-RRBLUP")
                     b = μ̂[end]
                     ### Wald's test statistic:
                     W = try
@@ -316,6 +318,7 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-GWAlpha.tsv")
     end
+    out = AVOID_FILE_OVERWRITE(out)
     file_out = open(out, "a")
     ### Extract phenotype information
     phenotype_name, sigma, min, max, perc, q, bins = LOAD_PY(py_phenotype)
@@ -333,17 +336,17 @@ function GWALPHA(syncx::String, py_phenotype::String, init::Int64, term::Int64, 
     ### GWAlpha iteratively
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     i = init
-    while (i < term) & (!eof(file))
+    while (i < term) && (!eof(file))
         locus = PARSE([PARSE(SyncxLine(i, readline(file)))])
         i = position(file)
         freqs = (locus.cou ./ sum(locus.cou, dims=1))'
         freqs[isnan.(freqs)] .= 0.0
 	    allele_freqs = sum(freqs .* bins, dims=1)
         if (sum(locus.cou) != 0.0)
-            if (minimum(allele_freqs[allele_freqs .!= 0.0]) >= maf) & (maximum(allele_freqs) < (1.0 - maf)) #locus filtering by mean MAF
+            if (minimum(allele_freqs[allele_freqs .!= 0.0]) >= maf) && (maximum(allele_freqs) < (1.0 - maf)) #locus filtering by mean MAF
                 for allele in 1:7
                     # allele = 1
-                    if (allele_freqs[allele] > 0.0) & (maximum(freqs[:,allele]) < 0.999999)  #allele filtering remove alleles with no counts and that the number of pools with allele frequency close to one should not occur even once!
+                    if (allele_freqs[allele] > 0.0) && (maximum(freqs[:,allele]) < 0.999999)  #allele filtering remove alleles with no counts and that the number of pools with allele frequency close to one should not occur even once!
                         freqA = freqs[:, allele]
                         pA = sum(freqA .* bins)
                         pB = 1 - pA
@@ -451,7 +454,7 @@ function ESTIMATE_LOD(vec_b::Vector{Float64})::Vector{Float64}
     #####################
     D, D_name = BEST_FITTING_DISTRIBUTION(vec_b)
     println(string("Distribution used: ", D_name))
-    if (D == nothing) | (std(vec_b) == 0)
+    if (D == nothing) || (std(vec_b) == 0)
         pval = repeat([1.0], inner=length(vec_b))
         lod = pval .- 1.0
     else
@@ -681,7 +684,7 @@ function GWAS_SHOW_ANNOTATIONS_OF_TOP_HITS(tsv::String, gff::String, heuristic_p
             idx = vec_idx[idx1][idx2]
             for j in idx
                 # j = idx[1]
-                if (vec_ann[j] == []) | (sum(match.(Regex(replace(replace(ann, "[" => "{"), "]" => "}")), vec_ann[j]) .== nothing) == length(vec_ann[j]))
+                if (vec_ann[j] == []) || (sum(match.(Regex(replace(replace(ann, "[" => "{"), "]" => "}")), vec_ann[j]) .== nothing) == length(vec_ann[j]))
                     push!(vec_ann[j], ann)
                     push!(vec_ann_pos_ini[j], ini)
                     push!(vec_ann_pos_fin[j], fin)
@@ -756,6 +759,7 @@ function BOO_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-BOO_ITERATIVE.tsv")
     end
+    out = AVOID_FILE_OVERWRITE(out)
     file_out = open(out, "a")
     ### Load phenotype data and standard normalise so we don't need to fit an intercept for simplicity
     ϕ = LOAD(phenotype, delimiter, header, id_col, [phenotype_col], missing_strings)
@@ -780,14 +784,14 @@ function BOO_ITERATIVE(syncx::String, init::Int64, term::Int64, maf::Float64, ph
     # vec_pval = []
     vec_alleles = ["A", "T", "C", "G", "INS", "DEL", "N"]
     pos = init
-    while (pos < term) & (!eof(file))
+    while (pos < term) && (!eof(file))
         # @show position(file)
         locus = PARSE([PARSE(SyncxLine(pos, readline(file)))])
         pos = position(file)
         X = locus.cou ./ sum(locus.cou, dims=1)
         X = X'
         ### Continue if allele frequences are larger that the minimum allele frequence (and vice-versa for 1-maf); and if the locus is polymorphic
-        if (minimum(X[X .!= 0.0]) .>= maf) & (maximum(X[X .!= 0.0]) .<= (1 - maf)) & (sum(var(X, dims=1)) > 0.0)
+        if (minimum(X[X .!= 0.0]) .>= maf) && (maximum(X[X .!= 0.0]) .<= (1 - maf)) && (sum(var(X, dims=1)) > 0.0)
             ### Keep p-1 alleles where p is the number of polymorphic alleles
             idx = collect(1:7)[(var(X, dims=1) .> 0.0)[1, :]]
             freqs = mean(X[:, idx], dims=1)[1,:]

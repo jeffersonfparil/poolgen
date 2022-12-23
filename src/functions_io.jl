@@ -46,7 +46,7 @@ function PARSE(line::PileupLine, minimum_quality=20)::LocusAlleleCounts
                 end
             ### allele states
             str_state = uppercase(vec_sta_per_pool[j])
-            if (str_state == "+") | (str_state == "-")
+            if (str_state == "+") || (str_state == "-")
                 ### remove insertion and deletion sequences
                 if str_state == "+"
                     # push!(s, "I")
@@ -67,10 +67,10 @@ function PARSE(line::PileupLine, minimum_quality=20)::LocusAlleleCounts
                     end
                 end
                 j = j + l + parse(Int, string(vec_sta_per_pool[(j+1):(j+(l-1))]...))
-            elseif ((str_state==".") | 
-                    (str_state==",") | 
+            elseif ((str_state==".") || 
+                    (str_state==",") || 
                     (str_state ∈ ["A", "T", "C", "G"])
-                   ) & (q>=minimum_quality)
+                   ) && (q>=minimum_quality)
                 if str_state ∈ ["A", "T", "C", "G"]
                     a = uppercase(str_state)[1]
                 else
@@ -333,7 +333,7 @@ function LOAD_OUT(tsv_gwalpha::String, include_all_sites::Bool)::Tuple{Vector{St
     vec_alpha = []
     while !eof(file)
         line = split(readline(file), "\t")
-        if include_all_sites | ((include_all_sites == false) & (line[4] != "0"))
+        if include_all_sites || ((include_all_sites == false) && (line[4] != "0"))
             push!(vec_chr, line[1])
             push!(vec_pos, parse(Int, line[2]))
             push!(vec_allele, line[3])
@@ -410,7 +410,7 @@ function LOAD_GFF(gff::String)::Tuple{Vector{String}, Vector{Int64}, Vector{Int6
         pos_ini = parse.(Int64, line[4])
         pos_fin = parse.(Int64, line[5])
         ann = line[end]
-        if (match(Regex(";genome=chromosome;"), ann) == nothing) & ( match(Regex(";model_evidence="), ann) != nothing)
+        if (match(Regex(";genome=chromosome;"), ann) == nothing) && ( match(Regex(";model_evidence="), ann) != nothing)
             push!(vec_gff_chr, chr)
             push!(vec_gff_ini, pos_ini)
             push!(vec_gff_fin, pos_fin)
@@ -630,7 +630,7 @@ function MERGE(filenames_out::Vector{String}, window_size::Int64, out::String)::
             end
             file_in = open(filenames_out[i], "r")
             j = 0
-            while (!eof(file_in)) & (j < max_line)
+            while (!eof(file_in)) && (j < max_line)
                 j += 1
                 write(file_out, string(readline(file_in), "\n"))
             end
@@ -708,4 +708,16 @@ function SAVE(phenotype::Phenotype, filename::String, delimiter::String=",", hea
         write(file, string(join(vcat(phenotype.iid[i], phe), ",")), "\n")
     end
     close(file)
+end
+
+function AVOID_FILE_OVERWRITE(out::String)::String
+    ####### TEST ########
+    # out = "../test/test.tsv"
+    #####################
+    if isfile(out)
+        out_basename = join(split(out, ".")[1:(end-1)], ".")
+        out_extension = split(out, ".")[end]
+        out = string(out_basename, "-", Dates.now(Dates.UTC), ".", out_extension)
+    end
+    return(out)
 end

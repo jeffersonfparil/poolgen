@@ -55,6 +55,7 @@ function SIMULATE_MISSING(syncx::String, init::Int, term::Int, window_size::Int=
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-SIMULATED_MISSING.syncx")
     end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Open syncx file
     file = open(syncx, "r")
     ### Set position to the next line if the current position is a truncated line
@@ -68,10 +69,10 @@ function SIMULATE_MISSING(syncx::String, init::Int, term::Int, window_size::Int=
     seek(file, init)
     ### Impute
     i = init
-    while (i < term) & (!eof(file))
+    while (i < term) && (!eof(file))
         j = 0
         window = []
-        while (j < window_size) & (i < term) & (!eof(file))
+        while (j < window_size) && (i < term) && (!eof(file))
             j += 1
             locus = PARSE(SyncxLine(j, readline(file)))
             i = position(file)
@@ -107,11 +108,11 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
     p, n = size(window.cou)
     idx_pools = sum(ismissing.(window.cou), dims=1)[1,:] .> 0
     ### If we have at least one pool with no missing data, then we proceed with imputation
-    if (sum(.!idx_pools) >= 1) & (sum(idx_pools) >= 1)
+    if (sum(.!idx_pools) >= 1) && (sum(idx_pools) >= 1)
         ### Explanatory variables
         X = Int.(window.cou[:, .!idx_pools])
          ### Distance covariate (only add if the window is within a single chromosome)
-         if (distance) & (length(unique(window.chr))==1) & (model != "Mean")
+         if (distance) && (length(unique(window.chr))==1) && (model != "Mean")
             m = length(window.pos)
             D = zeros(Int, m, m)
             @simd for i in 1:m
@@ -143,7 +144,7 @@ function IMPUTE!(window::Window, model::String=["Mean", "OLS", "RR", "LASSO", "G
                         missing
                     end
                 end
-            elseif (model == "RR") | (model == "LASSO") | (model == "GLMNET")
+            elseif (model == "RR") || (model == "LASSO") || (model == "GLMNET")
                 model=="RR" ? alpha1=0 : model=="LASSO" ? alpha1=1 : alpha1=0.5
                 β = try
                         GLMNET(X_train, y_train, alpha1)
@@ -221,6 +222,7 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
     if out==""
         out = string(join(split(syncx, '.')[1:(end-1)], '.'), "-IMPUTED.syncx")
     end
+    out = AVOID_FILE_OVERWRITE(out)
     ### Open syncx file
     file = open(syncx, "r")
     ### Set position to the next line if the current position is a truncated line
@@ -236,9 +238,9 @@ function IMPUTE(syncx::String, init::Int, term::Int, window_size::Int=100, model
     i = init
     j = 0
     window = []
-    while (i < term) & (!eof(file))
+    while (i < term) && (!eof(file))
         if window == []
-            while (j < window_size) & (i < term) & (!eof(file))
+            while (j < window_size) && (i < term) && (!eof(file))
                 j += 1
                 locus = PARSE(SyncxLine(j, readline(file)))
                 i = position(file)

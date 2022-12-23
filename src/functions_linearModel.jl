@@ -52,7 +52,7 @@ function GENERATE_COVARIATE(syncx::String, nloci::Int64=1_000, df::Int64=1, cova
     file = open(syncx, "r")
     m = countlines(file) ### total number of loci
     close(file)
-    if (nloci == 0) | (nloci >= m)
+    if (nloci == 0) || (nloci >= m)
         χ = LOAD(syncx, false)
     else
         _step_ = Int(round(m / nloci))
@@ -405,7 +405,7 @@ function NLL_MM(θ::Vector{T}, X::Array{T}, y::Array{T}, Z::Union{Array{T}, Unif
     return(neg_log_lik)
 end
 
-function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], ridge_regression::Bool=false, inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false)::Tuple{Float64, Float64} where T <: Number
+function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}}, K, FE_method::String=["CANONICAL", "N<<P"][2], method::String=["ML", "REML"][1], ridge_regression::Bool=false, inner_optimizer=[GradientDescent(), LBFGS(), BFGS(), SimulatedAnnealing(), NelderMead()][1], optim_trace::Bool=false, optim_time_limit::Int64=60)::Tuple{Float64, Float64} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -418,6 +418,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
     # method = ["ML", "REML"][1]
     # inner_optimizer = [LBFGS(), BFGS(), SimulatedAnnealing(), GradientDescent(), NelderMead()][1]
     # optim_trace = true
+    # optim_time_limit = 60
     # T = Float64
     # ### GBLUP
     # X = G
@@ -458,7 +459,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
                                         store_trace = false,
                                         show_trace = optim_trace,
                                         show_every=1, 
-                                        time_limit=120))
+                                        time_limit=optim_time_limit))
         catch
             MinimisationError(initial_values, false, false)
         end
@@ -467,7 +468,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
     # ### Output messages
     if optim_trace
         @show θ
-        if (θ.f_converged) | (θ.g_converged)
+        if (θ.f_converged) || (θ.g_converged)
             println("CONVERGED! 😄")
         else
             println("DID NOT CONVERGE! 😭")
@@ -476,7 +477,7 @@ function OPTIM_MM(X::Array{T}, y::Array{T}, Z::Union{Array{T}, UniformScaling{T}
     return(σ2u, σ2e)
 end
 
-function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2])::Array{T} where T <: Number
+function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP", "G-ABLUP", "G-RRBLUP"][1], method::String=["ML", "REML"][1], inner_optimizer=["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1], optim_trace::Bool=false, FE_method::String=["CANONICAL", "N<<P"][2], GBLUP_K::String=["XTX", "COR"][2], optim_time_limit::Int64=60)::Array{T} where T <: Number
     ####### TEST ########
     # syncx = "../test/test_Lr.syncx"
     # csv = "../test/test_Lr.csv"
@@ -484,12 +485,13 @@ function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"]
     # X, vec_chr, vec_pos, vec_ref = FILTER(χ, 0.01, 1e-3, true, false, true)
     # ϕ = LOAD(csv, ",", true, 1, [2])
     # y = Float64.(ϕ.phe[:,1])
-    # model = ["GBLUP", "ABLUP", "RRBLUP"][3]
+    # model = ["GBLUP", "ABLUP", "RRBLUP", "G-ABLUP", "G-RRBLUP"][3]
     # method = ["ML", "REML"][1]
     # inner_optimizer = ["GradientDescent", "LBFGS", "BFGS", "SimulatedAnnealing", "NelderMead"][1]
     # optim_trace = false
     # FE_method = ["CANONICAL", "N<<P"][2]
     # GBLUP_K = ["XTX", "COR"][2]
+    # optim_time_limit = 60
     # T = Float64
     #####################
     if isa(X, Vector)
@@ -503,12 +505,12 @@ function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"]
         Z = 1.0*I                               ### Genotypes have random effects...
         K = GENERATE_COVARIATE(X, n, GBLUP_K)   ### ... and are distributed normally μ=0, and Σ=σ2g*K
         ridge_regression = false
-    elseif model == "ABLUP"
+    elseif (model == "ABLUP") || (model == "G-ABLUP")
         Z = X[:,2:end]                          ### SNPs have random effects
         K = 1.0*I                               ### ... and are spherically normally μ=0, and Σ=σ2g*I
         X = X[:,1:1]                            ### Intercept is the only fixed effect
         ridge_regression = false
-    elseif model == "RRBLUP"
+    elseif (model == "RRBLUP") || (model == "G-RRBLUP")
         Z = X[:,2:end]                          ### SNPs have random effects
         K = 1.0*I                               ### ... and are spherically normally μ=0, and Σ=σ2g*I
         X = X[:,1:1]                            ### Intercept is the only fixed effect
@@ -530,7 +532,11 @@ function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"]
         inner_optimizer = Optim.NelderMead()
     end
     ### Linear mixed model fitting using the canonical method and outputting the estimates of the effects and variances
-    σ2u, σ2e = OPTIM_MM(X, y, Z, K, FE_method, method, ridge_regression, inner_optimizer, optim_trace)
+    if (model == "G-ABLUP") || model == "G-RRBLUP"
+        σ2u, σ2e = OPTIM_MM(ones(n), y, 1.0*I, GENERATE_COVARIATE(X, n, GBLUP_K), FE_method, method, ridge_regression, inner_optimizer, optim_trace, optim_time_limit)
+    else
+        σ2u, σ2e = OPTIM_MM(X,       y, Z,     K,                                 FE_method, method, ridge_regression, inner_optimizer, optim_trace, optim_time_limit)
+    end
     ### Random effects variance-covariance matrix
     D = σ2u*K
     ### Error variance-covariance matrix (homoscedastic)
@@ -539,7 +545,7 @@ function MM(X::Array{T}, y::Array{T}, model::String=["GBLUP", "ABLUP", "RRBLUP"]
     β̂, μ̂ = MM(X, y, Z, D, R, FE_method, method, ridge_regression)
     if model == "GBLUP"
         θ̂ = β̂
-    elseif (model == "ABLUP") | (model == "RRBLUP")
+    elseif (model == "ABLUP") || (model == "RRBLUP") || (model == "G-ABLUP") || (model == "G-RRBLUP")
         θ̂ = vcat(β̂, μ̂) # include the fixed intercept effect
     end
     return(θ̂)
@@ -633,7 +639,7 @@ function BOOTSTRAP_PVAL(ρ, x::Array{T}, y::Array{T}, F::Function, F_params="", 
     ### Bootstrap until convergence or maximum number of iterations is reached
     iter = 0
     pval_prev, pval_curr = pval[(end-1):end]
-    while (mean(diff(pval[(end-10):end])) >= δ) | (iter >= maxiter)
+    while (mean(diff(pval[(end-10):end])) >= δ) || (iter >= maxiter)
         iter += 1
         _p, _t = BOOTSTRAP(ρ, x, y, F, F_params)
         positive_cases += _p

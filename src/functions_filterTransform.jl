@@ -168,7 +168,7 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
     vec_idx = []
     ### If we are outputting frequencies we need to remove insertion counts since they're also counted as the bases the are.
     if remove_insertions
-        @showprogress "Removing insertion alleles: " for i in 1:7:size(X,2)
+        for i in 1:7:size(X,2)
             # i = 1
             g = X[:, i:(i+6)]
             g[:, 5] .= 0
@@ -179,7 +179,7 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
     if remove_minor_alleles
         S = reshape(sum(X, dims=1), 7, Int(size(X,2)/7))
         n, m = size(S)
-        @showprogress "Removing minor alleles: " for j in 1:m
+        for j in 1:m
             # j = 1
             x = S[:, j]
             idx_nonzero = x .!= 0
@@ -198,14 +198,14 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
         vec_idx = collect(1:size(X,2))
     end
     ### Filter by minimum allele frequency
-    if (maf > 0) & (maf < 1)
-        println("Filtering by minor allele frequency.")
+    if (maf > 0) && (maf < 1)
+        # println("Filtering by minor allele frequency.")
         idx = (minimum(X, dims=1)[1,:] .>= maf) .& (maximum(X, dims=1)[1,:] .<= 1-maf)
         X = X[:, idx]
         vec_idx = vec_idx[idx] ### update index
     end
     ### Remove non-polymorphic loci
-    println("Removing non-polymorphc loci.")
+    # println("Removing non-polymorphc loci.")
     idx = (Distributions.var(X, dims=1) .> δ)[1,:]
     X = X[:, idx]
     vec_idx = vec_idx[idx] ### update index
@@ -215,7 +215,7 @@ function FILTER(χ::Window, maf::Float64=0.001, δ::Float64=1e-10, remove_insert
     if remove_correlated_alleles
         idx = zeros(Bool, p)
         idx[end] = true
-        @showprogress "Removing correlated alleles: " for i in 1:(p-1)
+        for i in 1:(p-1)
             test_θ = true
             for j in (i+1):p
                 # i = 1; j = 10
@@ -291,7 +291,7 @@ function TRANSFORM(y::Vector{T}, absolute_threshold::Float64=0.1, maxiter::Int=1
     vec_fun = []
     vec_max = []
     iter = 0
-    while ((skewness(y) > absolute_threshold) | (skewness(y) < -absolute_threshold)) & (iter < maxiter)
+    while ((skewness(y) > absolute_threshold) || (skewness(y) < -absolute_threshold)) && (iter < maxiter)
         iter += 1
         if skewness(y) > 1.00
             push!(vec_fun, "++")

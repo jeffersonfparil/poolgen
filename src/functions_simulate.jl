@@ -2,14 +2,15 @@
 ### Note: using Int64 for the genotype encoding so we can include multi-allelic loci in the future
 
 ####### TEST ########
-# using Distributions, ProgressMeter, Plots
+# using Distributions, ProgressMeter
+# using Distributed
 #####################
 
-function BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=([0]), vec_chr_names::Vector{String}=[""])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, Array{Int64, 3}}
+function BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n::Int64, m::Int64, l::Int64, k::Int64, ϵ::Int64=Int(1e+15), a::Int64=2, vec_chr_lengths::Vector{Int64}=([0]), vec_chr_names::Vector{String}=[""])::Tuple{Vector{String}, Vector{Int64}, Vector{Int64}, Array{Int8, 3}}
     ####### TEST ########
     # n = 2                 ### number of founders
-    # m = 10_000            ### number of loci
-    # l = 2_300_000         ### total genome size
+    # m = 1_000_000         ### number of loci
+    # l = 2_200_000_000     ### total genome size
     # k = 7                 ### number of chromosomes
     # ϵ = Int(1e+15)        ### an arbitrarily large Int64 number to indicate no LD, i.e. the distance between the termini of 2 adjacent chromosomes is infinitely large LD-wise but we don;t want to use Inf as it is not Int64
     # a = 2                 ### number of alleles per locus (biallelic or a=2 by default)
@@ -27,7 +28,7 @@ function BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n::Int64, m::Int64, l::Int64, k::In
     vec_chr = []
     ### Generate founders with two sets of chromosomes (randomly dsitributed 1's and 0's)
     B = Distributions.Binomial(a-1, 0.5)
-    F = zeros(Int64, 2, n, m)
+    F = zeros(Int8, 2, n, m)
     F[1, :, :] = rand(B, 1, n, m)
     F[2, :, :] = abs.((a-1) .- F[1, :, :])
     ### Reset m if m > l
@@ -61,16 +62,17 @@ function BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n::Int64, m::Int64, l::Int64, k::In
         end
     end
     ### Test plots where we should see k peaks each corresponding to a chromosome terminal
+    # using Plots
     # p1 = Plots.plot(vec_dist, title="distances", legend=false)
     # p2 = Plots.plot(vec_pos, title="positions", legend=false)
     # Plots.plot(p1, p2, layout=(1,2))
     return(vec_chr, vec_pos, vec_dist, F)
 end
 
-function MEIOSIS(X::Matrix{Int64}, distances::Vector{Int64}, dist_noLD::Int64=10_000)::Vector{Int64}
+function MEIOSIS(X::Matrix{Int8}, distances::Vector{Int64}, dist_noLD::Int64=10_000)::Vector{Int8}
     ####### TEST ########
     # m = 1_000
-    # X = sample([0, 1], (2, m))
+    # X = Int8.(sample([0, 1], (2, m)))
     # ### Sample locations from a uniform distrbution    
     # U = Distributions.Uniform(1, 100*m)
     # positions = [0]
@@ -104,35 +106,56 @@ function MEIOSIS(X::Matrix{Int64}, distances::Vector{Int64}, dist_noLD::Int64=10
     return(vec_gamete)
 end
 
-function SIMULATE_GENOMES(G::Array{Int64, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=10_000, o::Int64=10_000, t::Int64=1)::Array{Int64, 3}
+function SIMULATE_GENOMES(G::Array{Int8, 3}, vec_dist::Vector{Int64}, dist_noLD::Int64=10_000, o::Int64=10_000, t::Int64=1)::Array{Int64, 3}
     ####### TEST ########
     # n = 5                   ### number of founders
-    # m = 10_000              ### number of loci
-    # l = 20_000              ### total genome length
+    # m = 1_000               ### number of loci
+    # l = 2_200_000_000       ### total genome length
     # k = 1                   ### number of chromosomes
     # ϵ = Int(1e+15)          ### some arbitrarily large number to signify the distance at which LD is nil
     # a = 2                   ### number of alleles per locus
     # vec_chr_lengths = [0]   ### chromosome lengths
     # vec_chr_names = [""]    ### chromosome names 
     # vec_chr, vec_pos, vec_dist, G = BUILD_FOUNDING_HETEROZYGOUS_GENOMES(n, m, l, k, ϵ, a, vec_chr_lengths, vec_chr_names)
-    # dist_noLD = 10_000     ### distance at which LD is nil (related to ϵ)
-    # o = 1_000               ### total number of simulated individuals
+    # dist_noLD = 10_000      ### distance at which LD is nil (related to ϵ)
+    # o = 100                 ### total number of simulated individuals
     # t = 10
     #####################
     ### Simulate t genetations of random mating starting from the founders with a constant population size of o per generation
+    ### Generation 1
     _, n, m = size(G)
-    P = zeros(Int64, 2, o, m)
-    @showprogress string("Simulating ", t, " generations:") for _ in 1:t
-        for i in 1:o
-            # i = 1
-            g = G[:, sample(collect(1:n)), :]
-            P[1, i, :] = MEIOSIS(g, vec_dist, dist_noLD) ### homologous chromosome 1
-            P[2, i, :] = MEIOSIS(g, vec_dist, dist_noLD) ### homologous chromosome 2
-        end
-        G = copy(P)
-        _, n, m  = size(G)
+    P = @sync @distributed (append!) for i in 1:o
+        # i = 1
+        ### Note: Parallelise below pleek!!! 20221223
+        g = G[:, Int(ceil(rand()*n)), :]
+        p1 = MEIOSIS(g, vec_dist, dist_noLD) ### homologous chromosome 1
+        p2 = MEIOSIS(g, vec_dist, dist_noLD) ### homologous chromosome 2
+        [p1, p2]
     end
-    return(P)
+    G = zeros(Int8, 2, o, m)
+    for i in 1:2
+        for j in 1:o
+            G[i, j, :] = P[(2*(j-1)) + i]
+        end
+    end
+    #@@ Generation 2 to t
+    @showprogress string("Simulating ", t, " generations:") for _ in 2:t
+        # for i in 1:o
+        P = @sync @distributed (append!) for i in 1:o
+            # i = 1
+            ### Note: Parallelise below pleek!!! 20221223
+            g = G[:, Int(ceil(rand()*o)), :]
+            p1 = MEIOSIS(g, vec_dist, dist_noLD) ### homologous chromosome 1
+            p2 = MEIOSIS(g, vec_dist, dist_noLD) ### homologous chromosome 2
+            [p1, p2]
+        end
+        for i in 1:2
+            for j in 1:o
+                G[i, j, :] = P[(2*(j-1)) + i]
+            end
+        end
+    end
+    return(G)
 end
 
 function LD(P::Array{Int64, 3}, vec_chr::Vector{String}, vec_pos::Vector{Int64}, chr::String="", window_size::Int64=1_000_000, n_pairs::Int64=10_000)::Tuple{Vector{Float64}, Vector{Int64}}
@@ -321,7 +344,7 @@ function EXPORT_SIMULATED_DATA(vec_chr::Vector{String}, vec_pos::Vector{Int64}, 
     ###               ###
     #####################
     ### Output syncx and csv files
-    if (out_geno=="") | (out_pheno=="")
+    if (out_geno=="") || (out_pheno=="")
         id = replace(join(collect(string(time()))[1:12], ""), "."=> "")
     end
     if out_geno==""
@@ -338,6 +361,10 @@ function EXPORT_SIMULATED_DATA(vec_chr::Vector{String}, vec_pos::Vector{Int64}, 
     else
         out_fam = string(out_pheno, ".fam")
     end
+    out_map = AVOID_FILE_OVERWRITE(out_map)
+    out_bim = AVOID_FILE_OVERWRITE(out_bim)
+    out_ped = AVOID_FILE_OVERWRITE(out_ped)
+    out_fam = AVOID_FILE_OVERWRITE(out_fam)
     n, m = size(X)
     ################################
     ###@@@ Map and Bim files @@@####
@@ -436,7 +463,7 @@ function EXPORT_SIMULATED_DATA(vec_chr::Vector{String}, vec_pos::Vector{Int64}, 
     ###               ###
     #####################
     ### Output syncx and csv files
-    if (out_geno=="") | (out_pheno=="")
+    if (out_geno=="") || (out_pheno=="")
         id = replace(join(collect(string(time()))[1:12], ""), "."=> "")
     end
     if out_geno==""
@@ -445,6 +472,8 @@ function EXPORT_SIMULATED_DATA(vec_chr::Vector{String}, vec_pos::Vector{Int64}, 
     if out_pheno==""
         out_pheno = string("Simulated-", id, ".csv")
     end
+    out_geno = AVOID_FILE_OVERWRITE(out_geno)
+    out_pheno = AVOID_FILE_OVERWRITE(out_pheno)
     n, m = size(G)
     ### Write simulated Pool-seq data into a syncx file
     geno = open(out_geno, "a")
