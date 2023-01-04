@@ -1,0 +1,21 @@
+authors = ["Jefferson F. Paril <jeffersonparil@gmail.com>"]
+name = "poolgen"
+uuid = "f1f486f6-9d9b-4bef-8b7d-74212131ca96"
+version = "0.1.0"
+repository = "https://github.com/jeffersonfparil/poolgen"
+description = "Quantitative and population genetics analyses using pool sequencing data."
+keywords = "genetics, quantitative genetics, population genetics, pool sequencing, allele frequency, genotype data, imputation"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+MultivariateStats = "6f286f6a-111f-5878-ab1e-185364afe411"
+GLMNet = "8d5ece8b-de18-5317-b113-243142960cc6"
+UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"

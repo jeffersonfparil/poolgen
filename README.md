@@ -7,28 +7,8 @@ Quantitative and population genetics analyses using pool sequencing data
 
 ## Quickstart
 
-1. Download and install Julia. See [https://julialang.org/downloads/](https://julialang.org/downloads/).
+...
 
-2. Install the poolgen package. Open Julia and run the following:
-```julia
-using Pkg
-Pkg.add(url="https://github.com/jeffersonfparil/poolgen.git")
-```
-
-3. Usage and documentation access. Open Julia and browse the documentation for all the currently available functions:
-```julia
-using poolgen
-?poolgen
-?poolgen.convert
-?poolgen.pileup2syncx
-?poolgen.filter
-?poolgen.filter
-?poolgen.impute
-?poolgen.simulate
-?poolgen.gwalpha
-?poolgen.genomic_prediction
-?poolgen.genomic_prediction_CV
-```
 ## File formats
 
 ### Pileup
@@ -142,30 +122,30 @@ Finally, the imputed allele counts are averaged across the windows sliding one l
 - [Grains Research & Development Corporation](https://grdc.com.au/)
 
 ## To do list
-- [X] Types: pileup line
-- [X] Types: syncx line
-- [X] Types: phenotype line
-- [X] Types: locus
-- [X] Types: window
-- [X] Types: phenotype
-- [X] pileup I/O
-- [X] syncx I/O
-- [X] pileup filtering: pileup to pileup and pileup to syncx
-- [X] syncx filtering
-- [X] imputation pileup to syncx
-- [X] simple genotype and phenotype simulation framework (with LD)
-- [X] OLS
-- [X] Elastic-net
-- [X] LMM: gBLUP
-- [X] LMM: rrBLUP
-- [X] GP cross-validation and plotting
-- [X] GWAlpha
-- [X] iterative OLS
-- [X] iterative elastic-net
-- [X] iterative LMM: gBLUP
-- [X] iterative LMM: rrBLUP
-- [X] Empirical p-values via bootstrapping
-- [X] Empirical p-values via maximum likelihood
-- [X] GWAS plotting
+- [ ] Types: pileup line
+- [ ] Types: syncx line
+- [ ] Types: phenotype line
+- [ ] Types: locus
+- [ ] Types: window
+- [ ] Types: phenotype
+- [ ] pileup I/O
+- [ ] syncx I/O
+- [ ] pileup filtering: pileup to pileup and pileup to syncx
+- [ ] syncx filtering
+- [ ] imputation pileup to syncx
+- [ ] simple genotype and phenotype simulation framework (with LD)
+- [ ] OLS
+- [ ] Elastic-net
+- [ ] LMM: gBLUP
+- [ ] LMM: rrBLUP
+- [ ] GP cross-validation and plotting
+- [ ] GWAlpha
+- [ ] iterative OLS
+- [ ] iterative elastic-net
+- [ ] iterative LMM: gBLUP
+- [ ] iterative LMM: rrBLUP
+- [ ] Empirical p-values via bootstrapping
+- [ ] Empirical p-values via maximum likelihood
+- [ ] GWAS plotting
 - [ ] Machine-learning: random forest
 - [ ] Machine-learning: multilayer perceptron
