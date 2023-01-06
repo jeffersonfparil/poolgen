@@ -20,13 +20,18 @@ struct IndelMarker {
 
 fn parse(line: &String) -> io::Result<PileupLine> {
     let raw_locus_data: Vec<&str>= line.split("\t").collect();
+    // Chromosome or scaffold name
     let chromosome: String = raw_locus_data[0].to_string();
+    // Position or locus coordinate in the genome assembly
     let position: u64 = raw_locus_data[1].to_string().parse::<u64>().unwrap();
+    // Allele in the reference genome assembly
     let reference_allele: char = raw_locus_data[2].to_string().parse::<char>().unwrap();
+    // List of the number of times the locus was read in each pool
     let mut coverages: Vec<u64> = vec![];
     for i in (3..raw_locus_data.len()).step_by(3) {
         coverages.push(raw_locus_data[i].to_string().parse::<u64>().unwrap());
     }
+    // List of alleles that were read in each pool
     let mut read_codes: Vec<Vec<u8>> = vec![];
     for i in (4..raw_locus_data.len()).step_by(3) {
         if coverages[((i-1)/3)-1] > 0 {
@@ -111,16 +116,24 @@ fn parse(line: &String) -> io::Result<PileupLine> {
             }
     }
     // println!("{:?}", read_codes);
-
-    // test:
-    let qual = 'J' as u8;
+    // List of the quailities of the read alleles in each pool
+    let mut read_qualities: Vec<Vec<u8>> = vec![];
+    for i in (5..raw_locus_data.len()).step_by(3) {
+        if coverages[((i-1)/3)-1] > 0 {
+                let qualities = raw_locus_data[i].as_bytes().to_owned();
+                read_qualities.push(qualities);
+            } else {
+                read_qualities.push(vec![]);
+            }
+    }
+    // Output PileupLine struct
     let out = PileupLine {
         chromosome: chromosome,
         position: position,
         reference_allele: reference_allele,
         coverages: coverages,
         read_codes: read_codes,
-        read_qualities: vec![vec![qual]],
+        read_qualities: read_qualities,
     };
     Ok(out)
 }
