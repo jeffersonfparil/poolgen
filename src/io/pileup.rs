@@ -78,6 +78,11 @@ fn parse(line: &String) -> io::Result<PileupLine> {
                         indel_marker.count = 0;
                         continue 'per_pool;
                     }
+                    // Is the current code a read start/end marker?
+                    // Remove read start and end codes (unicodes: '^' == 94 and '$' == 36)
+                    if (code == 94) | (code == 36){
+                        continue 'per_pool;
+                    }
                     // Reference allele (unicodes: ',' == 44 and '.' == 46) and 
                     // non-reference alleles (unicodes: 'A'/'a' == 65/97,
                     //                                  'T'/'t' == 84/116,
