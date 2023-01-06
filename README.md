@@ -7,7 +7,7 @@ Quantitative and population genetics analyses using pool sequencing data
 
 ## Quickstart
 
-...
+**Rewriting in Rust because of the existential and correctness crises in Julia.**
 
 ## File formats
 
