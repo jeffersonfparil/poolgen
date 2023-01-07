@@ -25,7 +25,7 @@ fn parse(line: &String) -> io::Result<PileupLine> {
     // Position or locus coordinate in the genome assembly
     let position: u64 = raw_locus_data[1].to_string().parse::<u64>().expect("Please check the format of the input pileup file as position is not a valid integer (i.e. u64).");
     // Allele in the reference genome assembly
-    let reference_allele: char = raw_locus_data[2].to_string().parse::<char>().unwrap();
+    let reference_allele: char = raw_locus_data[2].to_string().parse::<char>().expect("Please check the format of the input pileup file as the reference allele is not a valid nucleotide base (i.e. not a valid single character).");
     // List of the number of times the locus was read in each pool
     let mut coverages: Vec<u64> = vec![];
     for i in (3..raw_locus_data.len()).step_by(3) {
