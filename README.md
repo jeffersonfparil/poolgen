@@ -7,7 +7,7 @@ Quantitative and population genetics analyses using pool sequencing data
 
 ## Quickstart
 
-**Rewriting in Rust because of the existential and correctness crises in Julia.**
+**Rewriting in Rust because of my existential and correctness crises in Julia.**
 
 ## File formats
 
@@ -22,10 +22,10 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 - *Columns 7 - 3n*: coverages, reads, and base qualities of *n* pools (3 columns per pool).
 
 ### Syncx
-Spiritual successor to [popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format:
+[popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format with optional header/s prefixed by '#':
 - *Column 1*:      chromosome or scaffold name
 - *Column 2*:      locus position 
-- *Column 3 to n*: colon-delimited allele counts: A:T:C:G:INS:DEL:N, where "INS" is insertion, "DEL" is deletion, and "N" is unclassified (one column per pool).
+- *Column 3 to n*: colon-delimited allele counts: A:T:C:G:DEL:N, where "DEL" is deletion, and "N" is unclassified (one column per pool).
 
 ### Phenotypes
 
