@@ -172,6 +172,10 @@ fn parse(line: &String) -> Result<PileupLine, String> {
     return Ok(out);
 }
 
+fn convert(line: &PileupLine) -> Result<Vec<u64>, String> {
+    Ok(vec![1 as u64])
+}
+
 // Read pileup file
 pub fn read(fname: &str) -> io::Result<Vec<PileupLine>> {
     // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
