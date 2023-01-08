@@ -115,14 +115,11 @@ Finally, the imputed allele counts are averaged across the windows sliding one l
 ## Acknowledgements
 
 - [Benjamin Camm](https://adaptive-evolution.biosciences.unimelb.edu.au/people/bencamm.html)
-
-![ben](misc/BJC_pic.jpg)
-
 - [Adaptive Evolution lab](https://adaptive-evolution.biosciences.unimelb.edu.au)
 - [Grains Research & Development Corporation](https://grdc.com.au/)
 
 ## To do list
-- [ ] Types: pileup line
+- [X] Types: pileup line
 - [ ] Types: syncx line
 - [ ] Types: phenotype line
 - [ ] Types: locus
