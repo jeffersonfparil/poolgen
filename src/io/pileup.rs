@@ -1,9 +1,13 @@
 use std;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
+use std::result::Result;
+// use std::error::Error;
 use std::str;
 
-struct PileupLine {
+// Struct for a locus from a pileup line
+#[derive(Debug)]
+pub struct PileupLine {
     chromosome: String,             // chromosome or scaffold name
     position: u64,                  // position in number of bases
     reference_allele: char,         // reference allele
@@ -12,30 +16,44 @@ struct PileupLine {
     read_qualities: Vec<Vec<u8>>,   // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
 }
 
+// Struct for tracking the insertions and deletions prepended with +/i which we want to skip as they refer to the next base position and not the current locus
 struct IndelMarker {
     indel: bool,    // insertion or deletion, i.e. +/- codes
     count: usize,   // size of the indel, i.e. how many bases
     left: usize,    // how many indel bases are left to be removed (initialised with the maximum possible value of 4294967295)
 }
 
-fn parse(line: &String) -> io::Result<PileupLine> {
+// Parse each line
+fn parse(line: &String) -> Result<PileupLine, String> {
     let raw_locus_data: Vec<&str>= line.split("\t").collect();
     // Chromosome or scaffold name
     let chromosome: String = raw_locus_data[0].to_string();
     // Position or locus coordinate in the genome assembly
-    let position: u64 = raw_locus_data[1].to_string().parse::<u64>().expect("Please check the format of the input pileup file as position is not a valid integer (i.e. u64).");
+    let position = match raw_locus_data[1].to_string().parse::<u64>() {
+        Ok(x) => x,
+        Err(_) => return Err("Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_string()),
+    };
     // Allele in the reference genome assembly
-    let reference_allele: char = raw_locus_data[2].to_string().parse::<char>().expect("Please check the format of the input pileup file as the reference allele is not a valid nucleotide base (i.e. not a valid single character).");
+    let reference_allele  = match raw_locus_data[2].to_string().parse::<char>() {
+        Ok(x) => x,
+        Err(_) => return Err("Please check the format of the input pileup file as the reference allele is not a valid nucleotide base (i.e. not a valid single character).".to_string()),
+    };
     // List of the number of times the locus was read in each pool
     let mut coverages: Vec<u64> = vec![];
     for i in (3..raw_locus_data.len()).step_by(3) {
-        coverages.push(raw_locus_data[i].to_string().parse::<u64>().unwrap());
+        let error_message = "Please check the format of the input pileup file as coverage field/s is/are not valid integer/s (i.e. u64) at pool: ".to_owned() + &(i/3).to_string() + &".".to_owned();
+        let cov = match raw_locus_data[i].to_string().parse::<u64>() {
+            Ok(x) => x,
+            Err(_) => return Err(error_message),
+        };
+        coverages.push(cov);
     }
     // List of alleles that were read in each pool
     let mut read_codes: Vec<Vec<u8>> = vec![];
     for i in (4..raw_locus_data.len()).step_by(3) {
         // Parse if the current pool was read at least once for the current locus (i.e. line)
         if coverages[((i-1)/3)-1] > 0 {
+            let error_message = "Check the codes for insertions and deletion, i.e. they must be integers after '+' and '-' at pool: ".to_owned() + &((i-1)/3).to_string() + &".".to_owned();
             let raw_read_codes = raw_locus_data[i].as_bytes().to_owned();
             let mut alleles: Vec<u8> = vec![];
             let mut indel_marker: IndelMarker = IndelMarker{indel: false, count: 0, left: 4294967295}; // Instantiate the indel marker with no indel (i.e. indel==false and count==0) and the maximum number of indels left (i.e. left==4294967295 which is the maximum value for usize type of left)
@@ -45,7 +63,10 @@ fn parse(line: &String) -> io::Result<PileupLine> {
                 if indel_marker.indel {
                     // Find the firs digit of the number of indel/s
                     if (indel_marker.count == 0) & (indel_marker.left == 4294967295) {
-                        indel_marker.count = str::from_utf8(&[code]).unwrap().parse::<usize>().unwrap();
+                        indel_marker.count = match str::from_utf8(&[code]).unwrap().parse::<usize>() {
+                            Ok(x) => x,
+                            Err(_) => return Err(error_message),
+                        };
                         continue 'per_pool;
                     }
                     // Find the next digit of the number of indels, if we have more than 9 indels
@@ -136,23 +157,34 @@ fn parse(line: &String) -> io::Result<PileupLine> {
         read_codes: read_codes,
         read_qualities: read_qualities,
     };
-    Ok(out)
-}
-
-pub fn read(fname: &str) -> io::Result<i32> {
-    // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
-    let error_message = "File: ".to_owned() + fname + &" not found.".to_owned();
-    let file = File::open(fname).expect(&error_message);
-    let reader:BufReader<File> = BufReader::new(file);
-    let mut i: i64 = 0;
-    for line in reader.lines() {
-        i += 1;
-        let x = line.unwrap();
-        let p = parse(&x).unwrap();
-        if i < 5 {
-            println!("{:?}", x);
-            println!("chr:{:?}-pos:{:?}-ref:{:?}-covs:{:?}-reads:{:?}-quals:{:?}", p.chromosome, p.position, p.reference_allele, p.coverages, p.read_codes, p.read_qualities);
+    // Sanity check to see if the coverage, number of alleles and quality codes match per pool
+    let mut c: u64;
+    let mut a: u64;
+    let mut q: u64;
+    for i in 0..out.coverages.len() {
+        c = out.coverages[i];
+        a = out.read_codes[i].len() as u64;
+        q = out.read_qualities[i].len() as u64;
+        if (c != a) | (c != q) | (a != q) {
+            return Err("Please check the format of the input pileup file as the coverages, number of read alleles and read qualities do not match.".to_string());
         }
     }
-    Ok(0)
+    return Ok(out);
+}
+
+// Read pileup file
+pub fn read(fname: &str) -> io::Result<Vec<PileupLine>> {
+    // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
+    let error_message_1 = "File: ".to_owned() + fname + &" not found.".to_owned();
+    let file = File::open(fname).expect(&error_message_1);
+    let reader:BufReader<File> = BufReader::new(file);
+    let mut i: i64 = 0;
+    let mut out: Vec<PileupLine> = vec![];
+    for line in reader.lines() {
+        i += 1;
+        let error_message_2 = "Error in ".to_owned() + fname + &" at line: ".to_owned() + &i.to_string() + &".".to_owned();
+        let p = parse(&line.unwrap()).expect(&error_message_2);
+        out.push(p);
+    }
+    Ok(out)
 }
