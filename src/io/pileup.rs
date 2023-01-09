@@ -172,7 +172,7 @@ fn parse(line: &String) -> Result<PileupLine, String> {
 }
 
 impl PileupLine {
-    fn mean_quality(&self) -> Result<f64, String> {
+    fn mean_quality(&self) -> io::Result<f64> {
         let mut s: f64 = 0.0;
         let mut n: f64 = 0.0;
         for q in &self.read_qualities {
