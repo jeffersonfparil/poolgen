@@ -41,10 +41,9 @@ fn parse(line: &String) -> Result<PileupLine, String> {
     // List of the number of times the locus was read in each pool
     let mut coverages: Vec<u64> = vec![];
     for i in (3..raw_locus_data.len()).step_by(3) {
-        let error_message = "Please check the format of the input pileup file as coverage field/s is/are not valid integer/s (i.e. u64) at pool: ".to_owned() + &(i/3).to_string() + &".".to_owned();
         let cov = match raw_locus_data[i].to_string().parse::<u64>() {
             Ok(x) => x,
-            Err(_) => return Err(error_message),
+            Err(_) => return Err("Please check the format of the input pileup file as coverage field/s is/are not valid integer/s (i.e. u64) at pool: ".to_owned() + &(i/3).to_string() + &".".to_owned()),
         };
         coverages.push(cov);
     }
@@ -166,29 +165,47 @@ fn parse(line: &String) -> Result<PileupLine, String> {
         a = out.read_codes[i].len() as u64;
         q = out.read_qualities[i].len() as u64;
         if (c != a) | (c != q) | (a != q) {
-            return Err("Please check the format of the input pileup file as the coverages, number of read alleles and read qualities do not match.".to_string());
+            return Err("Please check the format of the input pileup file as the coverages, number of read alleles and read qualities do not match at pool: ".to_owned() + &(i+1).to_string() + &".".to_owned());
         }
     }
     return Ok(out);
 }
 
-fn convert(line: &PileupLine) -> Result<Vec<u64>, String> {
-    Ok(vec![1 as u64])
+impl PileupLine {
+    fn mean_quality(&self) -> Result<f64, String> {
+        let mut s: f64 = 0.0;
+        let mut n: f64 = 0.0;
+        for q in &self.read_qualities {
+            for x in q.iter().map(|&x| f64::from(x)).collect::<Vec<f64>>().iter() {
+                s += x;
+                n += 1.0;
+            }
+        }
+        let out = f64::powf(10.0, -s/(10.0*n));
+        // println!("{:?}", out);
+        return Ok(out)
+    }
+
+    fn convert(line: &PileupLine) -> Result<Vec<u64>, String> {
+        Ok(vec![1 as u64])
+    }
 }
 
 // Read pileup file
-pub fn read(fname: &str) -> io::Result<Vec<PileupLine>> {
+pub fn read(fname: &str, min_qual: &f64) -> io::Result<Vec<PileupLine>> {
     // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
-    let error_message_1 = "File: ".to_owned() + fname + &" not found.".to_owned();
-    let file = File::open(fname).expect(&error_message_1);
+    let file = File::open(fname).expect(&("Input file: '".to_owned() + fname + &"' not found.".to_owned()));
     let reader:BufReader<File> = BufReader::new(file);
     let mut i: i64 = 0;
     let mut out: Vec<PileupLine> = vec![];
     for line in reader.lines() {
         i += 1;
-        let error_message_2 = "Error in ".to_owned() + fname + &" at line: ".to_owned() + &i.to_string() + &".".to_owned();
-        let p = parse(&line.unwrap()).expect(&error_message_2);
-        out.push(p);
+        let p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
+        let q = p.mean_quality().unwrap();
+        if &q <= min_qual {
+            println!("{:?}---{:?}", &q, min_qual);
+            out.push(p);
+        }
     }
     Ok(out)
 }
