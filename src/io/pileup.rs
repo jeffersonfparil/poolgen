@@ -16,7 +16,19 @@ pub struct PileupLine {
     read_qualities: Vec<Vec<u8>>,   // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
 }
 
+#[derive(Debug)]
+pub struct AlleleCounts {
+    chromosome: String, // chromosome or scaffold name
+    position: u64,      // position in number of bases
+    a: Vec<u64>,        // allele A counts
+    t: Vec<u64>,        // allele T counts
+    c: Vec<u64>,        // allele C counts
+    g: Vec<u64>,        // allele G counts
+    n: Vec<u64>,        // allele N or ambiguous allele counts
+    d: Vec<u64>,        // allele DEL or deletion counts counts
+}
 // Struct for tracking the insertions and deletions prepended with +/i which we want to skip as they refer to the next base position and not the current locus
+#[derive(Debug)]
 struct IndelMarker {
     indel: bool,    // insertion or deletion, i.e. +/- codes
     count: usize,   // size of the indel, i.e. how many bases
@@ -24,8 +36,8 @@ struct IndelMarker {
 }
 
 // Parse each line
-fn parse(line: &String) -> Result<PileupLine, String> {
-    let raw_locus_data: Vec<&str>= line.split("\t").collect();
+fn parse(line: &String) -> Result<Box<PileupLine>, String> {
+    let raw_locus_data: Box<Vec<&str>> = Box::new(line.split("\t").collect());
     // Chromosome or scaffold name
     let chromosome: String = raw_locus_data[0].to_string();
     // Position or locus coordinate in the genome assembly
@@ -148,14 +160,14 @@ fn parse(line: &String) -> Result<PileupLine, String> {
             }
     }
     // Output PileupLine struct
-    let out = PileupLine {
+    let out = Box::new(PileupLine {
         chromosome: chromosome,
         position: position,
         reference_allele: reference_allele,
         coverages: coverages,
         read_codes: read_codes,
         read_qualities: read_qualities,
-    };
+    });
     // Sanity check to see if the coverage, number of alleles and quality codes match per pool
     let mut c: u64;
     let mut a: u64;
@@ -177,33 +189,86 @@ impl PileupLine {
         let mut n: f64 = 0.0;
         for q in &self.read_qualities {
             for x in q.iter().map(|&x| f64::from(x)).collect::<Vec<f64>>().iter() {
-                s += x;
+                s += x - 33.0; // Assumes PHRED 33 (i.e. !=10^(-0/10) to I=10^(-40/10))
                 n += 1.0;
             }
         }
         let out = f64::powf(10.0, -s/(10.0*n));
         // println!("{:?}", out);
-        return Ok(out)
+        Ok(out)
     }
 
-    fn convert(line: &PileupLine) -> Result<Vec<u64>, String> {
-        Ok(vec![1 as u64])
+    fn filter(&mut self, min_quality: f64) -> io::Result<&mut Self> {
+        let n = &self.read_qualities.len();
+        for i in 0..*n {
+            let pool = &self.read_qualities[i];
+            let m = pool.len();
+            for j in 0..m {
+                let q = f64::powf(10.0, -(pool[j] as f64 - 33.0) / 10.0); 
+                if q > min_quality {
+                    self.read_codes[i][j] = 78; // convert to N
+                }
+            }
+        }
+        Ok(self)
+    }
+
+    fn reads_to_counts(&self) -> io::Result<Box<AlleleCounts>> {
+        let mut out = Box::new(AlleleCounts {
+            chromosome: self.chromosome.clone(),
+            position: self.position.clone(),
+            a: vec![],
+            t: vec![],
+            c: vec![],
+            g: vec![],
+            n: vec![],
+            d: vec![]});
+        for pool in &self.read_codes {
+            let mut A: u64 = 0;
+            let mut T: u64 = 0;
+            let mut C: u64 = 0;
+            let mut G: u64 = 0;
+            let mut N: u64 = 0;
+            let mut D: u64 = 0;    
+            for allele in pool {
+                match allele {
+                    65 => A += 1,
+                    84 => T += 1,
+                    67 => C += 1,
+                    71 => G += 1,
+                    68 => D += 1,
+                    _ => N += 1,
+                };
+            }
+            out.a.push(A);
+            out.t.push(T);
+            out.c.push(C);
+            out.g.push(G);
+            out.n.push(N);
+            out.d.push(D);
+        }
+        Ok(out)
     }
 }
 
 // Read pileup file
-pub fn read(fname: &str, min_qual: &f64) -> io::Result<Vec<PileupLine>> {
+pub fn read(fname: &str, min_qual: &f64) -> io::Result<Vec<Box<PileupLine>>> {
     // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
     let file = File::open(fname).expect(&("Input file: '".to_owned() + fname + &"' not found.".to_owned()));
     let reader:BufReader<File> = BufReader::new(file);
     let mut i: i64 = 0;
-    let mut out: Vec<PileupLine> = vec![];
+    let mut out: Vec<Box<PileupLine>> = vec![];
     for line in reader.lines() {
         i += 1;
-        let p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
+        let mut p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
         let q = p.mean_quality().unwrap();
+        println!("{}: Before: {:?}", i, p);
+        p.filter(*min_qual).unwrap();
+        let r = p.reads_to_counts().unwrap();
+        println!("{}: Counts: {:?}", i, r);
+        println!("{}: After: {:?}", i, p);
+        // println!("idx: {}| read: {:?} | qualities: {:?}---{:?}", i, &r, &q, min_qual);
         if &q <= min_qual {
-            println!("{:?}---{:?}", &q, min_qual);
             out.push(p);
         }
     }
