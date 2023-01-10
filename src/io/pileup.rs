@@ -51,7 +51,7 @@ fn parse(line: &String) -> Result<Box<PileupLine>, String> {
         Err(_) => return Err("Please check the format of the input pileup file as the reference allele is not a valid nucleotide base (i.e. not a valid single character).".to_string()),
     };
     // List of the number of times the locus was read in each pool
-    let mut coverages: Vec<u64> = vec![];
+    let mut coverages: Vec<u64> = Vec::new();
     for i in (3..raw_locus_data.len()).step_by(3) {
         let cov = match raw_locus_data[i].to_string().parse::<u64>() {
             Ok(x) => x,
@@ -60,13 +60,13 @@ fn parse(line: &String) -> Result<Box<PileupLine>, String> {
         coverages.push(cov);
     }
     // List of alleles that were read in each pool
-    let mut read_codes: Vec<Vec<u8>> = vec![];
+    let mut read_codes: Vec<Vec<u8>> = Vec::new();
     for i in (4..raw_locus_data.len()).step_by(3) {
         // Parse if the current pool was read at least once for the current locus (i.e. line)
         if coverages[((i-1)/3)-1] > 0 {
             let error_message = "Check the codes for insertions and deletion, i.e. they must be integers after '+' and '-' at pool: ".to_owned() + &((i-1)/3).to_string() + &".".to_owned();
             let raw_read_codes = raw_locus_data[i].as_bytes().to_owned();
-            let mut alleles: Vec<u8> = vec![];
+            let mut alleles: Vec<u8> = Vec::new();
             let mut indel_marker: IndelMarker = IndelMarker{indel: false, count: 0, left: 4294967295}; // Instantiate the indel marker with no indel (i.e. indel==false and count==0) and the maximum number of indels left (i.e. left==4294967295 which is the maximum value for usize type of left)
             'per_pool: for j in 0..raw_read_codes.len() {
                 let code = raw_read_codes[j];
@@ -145,18 +145,18 @@ fn parse(line: &String) -> Result<Box<PileupLine>, String> {
             }
             read_codes.push(alleles);
         } else {
-            read_codes.push(vec![]);
+            read_codes.push(Vec::new());
         }
     }
     // println!("{:?}", read_codes);
     // List of the qualities of the read alleles in each pool
-    let mut read_qualities: Vec<Vec<u8>> = vec![];
+    let mut read_qualities: Vec<Vec<u8>> = Vec::new();
     for i in (5..raw_locus_data.len()).step_by(3) {
         if coverages[((i-1)/3)-1] > 0 {
                 let qualities = raw_locus_data[i].as_bytes().to_owned();
                 read_qualities.push(qualities);
             } else {
-                read_qualities.push(vec![]);
+                read_qualities.push(Vec::new());
             }
     }
     // Output PileupLine struct
@@ -217,12 +217,12 @@ impl PileupLine {
         let mut out = Box::new(AlleleCounts {
             chromosome: self.chromosome.clone(),
             position: self.position.clone(),
-            a: vec![],
-            t: vec![],
-            c: vec![],
-            g: vec![],
-            n: vec![],
-            d: vec![]});
+            a: Vec::new(),
+            t: Vec::new(),
+            c: Vec::new(),
+            g: Vec::new(),
+            n: Vec::new(),
+            d: Vec::new()});
         for pool in &self.read_codes {
             let mut A: u64 = 0;
             let mut T: u64 = 0;
@@ -257,7 +257,7 @@ pub fn read(fname: &str, min_qual: &f64) -> io::Result<Vec<Box<PileupLine>>> {
     let file = File::open(fname).expect(&("Input file: '".to_owned() + fname + &"' not found.".to_owned()));
     let reader:BufReader<File> = BufReader::new(file);
     let mut i: i64 = 0;
-    let mut out: Vec<Box<PileupLine>> = vec![];
+    let mut out: Vec<Box<PileupLine>> = Vec::new();
     for line in reader.lines() {
         i += 1;
         let mut p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
