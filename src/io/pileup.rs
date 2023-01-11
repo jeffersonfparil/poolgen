@@ -203,8 +203,13 @@ impl PileupLine {
         let mut n: f64 = 0.0;
         for q in &self.read_qualities {
             for x in q.iter().map(|&x| f64::from(x)).collect::<Vec<f64>>().iter() {
-                s += x - 33.0; // Assumes PHRED 33 (i.e. !=10^(-0/10) to I=10^(-40/10))
-                n += 1.0;
+                // println!("{:?}", x);
+                if *x < 33.0 {
+                    return Err(Error::new(ErrorKind::Other, "Phred score out of bounds."));
+                } else {
+                    s += x - 33.0; // Assumes PHRED 33 (i.e. !=10^(-0/10) to I=10^(-40/10))
+                    n += 1.0;
+                }
             }
         }
         let out = f64::powf(10.0, -s/(10.0*n));
@@ -218,9 +223,13 @@ impl PileupLine {
             let pool = &self.read_qualities[i];
             let m = pool.len();
             for j in 0..m {
-                let q = f64::powf(10.0, -(pool[j] as f64 - 33.0) / 10.0); 
-                if q > *min_quality {
-                    self.read_codes[i][j] = 78; // convert to N
+                if pool[j] < 33 {
+                    return Err(Error::new(ErrorKind::Other, "Phred score out of bounds."));
+                } else {
+                    let q = f64::powf(10.0, -(pool[j] as f64 - 33.0) / 10.0); 
+                    if q > *min_quality {
+                        self.read_codes[i][j] = 78; // convert to N
+                    }
                 }
             }
         }
