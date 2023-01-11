@@ -324,6 +324,7 @@ pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<Pi
         // println!("{:?}", r.position);
         if r.position != 0 {
             println!("{}: Counts: {:?}", i, r);
+            println!("{}: Frequencies: {:?}", i, f);
         }
         // println!("{}: After: {:?}", i, p);
         // println!("idx: {}| read: {:?} | qualities: {:?}---{:?}", i, &r, &q, min_qual);
