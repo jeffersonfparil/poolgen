@@ -286,7 +286,7 @@ impl PileupLine {
         };
         let n = counts.a.len();
         for i in 0..n {
-            let sum = (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.n[i] + counts.d[i]) as f64
+            let sum = (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.n[i] + counts.d[i]) as f64;
             out.a.push((counts.a[i] as f64) / sum);
             out.t.push((counts.t[i] as f64) / sum);
             out.c.push((counts.c[i] as f64) / sum); 
