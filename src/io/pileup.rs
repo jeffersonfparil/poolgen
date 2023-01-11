@@ -282,17 +282,17 @@ impl PileupLine {
             d: Vec::new()});
         let counts = match self.reads_to_counts(min_coverage) {
             Ok(x) => x,
-            Err(e) => return Err(Error::new(ErrorKind::Other, "Filtered out.")),
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Filtered out.")),
         };
         let n = counts.a.len();
-        for i in 0..n {
-            let mut A: f64 = 0.0;
-            let mut T: f64 = 0.0;
-            let mut C: f64 = 0.0;
-            let mut G: f64 = 0.0;
-            let mut N: f64 = 0.0;
-            let mut D: f64 = 0.0;
-
+        for i in 0..n 
+            let sum = (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.n[i] + counts.d[i]) as f64
+            out.a.push((counts.a[i] as f64) / sum);
+            out.t.push((counts.t[i] as f64) / sum);
+            out.c.push((counts.c[i] as f64) / sum); 
+            out.g.push((counts.g[i] as f64) / sum); 
+            out.n.push((counts.n[i] as f64) / sum); 
+            out.d.push((counts.d[i] as f64) / sum); 
         }
         Ok(out)
     }
@@ -314,7 +314,7 @@ pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<Pi
         p.filter(min_qual).unwrap();
         let r = match p.reads_to_counts(min_cov) {
             Ok(x) => x,
-            Err(e) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
+            Err(_) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
         };
         // println!("{:?}", p);
         // println!("{:?}", r.position);
