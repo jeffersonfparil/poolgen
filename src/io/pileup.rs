@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 use std::result::Result;
 // use std::error::Error;
+use std::io::{Error, ErrorKind};
 use std::str;
 
 // Struct for a locus from a pileup line
@@ -27,6 +28,19 @@ pub struct AlleleCounts {
     n: Vec<u64>,        // allele N or ambiguous allele counts
     d: Vec<u64>,        // allele DEL or deletion counts counts
 }
+
+#[derive(Debug)]
+pub struct AlleleFrequencies {
+    chromosome: String, // chromosome or scaffold name
+    position: u64,      // position in number of bases
+    a: Vec<f64>,        // allele A counts
+    t: Vec<f64>,        // allele T counts
+    c: Vec<f64>,        // allele C counts
+    g: Vec<f64>,        // allele G counts
+    n: Vec<f64>,        // allele N or ambiguous allele counts
+    d: Vec<f64>,        // allele DEL or deletion counts counts
+}
+
 // Struct for tracking the insertions and deletions prepended with +/i which we want to skip as they refer to the next base position and not the current locus
 #[derive(Debug)]
 struct IndelMarker {
@@ -198,14 +212,14 @@ impl PileupLine {
         Ok(out)
     }
 
-    fn filter(&mut self, min_quality: f64) -> io::Result<&mut Self> {
+    fn filter(&mut self, min_quality: &f64) -> io::Result<&mut Self> {
         let n = &self.read_qualities.len();
         for i in 0..*n {
             let pool = &self.read_qualities[i];
             let m = pool.len();
             for j in 0..m {
                 let q = f64::powf(10.0, -(pool[j] as f64 - 33.0) / 10.0); 
-                if q > min_quality {
+                if q > *min_quality {
                     self.read_codes[i][j] = 78; // convert to N
                 }
             }
@@ -213,7 +227,13 @@ impl PileupLine {
         Ok(self)
     }
 
-    fn reads_to_counts(&self) -> io::Result<Box<AlleleCounts>> {
+    fn reads_to_counts(&self, min_coverage: &u64) -> io::Result<Box<AlleleCounts>> {
+        for c in &self.coverages {
+            // println!("{:?}", c);
+            if c < min_coverage {
+                return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            }
+        }
         let mut out = Box::new(AlleleCounts {
             chromosome: self.chromosome.clone(),
             position: self.position.clone(),
@@ -249,10 +269,38 @@ impl PileupLine {
         }
         Ok(out)
     }
+    
+    fn reads_to_frequencies(&self, min_coverage: &u64) -> io::Result<Box<AlleleFrequencies>> {
+        let mut out = Box::new(AlleleFrequencies {
+            chromosome: self.chromosome.clone(),
+            position: self.position.clone(),
+            a: Vec::new(),
+            t: Vec::new(),
+            c: Vec::new(),
+            g: Vec::new(),
+            n: Vec::new(),
+            d: Vec::new()});
+        let counts = match self.reads_to_counts(min_coverage) {
+            Ok(x) => x,
+            Err(e) => return Err(Error::new(ErrorKind::Other, "Filtered out.")),
+        };
+        let n = counts.a.len();
+        for i in 0..n {
+            let mut A: f64 = 0.0;
+            let mut T: f64 = 0.0;
+            let mut C: f64 = 0.0;
+            let mut G: f64 = 0.0;
+            let mut N: f64 = 0.0;
+            let mut D: f64 = 0.0;
+
+        }
+        Ok(out)
+    }
+
 }
 
 // Read pileup file
-pub fn read(fname: &str, min_qual: &f64) -> io::Result<Vec<Box<PileupLine>>> {
+pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<PileupLine>>> {
     // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
     let file = File::open(fname).expect(&("Input file: '".to_owned() + fname + &"' not found.".to_owned()));
     let reader:BufReader<File> = BufReader::new(file);
@@ -262,11 +310,18 @@ pub fn read(fname: &str, min_qual: &f64) -> io::Result<Vec<Box<PileupLine>>> {
         i += 1;
         let mut p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
         let q = p.mean_quality().unwrap();
-        println!("{}: Before: {:?}", i, p);
-        p.filter(*min_qual).unwrap();
-        let r = p.reads_to_counts().unwrap();
-        println!("{}: Counts: {:?}", i, r);
-        println!("{}: After: {:?}", i, p);
+        // println!("{}: Before: {:?}", i, p);
+        p.filter(min_qual).unwrap();
+        let r = match p.reads_to_counts(min_cov) {
+            Ok(x) => x,
+            Err(e) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
+        };
+        // println!("{:?}", p);
+        // println!("{:?}", r.position);
+        if r.position != 0 {
+            println!("{}: Counts: {:?}", i, r);
+        }
+        // println!("{}: After: {:?}", i, p);
         // println!("idx: {}| read: {:?} | qualities: {:?}---{:?}", i, &r, &q, min_qual);
         if &q <= min_qual {
             out.push(p);

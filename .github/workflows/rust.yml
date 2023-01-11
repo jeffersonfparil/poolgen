@@ -38,4 +38,4 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Build | Compile
-        run: cargo run
+        run: cargo run -- ./tests/test.pileup
