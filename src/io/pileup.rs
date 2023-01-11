@@ -316,6 +316,10 @@ pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<Pi
             Ok(x) => x,
             Err(_) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
         };
+        let f = match p.reads_to_frequencies(min_cov) {
+            Ok(x) => x,
+            Err(_) => Box::new(AlleleFrequencies { chromosome: "".to_owned(), position: 0, a: vec![0.0], t: vec![0.0], c: vec![0.0], g: vec![0.0], n: vec![0.0], d: vec![0.0] }),
+        };
         // println!("{:?}", p);
         // println!("{:?}", r.position);
         if r.position != 0 {
