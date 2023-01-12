@@ -1,6 +1,6 @@
 use std;
 use std::fs::File;
-use std::io::{self, prelude::*, BufReader};
+use std::io::{self, prelude::*, SeekFrom, BufReader};
 // use std::result::Result;
 // use std::error::Error;
 use std::io::{Error, ErrorKind};
@@ -308,15 +308,67 @@ impl PileupLine {
 
 }
 
+fn find_start_of_next_line(fname: &str, pos: u64) -> u64 {
+    let mut out = pos.clone();
+    if out > 0 {
+        let mut file = File::open(fname).unwrap();
+        let _ = file.seek(SeekFrom::Start(out));
+        let mut reader = BufReader::new(file);
+        let mut line = String::new();
+        let _ = reader.read_line(&mut line).unwrap();
+        out = reader.seek(SeekFrom::Current(0)).unwrap();
+    }
+    return out
+}
+
+fn sort<T>(x: Vec<T>) -> Vec<T> {
+    
+    x
+}
+
+fn keep_unique<T>(x: Vec<T>) -> Vec<T> {
+    let out: Vec<T> = Vec::new();
+    x
+}
+
+fn find_file_splits(fname: &str, threads: u64) -> Vec<u64> {
+    let mut file = File::open(fname).unwrap();
+    let _ = file.seek(SeekFrom::End(0));
+    let mut reader = BufReader::new(file);
+    let end = reader.seek(SeekFrom::Current(0)).unwrap();
+    let mut out = (0..end).step_by((end/threads) as usize).collect::<Vec<u64>>();
+    println!("{:?}", end);
+    println!("{:?}", out);
+    for i in 0..out.len() {
+        out[i] = find_start_of_next_line(fname, out[i]);
+    }
+    println!("{:?}", out);
+    return out
+}
+
+fn read_chunk(fname: &str, start: u64, end: u64) -> io::Result<i32>{
+    let file = File::open(fname).unwrap();
+    let mut reader = BufReader::new(file);
+    let mut line = String::new();
+    let mut i: u64 = start;
+    while i < end {
+        let _ = reader.read_line(&mut line).unwrap();
+        i = reader.seek(SeekFrom::Current(0)).unwrap();
+        println!("i: {} | {:?}", i, line);
+    }
+    Ok(1)
+}
+
 // Read pileup file
 pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<PileupLine>>> {
     // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
     let file = File::open(fname).expect(&("Input file: '".to_owned() + fname + &"' not found.".to_owned()));
-    let reader:BufReader<File> = BufReader::new(file);
+    let mut reader:BufReader<File> = BufReader::new(file);
     let mut i: i64 = 0;
     let mut out: Vec<Box<PileupLine>> = Vec::new();
-    for line in reader.lines() {
+    for line in reader.by_ref().lines() {
         i += 1;
+        // println!("{}: Line: {:?}", i, line);
         let mut p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
         let q = p.mean_quality().unwrap();
         // println!("{}: Before: {:?}", i, p);
@@ -341,5 +393,9 @@ pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<Pi
             out.push(p);
         }
     }
+    let x = find_start_of_next_line(fname, 60);
+    println!("{}", x);
+    // read_chunk(fname, 0, 488);
+    find_file_splits(fname, 4);
     Ok(out)
 }
