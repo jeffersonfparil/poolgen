@@ -322,7 +322,7 @@ fn find_start_of_next_line(fname: &str, pos: u64) -> u64 {
 }
 
 fn sort<T>(x: Vec<T>) -> Vec<T> {
-    
+
     x
 }
 
@@ -342,6 +342,7 @@ fn find_file_splits(fname: &str, threads: u64) -> Vec<u64> {
     for i in 0..out.len() {
         out[i] = find_start_of_next_line(fname, out[i]);
     }
+    out.dedup();
     println!("{:?}", out);
     return out
 }
