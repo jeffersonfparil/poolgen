@@ -1,7 +1,7 @@
 use std;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
-use std::result::Result;
+// use std::result::Result;
 // use std::error::Error;
 use std::io::{Error, ErrorKind};
 use std::str;
@@ -50,26 +50,27 @@ struct IndelMarker {
 }
 
 // Parse each line
-fn parse(line: &String) -> Result<Box<PileupLine>, String> {
+fn parse(line: &String) -> io::Result<Box<PileupLine>> {
     let raw_locus_data: Box<Vec<&str>> = Box::new(line.split("\t").collect());
     // Chromosome or scaffold name
     let chromosome: String = raw_locus_data[0].to_string();
     // Position or locus coordinate in the genome assembly
     let position = match raw_locus_data[1].to_string().parse::<u64>() {
         Ok(x) => x,
-        Err(_) => return Err("Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_string()),
+        // Err(_) => return Err("Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_string()),
+        Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_string())),
     };
     // Allele in the reference genome assembly
     let reference_allele  = match raw_locus_data[2].to_string().parse::<char>() {
         Ok(x) => x,
-        Err(_) => return Err("Please check the format of the input pileup file as the reference allele is not a valid nucleotide base (i.e. not a valid single character).".to_string()),
+        Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as the reference allele is not a valid nucleotide base (i.e. not a valid single character).".to_string())),
     };
     // List of the number of times the locus was read in each pool
     let mut coverages: Vec<u64> = Vec::new();
     for i in (3..raw_locus_data.len()).step_by(3) {
         let cov = match raw_locus_data[i].to_string().parse::<u64>() {
             Ok(x) => x,
-            Err(_) => return Err("Please check the format of the input pileup file as coverage field/s is/are not valid integer/s (i.e. u64) at pool: ".to_owned() + &(i/3).to_string() + &".".to_owned()),
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as coverage field/s is/are not valid integer/s (i.e. u64) at pool: ".to_owned() + &(i/3).to_string() + &".".to_owned())),
         };
         coverages.push(cov);
     }
@@ -78,7 +79,6 @@ fn parse(line: &String) -> Result<Box<PileupLine>, String> {
     for i in (4..raw_locus_data.len()).step_by(3) {
         // Parse if the current pool was read at least once for the current locus (i.e. line)
         if coverages[((i-1)/3)-1] > 0 {
-            let error_message = "Check the codes for insertions and deletion, i.e. they must be integers after '+' and '-' at pool: ".to_owned() + &((i-1)/3).to_string() + &".".to_owned();
             let raw_read_codes = raw_locus_data[i].as_bytes().to_owned();
             let mut alleles: Vec<u8> = Vec::new();
             let mut indel_marker: IndelMarker = IndelMarker{indel: false, count: 0, left: 4294967295}; // Instantiate the indel marker with no indel (i.e. indel==false and count==0) and the maximum number of indels left (i.e. left==4294967295 which is the maximum value for usize type of left)
@@ -90,7 +90,7 @@ fn parse(line: &String) -> Result<Box<PileupLine>, String> {
                     if (indel_marker.count == 0) & (indel_marker.left == 4294967295) {
                         indel_marker.count = match str::from_utf8(&[code]).unwrap().parse::<usize>() {
                             Ok(x) => x,
-                            Err(_) => return Err(error_message),
+                            Err(_) => return Err(Error::new(ErrorKind::Other, "Check the codes for insertions and deletion, i.e. they must be integers after '+' and '-' at pool: ".to_owned() + &((i-1)/3).to_string() + &".".to_owned())),
                         };
                         continue 'per_pool;
                     }
@@ -191,7 +191,7 @@ fn parse(line: &String) -> Result<Box<PileupLine>, String> {
         a = out.read_codes[i].len() as u64;
         q = out.read_qualities[i].len() as u64;
         if (c != a) | (c != q) | (a != q) {
-            return Err("Please check the format of the input pileup file as the coverages, number of read alleles and read qualities do not match at pool: ".to_owned() + &(i+1).to_string() + &".".to_owned());
+            return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as the coverages, number of read alleles and read qualities do not match at pool: ".to_owned() + &(i+1).to_string() + &".".to_owned()));
         }
     }
     return Ok(out);
