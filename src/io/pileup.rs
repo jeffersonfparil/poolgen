@@ -321,16 +321,6 @@ fn find_start_of_next_line(fname: &str, pos: u64) -> u64 {
     return out
 }
 
-fn sort<T>(x: Vec<T>) -> Vec<T> {
-
-    x
-}
-
-fn keep_unique<T>(x: Vec<T>) -> Vec<T> {
-    let out: Vec<T> = Vec::new();
-    x
-}
-
 fn find_file_splits(fname: &str, threads: u64) -> Vec<u64> {
     let mut file = File::open(fname).unwrap();
     let _ = file.seek(SeekFrom::End(0));
