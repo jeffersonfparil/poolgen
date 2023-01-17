@@ -1,6 +1,6 @@
 use std;
 use std::fs::File;
-use std::io::{self, prelude::*, SeekFrom, BufReader};
+use std::io::{self, prelude::*, SeekFrom, BufReader, BufWriter};
 // use std::result::Result;
 // use std::error::Error;
 use std::io::{Error, ErrorKind};
@@ -337,15 +337,79 @@ fn find_file_splits(fname: &str, threads: u64) -> Vec<u64> {
     return out
 }
 
-fn read_chunk(fname: &str, start: u64, end: u64) -> io::Result<i32>{
+fn read_chunk(fname: &str, start: u64, end: u64, min_qual: &f64, min_cov: &u64, format: &str) -> io::Result<i32>{
+    // Output temp file for the chunk
+    let fname_out = fname.to_owned() + &"-".to_owned() + &start.to_string() + &"-".to_owned() + &end.to_string() + &".syncx.tmp".to_owned();
+    let error_writing_file = "Unable to create file: ".to_owned() + &fname_out;
+    // println!("{}", fname_out);
+    let file_out = File::create(fname_out).expect(&error_writing_file);
+    let mut file_out = BufWriter::new(file_out);
+    // Input file chunk
     let file = File::open(fname).unwrap();
     let mut reader = BufReader::new(file);
-    let mut line = String::new();
     let mut i: u64 = start;
     while i < end {
+        // Instantiate the line
+        let mut line = String::new();
+        // Read the line which automatically movesthe cursor position to the next line
         let _ = reader.read_line(&mut line).unwrap();
+        // Find the new cursor position
         i = reader.seek(SeekFrom::Current(0)).unwrap();
-        println!("i: {} | {:?}", i, line);
+        // Remove trailing newline character in Unix-like (\n) and Windows (\r)
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
+        // println!("i: {} | {:?}", i, line);
+        // Parse the pileup line
+        let mut p = parse(&line).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
+        // println!("i: {} | Raw line: {:?}", i, p);
+        // Filter
+        p.filter(min_qual).unwrap();
+        // Convert to a vector of counts
+        let r = match p.reads_to_counts(min_cov) {
+            Ok(x) => x,
+            Err(_) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
+        };
+        // Convert to a vector of frequencies
+        let f = match p.reads_to_frequencies(min_cov) {
+            Ok(x) => x,
+            Err(_) => Box::new(AlleleFrequencies { chromosome: "".to_owned(), position: 0, a: vec![0.0], t: vec![0.0], c: vec![0.0], g: vec![0.0], n: vec![0.0], d: vec![0.0] }),
+        };
+        println!("i: {} | Filtered: {:?}", i, p);
+        println!("i: {} | Counts: {:?}", i, r);
+        println!("i: {} | Frequencies: {:?}", i, f);
+        println!("#########################################");
+        if (r.chromosome != "") & (r.position > 0) {
+            let mut x = vec![p.chromosome, p.position.to_string(), p.reference_allele.to_string()];
+            if format == "sync" {
+                // Sync canonical popoolation2 format
+                for i in 0..r.a.len() {
+                    let column = vec![r.a[i].to_string(),
+                                                   r.t[i].to_string(),
+                                                   r.c[i].to_string(),
+                                                   r.g[i].to_string(),
+                                                   r.n[i].to_string(),
+                                                   r.d[i].to_string()];
+                    x.push(column.join(":"));
+                }
+            } else if format == "syncf" {
+                // Sync canonical popoolation2 format
+                for i in 0..f.a.len() {
+                    let column: Vec<String> = vec![((f.a[i] * 100.0).round()/100.0).to_string(),
+                                                   ((f.t[i] * 100.0).round()/100.0).to_string(),
+                                                   ((f.c[i] * 100.0).round()/100.0).to_string(),
+                                                   ((f.g[i] * 100.0).round()/100.0).to_string(),
+                                                   ((f.n[i] * 100.0).round()/100.0).to_string(),
+                                                   ((f.d[i] * 100.0).round()/100.0).to_string()];
+                    x.push(column.join(":"));
+                }
+            }
+            let data = x.join("\t");
+            file_out.write_all(data.as_bytes()).expect("Unable to write data")
+        }
     }
     Ok(1)
 }
@@ -357,36 +421,39 @@ pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<Pi
     let mut reader:BufReader<File> = BufReader::new(file);
     let mut i: i64 = 0;
     let mut out: Vec<Box<PileupLine>> = Vec::new();
-    for line in reader.by_ref().lines() {
-        i += 1;
-        // println!("{}: Line: {:?}", i, line);
-        let mut p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
-        let q = p.mean_quality().unwrap();
-        // println!("{}: Before: {:?}", i, p);
-        p.filter(min_qual).unwrap();
-        let r = match p.reads_to_counts(min_cov) {
-            Ok(x) => x,
-            Err(_) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
-        };
-        let f = match p.reads_to_frequencies(min_cov) {
-            Ok(x) => x,
-            Err(_) => Box::new(AlleleFrequencies { chromosome: "".to_owned(), position: 0, a: vec![0.0], t: vec![0.0], c: vec![0.0], g: vec![0.0], n: vec![0.0], d: vec![0.0] }),
-        };
-        // println!("{:?}", p);
-        // println!("{:?}", r.position);
-        if r.position != 0 {
-            println!("{}: Counts: {:?}", i, r);
-            println!("{}: Frequencies: {:?}", i, f);
-        }
-        // println!("{}: After: {:?}", i, p);
-        // println!("idx: {}| read: {:?} | qualities: {:?}---{:?}", i, &r, &q, min_qual);
-        if &q <= min_qual {
-            out.push(p);
-        }
-    }
+    // for line in reader.by_ref().lines() {
+    //     i += 1;
+    //     // println!("{}: Line: {:?}", i, line);
+    //     let mut p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
+    //     let q = p.mean_quality().unwrap();
+    //     // println!("{}: Before: {:?}", i, p);
+    //     p.filter(min_qual).unwrap();
+    //     let r = match p.reads_to_counts(min_cov) {
+    //         Ok(x) => x,
+    //         Err(_) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
+    //     };
+    //     let f = match p.reads_to_frequencies(min_cov) {
+    //         Ok(x) => x,
+    //         Err(_) => Box::new(AlleleFrequencies { chromosome: "".to_owned(), position: 0, a: vec![0.0], t: vec![0.0], c: vec![0.0], g: vec![0.0], n: vec![0.0], d: vec![0.0] }),
+    //     };
+    //     // println!("{:?}", p);
+    //     // println!("{:?}", r.position);
+    //     if r.position != 0 {
+    //         println!("{}: Counts: {:?}", i, r);
+    //         println!("{}: Frequencies: {:?}", i, f);
+    //     }
+    //     // println!("{}: After: {:?}", i, p);
+    //     // println!("idx: {}| read: {:?} | qualities: {:?}---{:?}", i, &r, &q, min_qual);
+    //     if &q <= min_qual {
+    //         out.push(p);
+    //     }
+    // }
     let x = find_start_of_next_line(fname, 60);
     println!("{}", x);
     // read_chunk(fname, 0, 488);
-    find_file_splits(fname, 4);
+    let chunks = find_file_splits(fname, 4);
+    let start = chunks[0];
+    let end = chunks[1];
+    read_chunk(&fname, start, end, min_qual, min_cov, "syncf");
     Ok(out)
 }
