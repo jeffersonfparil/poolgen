@@ -5,6 +5,8 @@ use std::io::{self, prelude::*, SeekFrom, BufReader, BufWriter};
 // use std::error::Error;
 use std::io::{Error, ErrorKind};
 use std::str;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 // Struct for a locus from a pileup line
 #[derive(Debug)]
@@ -308,7 +310,7 @@ impl PileupLine {
 
 }
 
-fn find_start_of_next_line(fname: &str, pos: u64) -> u64 {
+fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
     let mut out = pos.clone();
     if out > 0 {
         let mut file = File::open(fname).unwrap();
@@ -321,7 +323,7 @@ fn find_start_of_next_line(fname: &str, pos: u64) -> u64 {
     return out
 }
 
-fn find_file_splits(fname: &str, threads: u64) -> Vec<u64> {
+fn find_file_splits(fname: &String, threads: u64) -> Vec<u64> {
     let mut file = File::open(fname).unwrap();
     let _ = file.seek(SeekFrom::End(0));
     let mut reader = BufReader::new(file);
@@ -337,9 +339,10 @@ fn find_file_splits(fname: &str, threads: u64) -> Vec<u64> {
     return out
 }
 
-fn read_chunk(fname: &str, start: u64, end: u64, min_qual: &f64, min_cov: &u64, format: &str) -> io::Result<i32>{
+fn read_chunk(fname: &String, start: u64, end: u64, min_qual: &f64, min_cov: &u64, format: &str) -> io::Result<String>{
     // Output temp file for the chunk
     let fname_out = fname.to_owned() + &"-".to_owned() + &start.to_string() + &"-".to_owned() + &end.to_string() + &".syncx.tmp".to_owned();
+    let out = fname_out.clone();
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_out;
     // println!("{}", fname_out);
     let file_out = File::create(fname_out).expect(&error_writing_file);
@@ -348,6 +351,7 @@ fn read_chunk(fname: &str, start: u64, end: u64, min_qual: &f64, min_cov: &u64, 
     let file = File::open(fname).unwrap();
     let mut reader = BufReader::new(file);
     let mut i: u64 = start;
+    reader.seek(SeekFrom::Start(start)).unwrap();
     while i < end {
         // Instantiate the line
         let mut line = String::new();
@@ -378,10 +382,10 @@ fn read_chunk(fname: &str, start: u64, end: u64, min_qual: &f64, min_cov: &u64, 
             Ok(x) => x,
             Err(_) => Box::new(AlleleFrequencies { chromosome: "".to_owned(), position: 0, a: vec![0.0], t: vec![0.0], c: vec![0.0], g: vec![0.0], n: vec![0.0], d: vec![0.0] }),
         };
-        println!("i: {} | Filtered: {:?}", i, p);
-        println!("i: {} | Counts: {:?}", i, r);
-        println!("i: {} | Frequencies: {:?}", i, f);
-        println!("#########################################");
+        // println!("i: {} | Filtered: {:?}", i, p);
+        // println!("i: {} | Counts: {:?}", i, r);
+        // println!("i: {} | Frequencies: {:?}", i, f);
+        // println!("#########################################");
         if (r.chromosome != "") & (r.position > 0) {
             let mut x = vec![p.chromosome, p.position.to_string(), p.reference_allele.to_string()];
             if format == "sync" {
@@ -407,15 +411,15 @@ fn read_chunk(fname: &str, start: u64, end: u64, min_qual: &f64, min_cov: &u64, 
                     x.push(column.join(":"));
                 }
             }
-            let data = x.join("\t");
+            let data = x.join("\t") + "\n";
             file_out.write_all(data.as_bytes()).expect("Unable to write data")
         }
     }
-    Ok(1)
+    Ok(out)
 }
 
 // Read pileup file
-pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<PileupLine>>> {
+pub fn read(fname: &String, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<PileupLine>>> {
     // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
     let file = File::open(fname).expect(&("Input file: '".to_owned() + fname + &"' not found.".to_owned()));
     let mut reader:BufReader<File> = BufReader::new(file);
@@ -451,9 +455,44 @@ pub fn read(fname: &str, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<Pi
     let x = find_start_of_next_line(fname, 60);
     println!("{}", x);
     // read_chunk(fname, 0, 488);
-    let chunks = find_file_splits(fname, 4);
-    let start = chunks[0];
-    let end = chunks[1];
-    read_chunk(&fname, start, end, min_qual, min_cov, "syncf");
+    let n_threads: usize = 3;
+    let chunks = find_file_splits(fname, n_threads as u64);
+    println!("Chunks: {:?}", chunks);
+
+    // let start = chunks[2];
+    // let end = chunks[3];
+    // let _ = read_chunk(&fname, start, end, min_qual, min_cov, "syncf");
+
+    ///////////////////////////////////////////////////////////////////
+    // Testing parallel execution, i.e. read-write per file chunk
+    let mut out_consolidated = Vec::new();
+    // Vector holding all returns from read_chunk()
+    let mut out_per_thread: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    // Making four separate threads calling the `search_for_word` function
+    let name = fname.to_owned();
+    for i in 0..n_threads {
+        let fname = name.clone();
+        let min_qual = min_qual.clone();
+        let min_cov = min_cov.clone();
+        let chunks = chunks.clone();
+        // Determing start and end of this chunk
+        let start = chunks[i];
+        let end = chunks[i+1];
+        let mut out_per_thread_inner = out_per_thread.clone();
+        let thread = std::thread::spawn(move || {
+            let x = read_chunk(&fname, start, end, &min_qual, &min_cov, "syncf").unwrap();
+            out_per_thread_inner.lock().unwrap().push(x);
+        });
+        out_consolidated.push(thread);
+    }
+
+
+    // Waiting for all threads to finish
+    for thread in out_consolidated {
+        let x = thread.join().expect("Unknown thread error occured.");
+    }
+    println!("OUTPUT OF PARALLEL EXECUTION: {:?}", x);
+    ///////////////////////////////////////////////////////////////////
+
     Ok(out)
 }
