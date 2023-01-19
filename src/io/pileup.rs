@@ -98,14 +98,14 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
                     }
                     // Find the next digit of the number of indels, if we have more than 9 indels
                     if (indel_marker.count > 0) & (indel_marker.left == 4294967295) {
-                        let x = str::from_utf8(&[code]).unwrap().parse::<usize>();
+                        let x = str::from_utf8(&[code]).unwrap().parse::<i64>();
                         let y = match x {
                             Ok(z) => z,
-                            Err(_) => 0,
+                            Err(_) => -1,
                         };
-                        if y > 0 {
+                        if y >= 0 {
                             let z = indel_marker.count.to_string() + "0";
-                            indel_marker.count = z.parse::<usize>().unwrap() + y;
+                            indel_marker.count = z.parse::<usize>().unwrap() + (y as usize);
                             // println!("{}", z.parse::<usize>().unwrap() + y);
                             continue 'per_pool;
                         } else {
@@ -135,6 +135,12 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
                 // Is the current code a read start/end marker?
                 // Remove read start and end codes (unicodes: '^' == 94 and '$' == 36)
                 if (code == 94) | (code == 36){
+                    if code == 94 {
+                        // If we have a start marker then we use the IndelMarker struct to get rig of the next character which encodes for the mapping quality of the read
+                        indel_marker.indel = true;
+                        indel_marker.count = 1;
+                        indel_marker.left = 1;
+                    }
                     continue 'per_pool;
                 }
                 // Reference allele (unicodes: ',' == 44 and '.' == 46) and 
@@ -175,6 +181,7 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
                 read_qualities.push(Vec::new());
             }
     }
+    // println!("{:?}", read_qualities);
     // Output PileupLine struct
     let out = Box::new(PileupLine {
         chromosome: chromosome,
@@ -219,7 +226,15 @@ impl PileupLine {
         Ok(out)
     }
 
-    fn filter(&mut self, min_quality: &f64) -> io::Result<&mut Self> {
+    fn filter(&mut self, min_coverage: &u64, min_quality: &f64) -> io::Result<&mut Self> {
+        // All the pools needs be have been covered at least min_coverage times
+        for c in &self.coverages {
+            // println!("{:?}", c);
+            if c < min_coverage {
+                return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            }
+        }
+        // Convert low quality bases into Ns
         let n = &self.read_qualities.len();
         for i in 0..*n {
             let pool = &self.read_qualities[i];
@@ -238,13 +253,7 @@ impl PileupLine {
         Ok(self)
     }
 
-    fn reads_to_counts(&self, min_coverage: &u64) -> io::Result<Box<AlleleCounts>> {
-        for c in &self.coverages {
-            // println!("{:?}", c);
-            if c < min_coverage {
-                return Err(Error::new(ErrorKind::Other, "Filtered out."));
-            }
-        }
+    fn reads_to_counts(&self) -> io::Result<Box<AlleleCounts>> {
         let mut out = Box::new(AlleleCounts {
             chromosome: self.chromosome.clone(),
             position: self.position.clone(),
@@ -281,7 +290,7 @@ impl PileupLine {
         Ok(out)
     }
     
-    fn reads_to_frequencies(&self, min_coverage: &u64) -> io::Result<Box<AlleleFrequencies>> {
+    fn reads_to_frequencies(&self) -> io::Result<Box<AlleleFrequencies>> {
         let mut out = Box::new(AlleleFrequencies {
             chromosome: self.chromosome.clone(),
             position: self.position.clone(),
@@ -291,10 +300,7 @@ impl PileupLine {
             g: Vec::new(),
             n: Vec::new(),
             d: Vec::new()});
-        let counts = match self.reads_to_counts(min_coverage) {
-            Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Filtered out.")),
-        };
+        let counts = self.reads_to_counts().unwrap();
         let n = counts.a.len();
         for i in 0..n {
             let sum = (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.n[i] + counts.d[i]) as f64;
@@ -323,35 +329,49 @@ fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
     return out
 }
 
-fn find_file_splits(fname: &String, threads: u64) -> Vec<u64> {
+fn find_file_splits(fname: &String, n_threads: &u64) -> Vec<u64> {
     let mut file = File::open(fname).unwrap();
     let _ = file.seek(SeekFrom::End(0));
     let mut reader = BufReader::new(file);
     let end = reader.seek(SeekFrom::Current(0)).unwrap();
-    let mut out = (0..end).step_by((end/threads) as usize).collect::<Vec<u64>>();
-    println!("{:?}", end);
-    println!("{:?}", out);
+    let mut out = (0..end).step_by((end/n_threads) as usize).collect::<Vec<u64>>();
+    out.push(end);
+    // println!("{:?}", end);
+    // println!("{:?}", out);
     for i in 0..out.len() {
         out[i] = find_start_of_next_line(fname, out[i]);
     }
     out.dedup();
-    println!("{:?}", out);
+    // println!("{:?}", out);
     return out
 }
 
-fn read_chunk(fname: &String, start: u64, end: u64, min_qual: &f64, min_cov: &u64, format: &str) -> io::Result<String>{
-    // Output temp file for the chunk
-    let fname_out = fname.to_owned() + &"-".to_owned() + &start.to_string() + &"-".to_owned() + &end.to_string() + &".syncx.tmp".to_owned();
+fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
+    // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
+    let mut start_string = start.to_string();
+    for  i in 0..(n_digits - start_string.len()) {
+        start_string = "0".to_owned() + &start_string;
+    }
+    // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
+    let mut end_string = end.to_string();
+    for  i in 0..(n_digits - end_string.len()) {
+        end_string = "0".to_owned() + &end_string;
+    }
+    // Output temp file for the chunk    
+    let fname_out = fname.to_owned() + &"-".to_owned() + &start_string + &"-".to_owned() + &end_string + &".syncx.tmp".to_owned();
     let out = fname_out.clone();
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_out;
+    let error_writing_line = "Unable to write line into file: ".to_owned() + &fname_out;
     // println!("{}", fname_out);
     let file_out = File::create(fname_out).expect(&error_writing_file);
     let mut file_out = BufWriter::new(file_out);
     // Input file chunk
     let file = File::open(fname).unwrap();
     let mut reader = BufReader::new(file);
+    // Navigate to the start of the chunk
     let mut i: u64 = start;
     reader.seek(SeekFrom::Start(start)).unwrap();
+    // Read and parse until the end of the chunk
     while i < end {
         // Instantiate the line
         let mut line = String::new();
@@ -368,131 +388,114 @@ fn read_chunk(fname: &String, start: u64, end: u64, min_qual: &f64, min_cov: &u6
         }
         // println!("i: {} | {:?}", i, line);
         // Parse the pileup line
-        let mut p = parse(&line).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
+        let mut p = parse(&line).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line with the first 20 characters as: ".to_owned() + &line[0..20] + &".".to_owned()));
         // println!("i: {} | Raw line: {:?}", i, p);
         // Filter
-        p.filter(min_qual).unwrap();
-        // Convert to a vector of counts
-        let r = match p.reads_to_counts(min_cov) {
+        match p.filter(min_cov, min_qual) {
             Ok(x) => x,
-            Err(_) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
-        };
-        // Convert to a vector of frequencies
-        let f = match p.reads_to_frequencies(min_cov) {
-            Ok(x) => x,
-            Err(_) => Box::new(AlleleFrequencies { chromosome: "".to_owned(), position: 0, a: vec![0.0], t: vec![0.0], c: vec![0.0], g: vec![0.0], n: vec![0.0], d: vec![0.0] }),
+            Err(_) => continue,
         };
         // println!("i: {} | Filtered: {:?}", i, p);
         // println!("i: {} | Counts: {:?}", i, r);
         // println!("i: {} | Frequencies: {:?}", i, f);
         // println!("#########################################");
-        if (r.chromosome != "") & (r.position > 0) {
-            let mut x = vec![p.chromosome, p.position.to_string(), p.reference_allele.to_string()];
-            if format == "sync" {
-                // Sync canonical popoolation2 format
-                for i in 0..r.a.len() {
-                    let column = vec![r.a[i].to_string(),
-                                                   r.t[i].to_string(),
-                                                   r.c[i].to_string(),
-                                                   r.g[i].to_string(),
-                                                   r.n[i].to_string(),
-                                                   r.d[i].to_string()];
-                    x.push(column.join(":"));
-                }
-            } else if format == "syncf" {
-                // Sync canonical popoolation2 format
-                for i in 0..f.a.len() {
-                    let column: Vec<String> = vec![((f.a[i] * 100.0).round()/100.0).to_string(),
-                                                   ((f.t[i] * 100.0).round()/100.0).to_string(),
-                                                   ((f.c[i] * 100.0).round()/100.0).to_string(),
-                                                   ((f.g[i] * 100.0).round()/100.0).to_string(),
-                                                   ((f.n[i] * 100.0).round()/100.0).to_string(),
-                                                   ((f.d[i] * 100.0).round()/100.0).to_string()];
-                    x.push(column.join(":"));
-                }
+        let mut x = vec![p.chromosome.clone(), p.position.to_string(), p.reference_allele.to_string()];
+        if fmt == "sync" {
+            // Convert to a vector of counts (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
+            let r = p.reads_to_counts().unwrap();
+            // Sync canonical popoolation2 format
+            for i in 0..r.a.len() {
+                let column = vec![r.a[i].to_string(),
+                                                r.t[i].to_string(),
+                                                r.c[i].to_string(),
+                                                r.g[i].to_string(),
+                                                r.n[i].to_string(),
+                                                r.d[i].to_string()];
+                x.push(column.join(":"));
             }
-            let data = x.join("\t") + "\n";
-            file_out.write_all(data.as_bytes()).expect("Unable to write data")
+        } else if fmt == "syncf" {
+            // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
+            let f = p.reads_to_frequencies().unwrap();
+            // Also, sync format but with allele frequencies instead of allele counts
+            for i in 0..f.a.len() {
+                let column: Vec<String> = vec![((f.a[i] * 100.0).round()/100.0).to_string(),
+                                                ((f.t[i] * 100.0).round()/100.0).to_string(),
+                                                ((f.c[i] * 100.0).round()/100.0).to_string(),
+                                                ((f.g[i] * 100.0).round()/100.0).to_string(),
+                                                ((f.n[i] * 100.0).round()/100.0).to_string(),
+                                                ((f.d[i] * 100.0).round()/100.0).to_string()];
+                x.push(column.join(":"));
+            }
         }
+        let data = x.join("\t") + "\n";
+        file_out.write_all(data.as_bytes()).expect(&error_writing_line);
     }
     Ok(out)
 }
 
 // Read pileup file
-pub fn read(fname: &String, min_qual: &f64, min_cov: &u64) -> io::Result<Vec<Box<PileupLine>>> {
-    // let fname: &str = "/home/jeffersonfparil/Documents/poolgen/tests/test.pileup";
-    let file = File::open(fname).expect(&("Input file: '".to_owned() + fname + &"' not found.".to_owned()));
-    let mut reader:BufReader<File> = BufReader::new(file);
-    let mut i: i64 = 0;
-    let mut out: Vec<Box<PileupLine>> = Vec::new();
-    // for line in reader.by_ref().lines() {
-    //     i += 1;
-    //     // println!("{}: Line: {:?}", i, line);
-    //     let mut p = parse(&line.unwrap()).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line: ".to_owned() + &i.to_string() + &".".to_owned()));
-    //     let q = p.mean_quality().unwrap();
-    //     // println!("{}: Before: {:?}", i, p);
-    //     p.filter(min_qual).unwrap();
-    //     let r = match p.reads_to_counts(min_cov) {
-    //         Ok(x) => x,
-    //         Err(_) => Box::new(AlleleCounts { chromosome: "".to_owned(), position: 0, a: vec![0], t: vec![0], c: vec![0], g: vec![0], n: vec![0], d: vec![0] }),
-    //     };
-    //     let f = match p.reads_to_frequencies(min_cov) {
-    //         Ok(x) => x,
-    //         Err(_) => Box::new(AlleleFrequencies { chromosome: "".to_owned(), position: 0, a: vec![0.0], t: vec![0.0], c: vec![0.0], g: vec![0.0], n: vec![0.0], d: vec![0.0] }),
-    //     };
-    //     // println!("{:?}", p);
-    //     // println!("{:?}", r.position);
-    //     if r.position != 0 {
-    //         println!("{}: Counts: {:?}", i, r);
-    //         println!("{}: Frequencies: {:?}", i, f);
-    //     }
-    //     // println!("{}: After: {:?}", i, p);
-    //     // println!("idx: {}| read: {:?} | qualities: {:?}---{:?}", i, &r, &q, min_qual);
-    //     if &q <= min_qual {
-    //         out.push(p);
-    //     }
-    // }
-    let x = find_start_of_next_line(fname, 60);
-    println!("{}", x);
-    // read_chunk(fname, 0, 488);
-    let n_threads: usize = 3;
-    let chunks = find_file_splits(fname, n_threads as u64);
-    println!("Chunks: {:?}", chunks);
-
-    // let start = chunks[2];
-    // let end = chunks[3];
-    // let _ = read_chunk(&fname, start, end, min_qual, min_cov, "syncf");
-
-    ///////////////////////////////////////////////////////////////////
-    // Testing parallel execution, i.e. read-write per file chunk
-    let mut out_consolidated = Vec::new();
-    // Vector holding all returns from read_chunk()
-    let mut out_per_thread: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-    // Making four separate threads calling the `search_for_word` function
+pub fn read(fname: &String, min_qual: &f64, min_cov: &u64, file_format: &String, n_threads: &u64) -> io::Result<String> {
+    // Output filename
+    let out = fname.to_owned() + &(file_format.to_owned());
+    // Clone input filename and format extension name so that we won;t have any problems with threading
     let name = fname.to_owned();
-    for i in 0..n_threads {
-        let fname = name.clone();
-        let min_qual = min_qual.clone();
-        let min_cov = min_cov.clone();
-        let chunks = chunks.clone();
+    let fmt = file_format.to_owned();
+    // Find the positions whereto split the file into n_threads pieces
+    let chunks = find_file_splits(fname, n_threads);
+    let n_digits = chunks[*n_threads as usize].to_string().len();
+    println!("Chunks: {:?}", chunks);
+    // Instantiate thread object for parallel execution
+    let mut thread_objects = Vec::new();
+    // Vector holding all returns from read_chunk()
+    let mut thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
+    // Making four separate threads calling the `search_for_word` function
+    for i in 0..(*n_threads as usize) {
+        let fname_clone = name.clone();
+        let min_qual_clone = min_qual.clone();
+        let min_cov_clone = min_cov.clone();
+        let fmt_clone = fmt.clone();
+        let chunks_clone = chunks.clone();
         // Determing start and end of this chunk
-        let start = chunks[i];
-        let end = chunks[i+1];
-        let mut out_per_thread_inner = out_per_thread.clone();
+        let start = chunks_clone[i];
+        let end = chunks_clone[i+1];
+        let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
-            let x = read_chunk(&fname, start, end, &min_qual, &min_cov, "syncf").unwrap();
-            out_per_thread_inner.lock().unwrap().push(x);
+            let fname_out_per_thread = read_chunk(&fname_clone,
+                                                          start,
+                                                          end,
+                                                          n_digits,
+                                                          &min_qual_clone,
+                                                          &min_cov_clone,
+                                                          &fmt_clone).unwrap();
+            thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
         });
-        out_consolidated.push(thread);
+        thread_objects.push(thread);
     }
-
-
     // Waiting for all threads to finish
-    for thread in out_consolidated {
-        let x = thread.join().expect("Unknown thread error occured.");
+    for thread in thread_objects {
+        let _ = thread.join().expect("Unknown thread error occured.");
     }
-    println!("OUTPUT OF PARALLEL EXECUTION: {:?}", x);
-    ///////////////////////////////////////////////////////////////////
-
+    // Instatiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &out;
+    let mut file_out = File::create(&out).expect(&error_writing_file);
+    // Extract output filenames from each thread into a vector and sort them
+    let mut fnames_out: Vec<String> = Vec::new();
+    for f in thread_ouputs.lock().unwrap().iter() {
+        fnames_out.push(f.to_owned());
+    }
+    fnames_out.sort();
+    println!("{:?}", fnames_out);
+    // Iterate across output files from each thread, and concatenate non-empty files
+    for f in fnames_out {
+        let mut file: File = File::open(&f).unwrap();
+        if file.metadata().unwrap().len() == 0 {
+        } else {
+            io::copy(&mut file, &mut file_out).unwrap();
+            // println!("{:?}", f);
+        }
+        // Clean-up: remove temporary output files from each thread
+        let error_deleting_file = "Unable to remove file: ".to_owned() + &f;
+        std::fs::remove_file(f).expect(&error_deleting_file);
+    }
     Ok(out)
 }
