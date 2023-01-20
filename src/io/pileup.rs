@@ -8,6 +8,9 @@ use std::str;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use statrs::statistics::Distribution;
+use statrs::statistics::Data;
+
 // Struct for a locus from a pileup line
 #[derive(Debug)]
 pub struct PileupLine {
@@ -290,7 +293,7 @@ impl PileupLine {
         Ok(out)
     }
     
-    fn reads_to_frequencies(&self) -> io::Result<Box<AlleleFrequencies>> {
+    fn reads_to_frequencies(&self, remove_Ns: bool) -> io::Result<Box<AlleleFrequencies>> {
         let mut out = Box::new(AlleleFrequencies {
             chromosome: self.chromosome.clone(),
             position: self.position.clone(),
@@ -303,12 +306,19 @@ impl PileupLine {
         let counts = self.reads_to_counts().unwrap();
         let n = counts.a.len();
         for i in 0..n {
-            let sum = (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.n[i] + counts.d[i]) as f64;
+            let sum = match remove_Ns {
+                true => (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.d[i]) as f64,
+                false => (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.n[i] + counts.d[i]) as f64,
+            };
             out.a.push((counts.a[i] as f64) / sum);
             out.t.push((counts.t[i] as f64) / sum);
             out.c.push((counts.c[i] as f64) / sum); 
-            out.g.push((counts.g[i] as f64) / sum); 
-            out.n.push((counts.n[i] as f64) / sum); 
+            out.g.push((counts.g[i] as f64) / sum);
+            if remove_Ns {
+                out.n.push((0.000000000 as f64) / sum);
+            } else {
+                out.n.push((counts.n[i] as f64) / sum);
+            } 
             out.d.push((counts.d[i] as f64) / sum); 
         }
         Ok(out)
@@ -415,7 +425,7 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
             }
         } else if fmt == "syncf" {
             // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
-            let f = p.reads_to_frequencies().unwrap();
+            let f = p.reads_to_frequencies(false).unwrap();
             // Also, sync format but with allele frequencies instead of allele counts
             for i in 0..f.a.len() {
                 let column: Vec<String> = vec![((f.a[i] * 100.0).round()/100.0).to_string(),
@@ -428,9 +438,29 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
             }
         } else if fmt == "syncx" {
             // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
-            let f = p.reads_to_frequencies().unwrap();
+            let f = p.reads_to_frequencies(true).unwrap();
             // Find how many polymorphic alleles we have
-            
+            let frequencies = vec![f.a, f.t, f.c, f.g, f.n, f.d];
+            for i in 0..frequencies.len() {
+                let freqs = frequencies[i].clone();
+                let var = Data::new(freqs.clone()).variance().unwrap();
+                // println!("{:?}", var);
+                if var > 0.0 {
+                    let a = match i {
+                        0 => "a".to_owned(),
+                        1 => "t".to_owned(),
+                        2 => "c".to_owned(),
+                        3 => "g".to_owned(),
+                        4 => "n".to_owned(),
+                        _ => "d".to_owned(),
+                    };
+                    let mut column = vec![a];
+                    column.push(freqs.iter().map(|y| y.to_string()).collect::<Vec<String>>().join(":"));
+                    x.push(column.join("|"));
+                } else {
+                    continue;
+                }
+            }
         }
         let data = x.join("\t") + "\n";
         file_out.write_all(data.as_bytes()).expect(&error_writing_line);
