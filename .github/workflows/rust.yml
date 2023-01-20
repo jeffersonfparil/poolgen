@@ -38,7 +38,8 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Build | Compile
-        run: cargo run -- -f ./tests/test.pileup -p ./tests/test_names.txt
-        run: cargo run -- -f ./tests/test.pileup -p ./tests/test_names.txt --n-threads 2 --min-cov 2
-        run: cargo run -- -f ./tests/test.pileup -p ./tests/test_names.txt --file-format syncf --n-threads 2 --min-cov 2
-        run: cargo run -- -f ./tests/test.pileup -p ./tests/test_names.txt --file-format syncx --n-threads 2 --min-cov 2
+        run: | 
+          cargo run -- -f ./tests/test.pileup -p ./tests/test_names.txt
+          cargo run -- -f ./tests/test.pileup -p ./tests/test_names.txt --n-threads 2 --min-cov 2
+          cargo run -- -f ./tests/test.pileup -p ./tests/test_names.txt --file-format syncf --n-threads 2 --min-cov 2
+          cargo run -- -f ./tests/test.pileup -p ./tests/test_names.txt --file-format syncx --n-threads 2 --min-cov 2
