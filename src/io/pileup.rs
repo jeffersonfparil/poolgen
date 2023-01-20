@@ -264,28 +264,28 @@ impl PileupLine {
             n: Vec::new(),
             d: Vec::new()});
         for pool in &self.read_codes {
-            let mut A: u64 = 0;
-            let mut T: u64 = 0;
-            let mut C: u64 = 0;
-            let mut G: u64 = 0;
-            let mut N: u64 = 0;
-            let mut D: u64 = 0;    
+            let mut a_per_pool: u64 = 0;
+            let mut t_per_pool: u64 = 0;
+            let mut c_per_pool: u64 = 0;
+            let mut g_per_pool: u64 = 0;
+            let mut n_per_pool: u64 = 0;
+            let mut d_per_pool: u64 = 0;    
             for allele in pool {
                 match allele {
-                    65 => A += 1,
-                    84 => T += 1,
-                    67 => C += 1,
-                    71 => G += 1,
-                    68 => D += 1,
-                    _ => N += 1,
+                    65 => a_per_pool += 1,
+                    84 => t_per_pool += 1,
+                    67 => c_per_pool += 1,
+                    71 => g_per_pool += 1,
+                    68 => d_per_pool += 1,
+                    _  => n_per_pool += 1,
                 };
             }
-            out.a.push(A);
-            out.t.push(T);
-            out.c.push(C);
-            out.g.push(G);
-            out.n.push(N);
-            out.d.push(D);
+            out.a.push(a_per_pool);
+            out.t.push(t_per_pool);
+            out.c.push(c_per_pool);
+            out.g.push(g_per_pool);
+            out.n.push(n_per_pool);
+            out.d.push(d_per_pool);
         }
         Ok(out)
     }
@@ -419,13 +419,18 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
             // Also, sync format but with allele frequencies instead of allele counts
             for i in 0..f.a.len() {
                 let column: Vec<String> = vec![((f.a[i] * 100.0).round()/100.0).to_string(),
-                                                ((f.t[i] * 100.0).round()/100.0).to_string(),
-                                                ((f.c[i] * 100.0).round()/100.0).to_string(),
-                                                ((f.g[i] * 100.0).round()/100.0).to_string(),
-                                                ((f.n[i] * 100.0).round()/100.0).to_string(),
-                                                ((f.d[i] * 100.0).round()/100.0).to_string()];
+                                               ((f.t[i] * 100.0).round()/100.0).to_string(),
+                                               ((f.c[i] * 100.0).round()/100.0).to_string(),
+                                               ((f.g[i] * 100.0).round()/100.0).to_string(),
+                                               ((f.n[i] * 100.0).round()/100.0).to_string(),
+                                               ((f.d[i] * 100.0).round()/100.0).to_string()];
                 x.push(column.join(":"));
             }
+        } else if fmt == "syncx" {
+            // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
+            let f = p.reads_to_frequencies().unwrap();
+            // Find how many polymorphic alleles we have
+            
         }
         let data = x.join("\t") + "\n";
         file_out.write_all(data.as_bytes()).expect(&error_writing_line);
@@ -434,9 +439,17 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
 }
 
 // Read pileup file
-pub fn read(fname: &String, min_qual: &f64, min_cov: &u64, file_format: &String, n_threads: &u64) -> io::Result<String> {
+pub fn read(fname: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, file_format: &String, n_threads: &u64) -> io::Result<String> {
     // Output filename
     let out = fname.to_owned() + &(file_format.to_owned());
+    // Pool names
+    let mut names: Vec<String> = Vec::new();
+    let file_names = File::open(pool_names).unwrap();
+    let reader_names = BufReader::new(file_names);
+    for line in reader_names.lines() {
+        names.push(line.unwrap().to_owned());
+    }
+    let names = names.join("\t");
     // Clone input filename and format extension name so that we won;t have any problems with threading
     let name = fname.to_owned();
     let fmt = file_format.to_owned();
@@ -478,6 +491,13 @@ pub fn read(fname: &String, min_qual: &f64, min_cov: &u64, file_format: &String,
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &out;
     let mut file_out = File::create(&out).expect(&error_writing_file);
+    let sync = "sync".to_string();
+    let syncf = "syncf".to_string();
+    let _x = match file_format {
+        sync => file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()),
+        syncf => file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()),
+        _ => return Err(Error::new(ErrorKind::Other, "Phred score out of bounds.")),
+    };
     // Extract output filenames from each thread into a vector and sort them
     let mut fnames_out: Vec<String> = Vec::new();
     for f in thread_ouputs.lock().unwrap().iter() {
@@ -486,6 +506,7 @@ pub fn read(fname: &String, min_qual: &f64, min_cov: &u64, file_format: &String,
     fnames_out.sort();
     println!("{:?}", fnames_out);
     // Iterate across output files from each thread, and concatenate non-empty files
+
     for f in fnames_out {
         let mut file: File = File::open(&f).unwrap();
         if file.metadata().unwrap().len() == 0 {
