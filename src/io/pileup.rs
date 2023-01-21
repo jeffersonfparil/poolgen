@@ -1,13 +1,11 @@
 use std;
 use std::fs::File;
 use std::io::{self, prelude::*, SeekFrom, BufReader, BufWriter};
-// use std::result::Result;
-// use std::error::Error;
 use std::io::{Error, ErrorKind};
 use std::str;
 use std::sync::Arc;
 use std::sync::Mutex;
-
+use std::time::{SystemTime, UNIX_EPOCH};
 use statrs::statistics::Distribution;
 use statrs::statistics::Data;
 
@@ -293,7 +291,7 @@ impl PileupLine {
         Ok(out)
     }
     
-    fn reads_to_frequencies(&self, remove_Ns: bool) -> io::Result<Box<AlleleFrequencies>> {
+    fn reads_to_frequencies(&self, remove_n: bool) -> io::Result<Box<AlleleFrequencies>> {
         let mut out = Box::new(AlleleFrequencies {
             chromosome: self.chromosome.clone(),
             position: self.position.clone(),
@@ -306,7 +304,7 @@ impl PileupLine {
         let counts = self.reads_to_counts().unwrap();
         let n = counts.a.len();
         for i in 0..n {
-            let sum = match remove_Ns {
+            let sum = match remove_n {
                 true => (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.d[i]) as f64,
                 false => (counts.a[i] + counts.t[i] + counts.c[i] + counts.g[i] + counts.n[i] + counts.d[i]) as f64,
             };
@@ -314,7 +312,7 @@ impl PileupLine {
             out.t.push((counts.t[i] as f64) / sum);
             out.c.push((counts.c[i] as f64) / sum); 
             out.g.push((counts.g[i] as f64) / sum);
-            if remove_Ns {
+            if remove_n {
                 out.n.push((0.000000000 as f64) / sum);
             } else {
                 out.n.push((counts.n[i] as f64) / sum);
@@ -461,9 +459,15 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
                     continue;
                 }
             }
+        } else {
+            return Err(Error::new(ErrorKind::Other, "Format: ".to_owned() + &fmt + " not reconised. Please use: 'sync', 'syncf', or 'syncx'."));
         }
         let data = x.join("\t") + "\n";
-        file_out.write_all(data.as_bytes()).expect(&error_writing_line);
+        if x.len() > 3 {
+            file_out.write_all(data.as_bytes()).expect(&error_writing_line);
+        } else {
+            continue;
+        }
     }
     Ok(out)
 }
@@ -471,7 +475,11 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
 // Read pileup file
 pub fn read(fname: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, file_format: &String, n_threads: &u64) -> io::Result<String> {
     // Output filename
-    let out = fname.to_owned() + &(file_format.to_owned());
+    let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
+    let bname = fname.split(".").collect::<Vec<&str>>().into_iter().map(|a| a.to_owned())
+                                  .collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>()[1..].to_owned()
+                                  .into_iter().rev().collect::<Vec<String>>().join(".");
+    let out = bname.to_owned() + "-" + &time.to_string() + "." + &(file_format.to_owned());
     // Pool names
     let mut names: Vec<String> = Vec::new();
     let file_names = File::open(pool_names).unwrap();

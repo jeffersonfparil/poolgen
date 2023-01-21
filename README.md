@@ -12,33 +12,50 @@ Quantitative and population genetics analyses using pool sequencing data
 ## File formats
 
 ### Pileup
+
 Summarised or piled up base calls of aligned reads to a reference genome.
+
 - *Column 1*:       name of chromosome, scaffold or contig
 - *Column 2*:       locus position
 - *Column 3*:       reference allele
 - *Column 4*:       coverage, i.e. number of times the locus was included in a read
-- *Column 5*:       Read codes, i.e. "." ("," for reverse strand) reference allele; "A/T/C/G" ("a/t/c/g" for reverse strand) alternative alleles; "`\[+-][0-9]+[ACGTNacgtn]`" insertions and deletions; "^" start of read; "$" end of read; and "*" deleted or missing locus.
+- *Column 5*:       Read codes, i.e. "." ("," for reverse strand) reference allele; "A/T/C/G" ("a/t/c/g" for reverse strand) alternative alleles; "`\[+-][0-9]+[ACGTNacgtn]`" insertions and deletions; "^[" start of read including the mapping quality score; "$" end of read; and "*" deleted or missing locus.
 - *Column 6*:       base qualities encoded as the `10 ^ -((ascii value of the character - 33) / 10)`
 - *Columns 7 - 3n*: coverages, reads, and base qualities of *n* pools (3 columns per pool).
 
-### Syncx
+### Sync
+
 [popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format with optional header/s prefixed by '#':
-- *Column 1*:      chromosome or scaffold name
-- *Column 2*:      locus position 
-- *Column 3 to n*: colon-delimited allele counts: A:T:C:G:DEL:N, where "DEL" is deletion, and "N" is unclassified (one column per pool).
+
+- *Header line*:    optional header line/s including the names of the pools, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
+- *Column 1*:       chromosome or scaffold name
+- *Column 2*:       locus position 
+- *Column 3*:       reference allele, e.g. A, T, C, G 
+- *Column 4 to n*:  colon-delimited allele counts: A:T:C:G:DEL:N, where "DEL" is deletion, and "N" is unclassified (one column per pool).
+
+### Syncf
+
+Similar to **\*.sync** format but allele frequencies are used instead of allele counts:
+
+- *Header line*:    optional header line/s, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
+- *Column 1*:       chromosome or scaffold name
+- *Column 2*:       locus position 
+- *Column 3*:       reference allele, e.g. A, T, C, G 
+- *Column 4 to n*:  colon-delimited allele frequencies: A:T:C:G:DEL:N, where "DEL" is deletion, and "N" is unclassified (one column per pool).
+
 
 ### Phenotypes
 
 1. A simple delimited file, e.g. "csv" and "tsv" with a column for the individual IDs, and at least one column for the phenotypic values
-2. Text with a ".py" extension for GWAlpha:
-```python
-	Pheno_name='Phenotype Name';
-	sig=0.06724693662723039; # standard deviation
-	MIN=0.0; # minimum phenotype value
-	MAX=0.424591738712776; # maximum phenotype value
-	perc=[0.2,0.4,0.6,0.8]; # cummulative pool sizes percentiles excluding the last pool
-	q=[0.16,0.20,0.23,0.27,0.42]; # phenotype values corresponding to each percentile
-```
+
+2. GWAlpha-compatible file:
+
+- *Line 1*: phenotype name
+- *Line 2*: standard deviation of the phenotype across pools or for the entire population
+- *Line 3*: minimum phenotype value
+- *Line 4*: maximum phenotype value
+- *Line 5*: cummulative pool sizes percentiles (e.g. 0.2,0.4,0.6,0.8,1.0)
+- *Line 6*: phenotype values corresponding to each percentile (e.g. 0.16,0.20,0.23,0.27,0.42)
 
 ## Details
 
