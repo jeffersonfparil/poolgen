@@ -18,8 +18,8 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 - *Column 1*:       name of chromosome, scaffold or contig
 - *Column 2*:       locus position
 - *Column 3*:       reference allele
-- *Column 4*:       coverage, i.e. number of times the locus was included in a read
-- *Column 5*:       Read codes, i.e. "." ("," for reverse strand) reference allele; "A/T/C/G" ("a/t/c/g" for reverse strand) alternative alleles; "`\[+-][0-9]+[ACGTNacgtn]`" insertions and deletions; "^[" start of read including the mapping quality score; "$" end of read; and "*" deleted or missing locus.
+- *Column 4*:       coverage, i.e. number of times the locus was sequenced
+- *Column 5*:       read codes, i.e. "." ("," for reverse strand) reference allele; "A/T/C/G" ("a/t/c/g" for reverse strand) alternative alleles; "`\[+-][0-9]+[ACGTNacgtn]`" insertions and deletions; "^[" start of read including the mapping quality score; "$" end of read; and "*" deleted or missing locus.
 - *Column 6*:       base qualities encoded as the `10 ^ -((ascii value of the character - 33) / 10)`
 - *Columns 7 - 3n*: coverages, reads, and base qualities of *n* pools (3 columns per pool).
 
@@ -27,7 +27,7 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 
 [popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format with optional header/s prefixed by '#':
 
-- *Header line*:    optional header line/s including the names of the pools, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
+- *Header line/s*:  optional header line/s including the names of the pools, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
 - *Column 1*:       chromosome or scaffold name
 - *Column 2*:       locus position 
 - *Column 3*:       reference allele, e.g. A, T, C, G 
@@ -37,12 +37,21 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 
 Similar to **\*.sync** format but allele frequencies are used instead of allele counts:
 
-- *Header line*:    optional header line/s, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
+- *Header line/s*:  optional header line/s, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
 - *Column 1*:       chromosome or scaffold name
 - *Column 2*:       locus position 
 - *Column 3*:       reference allele, e.g. A, T, C, G 
 - *Column 4 to n*:  colon-delimited allele frequencies: A:T:C:G:DEL:N, where "DEL" is deletion, and "N" is unclassified (one column per pool).
 
+### Syncx
+
+Summarised allele frequencies where the ambiguous bases (i.e. filtered out low quality and low coverage bases) were excluded. This is a proposed update to the **\*.sync** format.
+
+- *Header line/s*:    optional header line/s, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
+- *Column 1*:         chromosome or scaffold name
+- *Column 2*:         locus position 
+- *Column 3*:         reference allele, e.g. A, T, C, G 
+- *Column 4 up to 8*: includes at least 2 columns where each column refers to either alleles A, T, C, G, or DEL. In each column, the first character refers to the allele the column refers to, proceeded by the pipe symbol (i.e. "|") followed by allele frequencies per pool separated by colons, e.g. "t|0.123:0.5:0.01:0.333333:0.2  g|0.877:0.5:0.99:0.666666:0.8"
 
 ### Phenotypes
 
