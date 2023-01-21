@@ -51,7 +51,7 @@ Summarised allele frequencies where the ambiguous bases (i.e. filtered out low q
 - *Column 1*:         chromosome or scaffold name
 - *Column 2*:         locus position 
 - *Column 3*:         reference allele, e.g. A, T, C, G 
-- *Column 4 up to 8*: includes at least 2 columns where each column refers to either alleles A, T, C, G, or DEL. In each column, the first character refers to the allele the column refers to, proceeded by the pipe symbol (i.e. "|") followed by allele frequencies per pool separated by colons, e.g. "t|0.123:0.5:0.01:0.333333:0.2  g|0.877:0.5:0.99:0.666666:0.8"
+- *Column 4 up to 8*: includes at least 2 columns where each column refers to either alleles A, T, C, G, or DEL. In each column, the first character refers to the allele the column refers to, proceeded by the pipe symbol (i.e. "|") followed by allele frequencies per pool separated by colons, e.g. "t|0.123:0.5:0.01:0.333333:0.2  g|0.877:0.5:0.99:0.666666:0.8".
 
 ### Phenotypes
 

@@ -6,8 +6,7 @@ use std::str;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use statrs::statistics::Distribution;
-use statrs::statistics::Data;
+use nalgebra::DVector;
 
 // Struct for a locus from a pileup line
 #[derive(Debug)]
@@ -441,7 +440,7 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
             let frequencies = vec![f.a, f.t, f.c, f.g, f.n, f.d];
             for i in 0..frequencies.len() {
                 let freqs = frequencies[i].clone();
-                let var = Data::new(freqs.clone()).variance().unwrap();
+                let var = DVector::from_column_slice(&freqs).variance();
                 // println!("{:?}", var);
                 if var > 0.0 {
                     let a = match i {
