@@ -51,13 +51,51 @@ struct IndelMarker {
     left: usize,    // how many indel bases are left to be removed (initialised with the maximum possible value of 4294967295)
 }
 
+// Struct for ordering the allele columns by variance in allele frequencies across pools for the syncx format
+#[derive(Debug, PartialEq, PartialOrd)]
+struct SyncxAlleleFreqs {
+    var_x_ave: f64,
+    freqs: String,
+}
+
+// File splitting for thread allocation for parallele computation
+fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
+    let mut out = pos.clone();
+    if out > 0 {
+        let mut file = File::open(fname).unwrap();
+        let _ = file.seek(SeekFrom::Start(out));
+        let mut reader = BufReader::new(file);
+        let mut line = String::new();
+        let _ = reader.read_line(&mut line).unwrap();
+        out = reader.seek(SeekFrom::Current(0)).unwrap();
+    }
+    return out
+}
+
+fn find_file_splits(fname: &String, n_threads: &u64) -> Vec<u64> {
+    let mut file = File::open(fname).unwrap();
+    let _ = file.seek(SeekFrom::End(0));
+    let mut reader = BufReader::new(file);
+    let end = reader.seek(SeekFrom::Current(0)).unwrap();
+    let mut out = (0..end).step_by((end/n_threads) as usize).collect::<Vec<u64>>();
+    out.push(end);
+    // println!("{:?}", end);
+    // println!("{:?}", out);
+    for i in 0..out.len() {
+        out[i] = find_start_of_next_line(fname, out[i]);
+    }
+    out.dedup();
+    // println!("{:?}", out);
+    return out
+}
+
 // Parse each line
 fn parse(line: &String) -> io::Result<Box<PileupLine>> {
     let raw_locus_data: Box<Vec<&str>> = Box::new(line.split("\t").collect());
     // Chromosome or scaffold name
     let chromosome: String = raw_locus_data[0].to_string();
     // Position or locus coordinate in the genome assembly
-    let position = match raw_locus_data[1].to_string().parse::<u64>() {
+    let position = match raw_locus_data[1].parse::<u64>() {
         Ok(x) => x,
         // Err(_) => return Err("Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_string()),
         Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_string())),
@@ -72,7 +110,7 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
     for i in (3..raw_locus_data.len()).step_by(3) {
         let cov = match raw_locus_data[i].to_string().parse::<u64>() {
             Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as coverage field/s is/are not valid integer/s (i.e. u64) at pool: ".to_owned() + &(i/3).to_string() + &".".to_owned())),
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as coverage field/s is/are not valid integer/s (i.e. u64) at pool: ".to_owned() + &(i/3).to_string() + ".")),
         };
         coverages.push(cov);
     }
@@ -92,7 +130,7 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
                     if (indel_marker.count == 0) & (indel_marker.left == 4294967295) {
                         indel_marker.count = match str::from_utf8(&[code]).unwrap().parse::<usize>() {
                             Ok(x) => x,
-                            Err(_) => return Err(Error::new(ErrorKind::Other, "Check the codes for insertions and deletion, i.e. they must be integers after '+' and '-' at pool: ".to_owned() + &((i-1)/3).to_string() + &".".to_owned())),
+                            Err(_) => return Err(Error::new(ErrorKind::Other, "Check the codes for insertions and deletion, i.e. they must be integers after '+' and '-' at pool: ".to_owned() + &((i-1)/3).to_string() + ".")),
                         };
                         continue 'per_pool;
                     }
@@ -200,7 +238,7 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
         a = out.read_codes[i].len() as u64;
         q = out.read_qualities[i].len() as u64;
         if (c != a) | (c != q) | (a != q) {
-            return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as the coverages, number of read alleles and read qualities do not match at pool: ".to_owned() + &(i+1).to_string() + &".".to_owned()));
+            return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as the coverages, number of read alleles and read qualities do not match at pool: ".to_owned() + &(i+1).to_string() + "."));
         }
     }
     return Ok(out);
@@ -323,49 +361,19 @@ impl PileupLine {
 
 }
 
-fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
-    let mut out = pos.clone();
-    if out > 0 {
-        let mut file = File::open(fname).unwrap();
-        let _ = file.seek(SeekFrom::Start(out));
-        let mut reader = BufReader::new(file);
-        let mut line = String::new();
-        let _ = reader.read_line(&mut line).unwrap();
-        out = reader.seek(SeekFrom::Current(0)).unwrap();
-    }
-    return out
-}
-
-fn find_file_splits(fname: &String, n_threads: &u64) -> Vec<u64> {
-    let mut file = File::open(fname).unwrap();
-    let _ = file.seek(SeekFrom::End(0));
-    let mut reader = BufReader::new(file);
-    let end = reader.seek(SeekFrom::Current(0)).unwrap();
-    let mut out = (0..end).step_by((end/n_threads) as usize).collect::<Vec<u64>>();
-    out.push(end);
-    // println!("{:?}", end);
-    // println!("{:?}", out);
-    for i in 0..out.len() {
-        out[i] = find_start_of_next_line(fname, out[i]);
-    }
-    out.dedup();
-    // println!("{:?}", out);
-    return out
-}
-
 fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
     // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
     let mut start_string = start.to_string();
     for  i in 0..(n_digits - start_string.len()) {
         start_string = "0".to_owned() + &start_string;
     }
-    // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
+    // Add leading zeros in front of the end file position so that we can sort the output files per chuck or thread properly
     let mut end_string = end.to_string();
     for  i in 0..(n_digits - end_string.len()) {
         end_string = "0".to_owned() + &end_string;
     }
     // Output temp file for the chunk    
-    let fname_out = fname.to_owned() + &"-".to_owned() + &start_string + &"-".to_owned() + &end_string + &".syncx.tmp".to_owned();
+    let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".syncx.tmp";
     let out = fname_out.clone();
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_out;
     let error_writing_line = "Unable to write line into file: ".to_owned() + &fname_out;
@@ -436,11 +444,14 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
         } else if fmt == "syncx" {
             // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
             let f = p.reads_to_frequencies(true).unwrap();
-            // Find how many polymorphic alleles we have
+            // Include only the polymorphic alleles
             let frequencies = vec![f.a, f.t, f.c, f.g, f.n, f.d];
+            // Temporarily store the allele frequencies and note of their variances so we can sort them later by the variance x mean
+            let mut x_tmp: Vec<SyncxAlleleFreqs> = Vec::new();
             for i in 0..frequencies.len() {
                 let freqs = frequencies[i].clone();
                 let var = DVector::from_column_slice(&freqs).variance();
+                let ave = DVector::from_column_slice(&freqs).mean();
                 // println!("{:?}", var);
                 if var > 0.0 {
                     let a = match i {
@@ -453,10 +464,18 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
                     };
                     let mut column = vec![a];
                     column.push(freqs.iter().map(|y| y.to_string()).collect::<Vec<String>>().join(":"));
-                    x.push(column.join("|"));
+                    x_tmp.push(SyncxAlleleFreqs{var_x_ave: var*ave, freqs: column.join("|")});
                 } else {
                     continue;
                 }
+            }
+            // Sort the allele columns by decreasing variance such that the most polymorphic allele across pools is in the first column
+            x_tmp.sort_by(|x, y| y.var_x_ave.partial_cmp(&x.var_x_ave).unwrap());
+            // if x_tmp.len() > 2 {
+            //     println!("{:?}", x_tmp);
+            // }
+            for xi in x_tmp.iter() {
+                x.push(xi.freqs.to_owned());
             }
         } else {
             return Err(Error::new(ErrorKind::Other, "Format: ".to_owned() + &fmt + " not reconised. Please use: 'sync', 'syncf', or 'syncx'."));
