@@ -220,6 +220,9 @@ pub fn sync2syncx(fname: &String, min_cov: &u64, n_threads: &u64) -> io::Result<
     Ok(out)
 }
 
+pub fn syncf2syncx(fname: &String, min_cov: &u64, n_threads: &u64) -> io::Result<String> {
+    Ok("".to_string())
+}
 
 pub fn load(fname: &String) -> io::Result<i64> {
     // let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
