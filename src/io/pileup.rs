@@ -3,8 +3,7 @@ use std::fs::File;
 use std::io::{self, prelude::*, SeekFrom, BufReader, BufWriter};
 use std::io::{Error, ErrorKind};
 use std::str;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use nalgebra::DVector;
 
@@ -56,37 +55,6 @@ struct IndelMarker {
 struct SyncxAlleleFreqs {
     var_x_ave: f64,
     freqs: String,
-}
-
-// File splitting for thread allocation for parallele computation
-fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
-    let mut out = pos.clone();
-    if out > 0 {
-        let mut file = File::open(fname).unwrap();
-        let _ = file.seek(SeekFrom::Start(out));
-        let mut reader = BufReader::new(file);
-        let mut line = String::new();
-        let _ = reader.read_line(&mut line).unwrap();
-        out = reader.seek(SeekFrom::Current(0)).unwrap();
-    }
-    return out
-}
-
-fn find_file_splits(fname: &String, n_threads: &u64) -> Vec<u64> {
-    let mut file = File::open(fname).unwrap();
-    let _ = file.seek(SeekFrom::End(0));
-    let mut reader = BufReader::new(file);
-    let end = reader.seek(SeekFrom::Current(0)).unwrap();
-    let mut out = (0..end).step_by((end/n_threads) as usize).collect::<Vec<u64>>();
-    out.push(end);
-    // println!("{:?}", end);
-    // println!("{:?}", out);
-    for i in 0..out.len() {
-        out[i] = find_start_of_next_line(fname, out[i]);
-    }
-    out.dedup();
-    // println!("{:?}", out);
-    return out
 }
 
 // Parse each line
@@ -265,13 +233,6 @@ impl PileupLine {
     }
 
     fn filter(&mut self, min_coverage: &u64, min_quality: &f64) -> io::Result<&mut Self> {
-        // All the pools needs be have been covered at least min_coverage times
-        for c in &self.coverages {
-            // println!("{:?}", c);
-            if c < min_coverage {
-                return Err(Error::new(ErrorKind::Other, "Filtered out."));
-            }
-        }
         // Convert low quality bases into Ns
         let n = &self.read_qualities.len();
         for i in 0..*n {
@@ -284,8 +245,16 @@ impl PileupLine {
                     let q = f64::powf(10.0, -(pool[j] as f64 - 33.0) / 10.0); 
                     if q > *min_quality {
                         self.read_codes[i][j] = 78; // convert to N
+                        self.coverages[i] = self.coverages[i] - 1; // remove the coverage for ambiguous alleles
                     }
                 }
+            }
+        }
+        // All the pools needs be have been covered at least min_coverage times
+        for c in &self.coverages {
+            // println!("{:?}", c);
+            if c < min_coverage {
+                return Err(Error::new(ErrorKind::Other, "Filtered out."));
             }
         }
         Ok(self)
@@ -361,7 +330,8 @@ impl PileupLine {
 
 }
 
-fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
+// fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
+fn read_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
     // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
     let mut start_string = start.to_string();
     for  i in 0..(n_digits - start_string.len()) {
@@ -384,10 +354,10 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
     let file = File::open(fname).unwrap();
     let mut reader = BufReader::new(file);
     // Navigate to the start of the chunk
-    let mut i: u64 = start;
-    reader.seek(SeekFrom::Start(start)).unwrap();
+    let mut i: u64 = *start;
+    reader.seek(SeekFrom::Start(*start)).unwrap();
     // Read and parse until the end of the chunk
-    while i < end {
+    while i < *end {
         // Instantiate the line
         let mut line = String::new();
         // Read the line which automatically movesthe cursor position to the next line
@@ -414,6 +384,7 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
         // println!("i: {} | Counts: {:?}", i, r);
         // println!("i: {} | Frequencies: {:?}", i, f);
         // println!("#########################################");
+        // Instantiate the output line
         let mut x = vec![p.chromosome.clone(), p.position.to_string(), p.reference_allele.to_string()];
         if fmt == "sync" {
             // Convert to a vector of counts (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
@@ -442,7 +413,7 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
                 x.push(column.join(":"));
             }
         } else if fmt == "syncx" {
-            // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
+            // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage; also do not count Ns hence allele frequencies sum up to one across alleles A, T, C, G, and DEL)
             let f = p.reads_to_frequencies(true).unwrap();
             // Include only the polymorphic alleles
             let frequencies = vec![f.a, f.t, f.c, f.g, f.n, f.d];
@@ -474,12 +445,14 @@ fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &
             // if x_tmp.len() > 2 {
             //     println!("{:?}", x_tmp);
             // }
+            // Append the polymorphic and sorted allele frequencies
             for xi in x_tmp.iter() {
                 x.push(xi.freqs.to_owned());
             }
         } else {
             return Err(Error::new(ErrorKind::Other, "Format: ".to_owned() + &fmt + " not reconised. Please use: 'sync', 'syncf', or 'syncx'."));
         }
+        // Write the line
         let data = x.join("\t") + "\n";
         if x.len() > 3 {
             file_out.write_all(data.as_bytes()).expect(&error_writing_line);
@@ -506,36 +479,29 @@ pub fn read(fname: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, 
         names.push(line.unwrap().to_owned());
     }
     let names = names.join("\t");
-    // Clone input filename and format extension name so that we won;t have any problems with threading
-    let name = fname.to_owned();
-    let fmt = file_format.to_owned();
-    // Find the positions whereto split the file into n_threads pieces
-    let chunks = find_file_splits(fname, n_threads);
+
+    // // Find the positions whereto split the file into n_threads pieces
+    let chunks = crate::io::find_file_splits(fname, n_threads);
     let n_digits = chunks[*n_threads as usize].to_string().len();
     println!("Chunks: {:?}", chunks);
+    // Tuple arguments of read_chunks
     // Instantiate thread object for parallel execution
     let mut thread_objects = Vec::new();
     // Vector holding all returns from read_chunk()
     let mut thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
     // Making four separate threads calling the `search_for_word` function
     for i in 0..(*n_threads as usize) {
-        let fname_clone = name.clone();
+        // Clone read_chunk parameters
+        let fname_clone = fname.clone();
+        let start = chunks[i].clone();
+        let end = chunks[i+1].clone();
+        let n_digits_clone = n_digits.clone();
         let min_qual_clone = min_qual.clone();
         let min_cov_clone = min_cov.clone();
-        let fmt_clone = fmt.clone();
-        let chunks_clone = chunks.clone();
-        // Determing start and end of this chunk
-        let start = chunks_clone[i];
-        let end = chunks_clone[i+1];
+        let file_format_clone = file_format.clone();
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
-            let fname_out_per_thread = read_chunk(&fname_clone,
-                                                          start,
-                                                          end,
-                                                          n_digits,
-                                                          &min_qual_clone,
-                                                          &min_cov_clone,
-                                                          &fmt_clone).unwrap();
+            let fname_out_per_thread = read_chunk(&fname_clone, &start, &end, &n_digits_clone, &min_qual_clone, &min_cov_clone, &file_format_clone).unwrap();
             thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
         });
         thread_objects.push(thread);
@@ -562,7 +528,6 @@ pub fn read(fname: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, 
     fnames_out.sort();
     println!("{:?}", fnames_out);
     // Iterate across output files from each thread, and concatenate non-empty files
-
     for f in fnames_out {
         let mut file: File = File::open(&f).unwrap();
         if file.metadata().unwrap().len() == 0 {

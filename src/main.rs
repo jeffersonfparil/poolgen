@@ -34,16 +34,21 @@ struct Args {
 fn main() {
     let args = Args::parse();
     if args.analysis == String::from("pileup2sync") {
-        let p = io::read(&args.fname,
-                                 &args.pool_names,
-                                 &args.min_qual,
-                                 &args.min_cov,
-                                 &args.file_format,
-                                 &args.n_threads).unwrap();
-        println!("{:?}", p);
+        let out: String = io::read(&args.fname,
+                                   &args.pool_names,
+                                   &args.min_qual,
+                                   &args.min_cov,
+                                   &args.file_format,
+                                   &args.n_threads).unwrap();
+        println!("{:?}", out);
 
+    } else if args.analysis == String::from("sync2syncx") {
+        let out: String = io::sync2syncx(&args.fname,
+                                         &args.min_cov,
+                                         &args.n_threads).unwrap();
+        println!("{:?}", out);
     } else if args.analysis == String::from("load") {
-        let x = io::load(&args.fname).unwrap();
-        println!("{:?}", x);
+        let out = io::load(&args.fname).unwrap();
+        println!("{:?}", out);
     }
 }

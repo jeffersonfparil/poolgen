@@ -43,4 +43,5 @@ jobs:
           cargo run -- pileup2sync -f ./tests/test.pileup --pool-names ./tests/test_names.txt --n-threads 2 --min-cov 2
           cargo run -- pileup2sync -f ./tests/test.pileup --pool-names ./tests/test_names.txt --file-format syncf --n-threads 2 --min-cov 2
           cargo run -- pileup2sync -f ./tests/test.pileup --pool-names ./tests/test_names.txt --file-format syncx --n-threads 2 --min-cov 2
+          cargo run -- sync2syncx  -f $(find ./tests/ -name 'test-*.sync' | head -n1) --n-threads 2 --min-cov 2
           cargo run -- load -f ./tests/test.pileup
