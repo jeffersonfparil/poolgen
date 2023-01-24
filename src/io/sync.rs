@@ -203,7 +203,7 @@ pub fn sync2syncx(fname: &String, min_cov: &u64, n_threads: &u64) -> io::Result<
         fnames_out.push(f.to_owned());
     }
     fnames_out.sort();
-    println!("{:?}", fnames_out);
+    // println!("{:?}", fnames_out);
     // Iterate across output files from each thread, and concatenate non-empty files
     for f in fnames_out {
         let mut file: File = File::open(&f).unwrap();
