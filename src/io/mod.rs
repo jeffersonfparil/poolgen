@@ -1,6 +1,6 @@
 pub use self::{
     file_split::find_file_splits,
-    pileup::read,
+    pileup::pileup2sync,
     sync::{sync2syncx, load},
 };
 

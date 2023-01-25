@@ -61,22 +61,21 @@ struct SyncxAlleleFreqs {
 fn parse(line: &String) -> io::Result<Box<PileupLine>> {
     let raw_locus_data: Box<Vec<&str>> = Box::new(line.split("\t").collect());
     // Chromosome or scaffold name
-    let chromosome: String = raw_locus_data[0].to_string();
+    let chromosome: String = raw_locus_data[0].to_owned();
     // Position or locus coordinate in the genome assembly
     let position = match raw_locus_data[1].parse::<u64>() {
         Ok(x) => x,
-        // Err(_) => return Err("Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_string()),
-        Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_string())),
+        Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as position is not a valid integer (i.e. u64).".to_owned())),
     };
     // Allele in the reference genome assembly
-    let reference_allele  = match raw_locus_data[2].to_string().parse::<char>() {
+    let reference_allele  = match raw_locus_data[2].to_owned().parse::<char>() {
         Ok(x) => x,
-        Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as the reference allele is not a valid nucleotide base (i.e. not a valid single character).".to_string())),
+        Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as the reference allele is not a valid nucleotide base (i.e. not a valid single character).".to_owned())),
     };
     // List of the number of times the locus was read in each pool
     let mut coverages: Vec<u64> = Vec::new();
     for i in (3..raw_locus_data.len()).step_by(3) {
-        let cov = match raw_locus_data[i].to_string().parse::<u64>() {
+        let cov = match raw_locus_data[i].to_owned().parse::<u64>() {
             Ok(x) => x,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as coverage field/s is/are not valid integer/s (i.e. u64) at pool: ".to_owned() + &(i/3).to_string() + ".")),
         };
@@ -330,8 +329,7 @@ impl PileupLine {
 
 }
 
-// fn read_chunk(fname: &String, start: u64, end: u64, n_digits: usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
-fn read_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
+fn pileup2sync_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
     // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
     let mut start_string = start.to_string();
     for  i in 0..(n_digits - start_string.len()) {
@@ -399,19 +397,6 @@ fn read_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, min_qual
                                                 r.d[i].to_string()];
                 x.push(column.join(":"));
             }
-        } else if fmt == "syncf" {
-            // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage)
-            let f = p.reads_to_frequencies(false).unwrap();
-            // Also, sync format but with allele frequencies instead of allele counts
-            for i in 0..f.a.len() {
-                let column: Vec<String> = vec![((f.a[i] * 100.0).round()/100.0).to_string(),
-                                               ((f.t[i] * 100.0).round()/100.0).to_string(),
-                                               ((f.c[i] * 100.0).round()/100.0).to_string(),
-                                               ((f.g[i] * 100.0).round()/100.0).to_string(),
-                                               ((f.n[i] * 100.0).round()/100.0).to_string(),
-                                               ((f.d[i] * 100.0).round()/100.0).to_string()];
-                x.push(column.join(":"));
-            }
         } else if fmt == "syncx" {
             // Convert to a vector of frequencies (Note: outputs an "empty" struct if the locus has been filtered out by minimum coverage; also do not count Ns hence allele frequencies sum up to one across alleles A, T, C, G, and DEL)
             let f = p.reads_to_frequencies(true).unwrap();
@@ -450,7 +435,7 @@ fn read_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, min_qual
                 x.push(xi.freqs.to_owned());
             }
         } else {
-            return Err(Error::new(ErrorKind::Other, "Format: ".to_owned() + &fmt + " not reconised. Please use: 'sync', 'syncf', or 'syncx'."));
+            return Err(Error::new(ErrorKind::Other, "Format: ".to_owned() + &fmt + " not reconised. Please use: 'sync', or 'syncx'."));
         }
         // Write the line
         let data = x.join("\t") + "\n";
@@ -463,17 +448,23 @@ fn read_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, min_qual
     Ok(out)
 }
 
-// Read pileup file
-pub fn read(fname: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, file_format: &String, n_threads: &u64) -> io::Result<String> {
+// Convert pileup into sync or syncx
+pub fn pileup2sync(fname: &String, out: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, file_format: &String, n_threads: &u64) -> io::Result<String> {
     // Output filename
-    let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
-    let bname = fname.split(".").collect::<Vec<&str>>().into_iter().map(|a| a.to_owned())
-                                  .collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>()[1..].to_owned()
-                                  .into_iter().rev().collect::<Vec<String>>().join(".");
-    let out = bname.to_owned() + "-" + &time.to_string() + "." + &(file_format.to_owned());
+    let mut out = out.to_owned();
+    if out == "".to_owned() {
+        let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
+        let bname = fname.split(".").collect::<Vec<&str>>().into_iter().map(|a| a.to_owned())
+                                    .collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>()[1..].to_owned()
+                                    .into_iter().rev().collect::<Vec<String>>().join(".");
+        out = bname.to_owned() + "-" + &time.to_string() + "." + &(file_format.to_owned());
+    }
     // Pool names
     let mut names: Vec<String> = Vec::new();
-    let file_names = File::open(pool_names).unwrap();
+    let file_names = match File::open(pool_names) {
+        Ok(x) => x,
+        Err(_) => return Err(Error::new(ErrorKind::Other, "Pool names file not found which is required for converting pileup into sync/syncx. Please make sure to include a valid file for the --pool_names parameter.")),
+    };
     let reader_names = BufReader::new(file_names);
     for line in reader_names.lines() {
         names.push(line.unwrap().to_owned());
@@ -481,17 +472,17 @@ pub fn read(fname: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, 
     let names = names.join("\t");
 
     // // Find the positions whereto split the file into n_threads pieces
-    let chunks = crate::io::find_file_splits(fname, n_threads);
+    let chunks = crate::io::find_file_splits(fname, n_threads).unwrap();
     let n_digits = chunks[*n_threads as usize].to_string().len();
     println!("Chunks: {:?}", chunks);
-    // Tuple arguments of read_chunks
+    // Tuple arguments of pileup2sync_chunks
     // Instantiate thread object for parallel execution
     let mut thread_objects = Vec::new();
-    // Vector holding all returns from read_chunk()
+    // Vector holding all returns from pileup2sync_chunk()
     let mut thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
     // Making four separate threads calling the `search_for_word` function
     for i in 0..(*n_threads as usize) {
-        // Clone read_chunk parameters
+        // Clone pileup2sync_chunk parameters
         let fname_clone = fname.clone();
         let start = chunks[i].clone();
         let end = chunks[i+1].clone();
@@ -501,7 +492,7 @@ pub fn read(fname: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, 
         let file_format_clone = file_format.clone();
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
-            let fname_out_per_thread = read_chunk(&fname_clone, &start, &end, &n_digits_clone, &min_qual_clone, &min_cov_clone, &file_format_clone).unwrap();
+            let fname_out_per_thread = pileup2sync_chunk(&fname_clone, &start, &end, &n_digits_clone, &min_qual_clone, &min_cov_clone, &file_format_clone).unwrap();
             thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
         });
         thread_objects.push(thread);
@@ -513,12 +504,10 @@ pub fn read(fname: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, 
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &out;
     let mut file_out = File::create(&out).expect(&error_writing_file);
-    let sync = "sync".to_string();
-    let syncf = "syncf".to_string();
-    let _x = match file_format {
-        sync => file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()),
-        syncf => file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()),
-        _ => return Err(Error::new(ErrorKind::Other, "Phred score out of bounds.")),
+    let _ = match &file_format[..] {
+        "sync" => file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()),
+        "syncx" => file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()),
+        _ => return Err(Error::new(ErrorKind::Other, "Format: ".to_owned() + &file_format + " not reconised. Please use: 'sync', or 'syncx'.")),
     };
     // Extract output filenames from each thread into a vector and sort them
     let mut fnames_out: Vec<String> = Vec::new();

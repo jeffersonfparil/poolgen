@@ -1,6 +1,7 @@
 use std;
 use std::fs::File;
-use std::io::{prelude::*, SeekFrom, BufReader};
+use std::io::{self, prelude::*, SeekFrom, BufReader};
+use std::io::{Error, ErrorKind};
 
 // File splitting for thread allocation for parallele computation
 fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
@@ -16,8 +17,11 @@ fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
     return out
 }
 
-pub fn find_file_splits(fname: &String, n_threads: &u64) -> Vec<u64> {
-    let mut file = File::open(fname).unwrap();
+pub fn find_file_splits(fname: &String, n_threads: &u64) -> io::Result<Vec<u64>> {
+    let mut file = match File::open(fname) {
+        Ok(x) => x,
+        Err(_) => return Err(Error::new(ErrorKind::Other, "The input file: ".to_owned() + fname + " does not exist. Please make sure you are entering the correct filename and/or the correct path.")),
+    };
     let _ = file.seek(SeekFrom::End(0));
     let mut reader = BufReader::new(file);
     let end = reader.seek(SeekFrom::Current(0)).unwrap();
@@ -30,6 +34,6 @@ pub fn find_file_splits(fname: &String, n_threads: &u64) -> Vec<u64> {
     }
     out.dedup();
     // println!("{:?}", out);
-    return out
+    return Ok(out)
 }
 

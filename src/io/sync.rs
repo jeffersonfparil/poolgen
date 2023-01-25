@@ -17,12 +17,12 @@ fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usiz
     // Add leading zeroes to the start-of-the-chunk index so we can propoerly sort the output files after parallele processing    
     let mut start_string = start.to_string();
     for i in 0..(n_digits - start_string.len()) {
-        start_string = "0".to_string() + &start_string;
+        start_string = "0".to_owned() + &start_string;
     }
     // Add leading zeroes to the end-of-the-chunk index so we can propoerly sort the output files after parallele processing
     let mut end_string = end.to_string();
     for i in 0..(n_digits - end_string.len()) {
-        end_string = "0".to_string() + &end_string;
+        end_string = "0".to_owned() + &end_string;
     }
     // Output file name for the current chunk
     let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".tmp";
@@ -33,8 +33,6 @@ fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usiz
     let file_out = File::create(fname_out).expect(&error_writing_file);
     let mut file_out = BufWriter::new(file_out);
     // Input file chunk
-    let file = File::open(fname).unwrap();
-
     let file = File::open(fname).unwrap();
     let mut reader = BufReader::new(file);
     // Navigate to the start of the chunk
@@ -115,7 +113,6 @@ fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usiz
                     1 => "t".to_owned(),
                     2 => "c".to_owned(),
                     3 => "g".to_owned(),
-                    4 => "n".to_owned(),
                     _ => "d".to_owned(),
                 };
                 let mut column = vec![a];
@@ -144,14 +141,17 @@ fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usiz
     Ok(out)
 }
 
-pub fn sync2syncx(fname: &String, min_cov: &u64, n_threads: &u64) -> io::Result<String> {
-    let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
-    let bname = fname.split(".").into_iter().map(|a| a.to_owned()).collect::<Vec<String>>()
-                     .into_iter().rev().collect::<Vec<String>>()[1..].to_owned().into_iter().rev().collect::<Vec<String>>()
-                     .join(".");
-    let out = bname + "-" + &time.to_string() + ".syncx";
+pub fn sync2syncx(fname: &String, out: &String, min_cov: &u64, n_threads: &u64) -> io::Result<String> {
+    let mut out = out.to_owned();
+    if out == "".to_owned() {
+        let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
+        let bname = fname.split(".").into_iter().map(|a| a.to_owned()).collect::<Vec<String>>()
+                        .into_iter().rev().collect::<Vec<String>>()[1..].to_owned().into_iter().rev().collect::<Vec<String>>()
+                        .join(".");
+        out = bname + "-" + &time.to_string() + ".syncx";
+    }
 
-    let chunks = crate::io::find_file_splits(fname, n_threads);
+    let chunks = crate::io::find_file_splits(fname, n_threads).unwrap();
     let n_digits = chunks[*n_threads as usize].to_string().len();
     println!("Chunks: {:?}", chunks);
 
@@ -220,16 +220,28 @@ pub fn sync2syncx(fname: &String, min_cov: &u64, n_threads: &u64) -> io::Result<
     Ok(out)
 }
 
-pub fn syncf2syncx(fname: &String, min_cov: &u64, n_threads: &u64) -> io::Result<String> {
-    Ok("".to_string())
-}
+fn load_per_chunk(fname: &String, format: &String, start: &u64, end: &u64) -> io::Result<i64> {
+    
+    let file = File::open(fname).unwrap();
+    let mut reader = BufReader::new(file);
+    reader.seek(SeekFrom::Start(*start)).unwrap();
+    let mut i = *start;
+    while i < *end {
+        let mut line = String::new();
+        let _ = reader.read_line(&mut line).unwrap();
+        i = reader.seek(SeekFrom::Current(0)).unwrap();
+        // Load
+        if format == &"sync".to_owned() {
+            println!("The format is sync.")
+        } else if format == &"syncx".to_owned() {
+            println!("The format is syncx.")
+        } else {
+            println!("Ooopppsssie! LOLOLOL!")
+        }
+        println!("{:?}", line)
 
-pub fn load(fname: &String) -> io::Result<i64> {
-    // let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
-    // let bname = fname.split(".").into_iter().map(|a| a.to_owned()).collect::<Vec<String>>()
-    //                  .into_iter().rev().collect::<Vec<String>>()[1..].to_owned().into_iter().rev().collect::<Vec<String>>()
-    //                  .join(".");
-    // let out = bname + "-" + &time.to_string() + "." + file_format;
+    }
+
 
     // Test linear algebra
     let n: usize = 10;
@@ -241,5 +253,45 @@ pub fn load(fname: &String) -> io::Result<i64> {
     println!("matrix variance: {:?}", matrix.variance());
     println!("vector variance: {:?}", vector.variance());
     println!("matrix multiplication product: {:?}", b);
+    Ok(0)
+}
+
+pub fn load(fname: &String, n_threads: &u64) -> io::Result<i64> {
+
+    let chunks = crate::io::find_file_splits(fname, n_threads).unwrap();
+    println!("Chunks: {:?}", chunks);
+
+    // Determine the format of the input file
+    let file = File::open(fname).unwrap();
+    let mut reader = BufReader::new(file);
+    let mut format: String = "sync".to_owned();
+    let mut caught_1_line = false;
+    while caught_1_line == false {
+        let mut line = String::new();
+        let _ = reader.read_line(&mut line).unwrap();
+        if line.as_bytes()[0] == 35 as u8 {
+            continue;
+        } else {
+            let allele_column = line.split("\t")
+                                                .collect::<Vec<&str>>()[3]
+                                                .split(":")
+                                                .collect::<Vec<&str>>()
+                                                .into_iter().map(|a| a.to_owned())
+                                                .collect::<Vec<String>>();
+            // println!("{:?}", allele_column[0]);
+            // println!("{:?}", allele_column[0].split("|").collect::<Vec<&str>>()[1]);
+            format = match allele_column[0].parse::<i64>() {
+                Ok(_) => "sync".to_owned(),
+                Err(_) => match allele_column[0].split("|").collect::<Vec<&str>>()[1].parse::<f64>() {
+                    Ok(_) => "syncx".to_owned(),
+                    Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input file: ".to_owned() + fname + ". Please use a sync or syncx file.")),
+                },
+            };
+            caught_1_line = true;
+        }
+    }
+    
+    let _ = load_per_chunk(fname, &format, &chunks[0], &chunks[1]).unwrap();
+
     Ok(0)
 }

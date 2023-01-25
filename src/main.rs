@@ -14,6 +14,9 @@ struct Args {
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
     fname: String,
+    /// Output filename
+    #[clap(short, long, default_value="")]
+    output: String,
     /// Text file containing the names of the pools, one name per line
     #[clap(long, default_value="")]
     pool_names: String,
@@ -23,7 +26,7 @@ struct Args {
     /// Minimum depth of coverage
     #[clap(long, default_value_t=1)]
     min_cov: u64,
-    /// Format of the output file: sync or syncf
+    /// Format of the output file: sync or syncx
     #[clap(long, default_value="sync")]
     file_format: String,
     /// Number of threads to use for parallel processing
@@ -34,21 +37,23 @@ struct Args {
 fn main() {
     let args = Args::parse();
     if args.analysis == String::from("pileup2sync") {
-        let out: String = io::read(&args.fname,
-                                   &args.pool_names,
-                                   &args.min_qual,
-                                   &args.min_cov,
-                                   &args.file_format,
-                                   &args.n_threads).unwrap();
+        let out: String = io::pileup2sync(&args.fname,
+                                          &args.output,
+                                          &args.pool_names,
+                                          &args.min_qual,
+                                          &args.min_cov,
+                                          &args.file_format,
+                                          &args.n_threads).unwrap();
         println!("{:?}", out);
 
     } else if args.analysis == String::from("sync2syncx") {
         let out: String = io::sync2syncx(&args.fname,
+                                        &args.output,
                                          &args.min_cov,
                                          &args.n_threads).unwrap();
         println!("{:?}", out);
     } else if args.analysis == String::from("load") {
-        let out = io::load(&args.fname).unwrap();
+        let out = io::load(&args.fname, &args.n_threads).unwrap();
         println!("{:?}", out);
     }
 }

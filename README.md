@@ -33,16 +33,6 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 - *Column 3*:       reference allele, e.g. A, T, C, G 
 - *Column 4 to n*:  colon-delimited allele counts: A:T:C:G:DEL:N, where "DEL" is deletion, and "N" is unclassified (one column per pool).
 
-### Syncf
-
-Similar to **\*.sync** format but allele frequencies are used instead of allele counts:
-
-- *Header line/s*:  optional header line/s, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
-- *Column 1*:       chromosome or scaffold name
-- *Column 2*:       locus position 
-- *Column 3*:       reference allele, e.g. A, T, C, G 
-- *Column 4 to n*:  colon-delimited allele frequencies: A:T:C:G:DEL:N, where "DEL" is deletion, and "N" is unclassified (one column per pool).
-
 ### Syncx
 
 Summarised allele frequencies where the ambiguous bases (i.e. filtered out low quality and low coverage bases) were excluded. This is a proposed update to the **\*.sync** format.
@@ -57,7 +47,7 @@ Summarised allele frequencies where the ambiguous bases (i.e. filtered out low q
 
 1. A simple delimited file, e.g. "csv" and "tsv" with a column for the individual IDs, and at least one column for the phenotypic values
 
-2. GWAlpha-compatible file:
+2. GWAlpha-compatible text file (i.e. "txt"):
 
 - *Line 1*: phenotype name
 - *Line 2*: standard deviation of the phenotype across pools or for the entire population
