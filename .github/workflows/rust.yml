@@ -53,9 +53,13 @@ jobs:
           
           d1=$(diff ./tests/test-pileup2sync_default_sync2syncx.syncx ./tests/test-pileup2sync_mincov2.syncx | wc -l)
           d2=$(diff ./tests/test-pileup2sync_default_sync2syncx.syncx ./tests/test-pileup2sync_mincov2_sync2syncx.syncx | wc -l)
-          if [ $d -gt 0 ]
+          if [ $d1 -gt 0 ]
           then
             exit 1
+          fi
+          if [ $d2 -gt 0 ]
+          then
+            exit 2
           fi
           echo "###############################################################"
           echo "More tests:"
