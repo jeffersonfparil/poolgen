@@ -371,7 +371,7 @@ fn pileup2sync_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, m
         }
         // println!("i: {} | {:?}", i, line);
         // Parse the pileup line
-        let mut p = parse(&line).expect(&("Input file error, i.e. '".to_owned() + fname + &"' at line with the first 20 characters as: ".to_owned() + &line[0..20] + &".".to_owned()));
+        let mut p = parse(&line).expect(&("Input file error, i.e. '".to_owned() + fname + "' at line with the first 20 characters as: " + &line[0..20] + "."));
         // println!("i: {} | Raw line: {:?}", i, p);
         // Filter
         match p.filter(min_cov, min_qual) {

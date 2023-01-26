@@ -4,13 +4,21 @@ use std::io::{self, prelude::*, SeekFrom, BufReader, BufWriter};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
-use nalgebra::{DVector, DMatrix};
+use nalgebra::{self, DVector, DMatrix};
 
 // Struct for ordering the allele columns by variance in allele frequencies across pools for the syncx format
 #[derive(Debug, PartialEq, PartialOrd)]
 struct SyncxAlleleFreqs {
     var_x_ave: f64,
     freqs: String,
+}
+
+#[derive(Clone)]
+struct AlleleCounts <T, R: nalgebra::Dim, C: nalgebra::Dim> {
+    chromosome: String,
+    position: u64,
+    alleles_vector: Vec<String>,
+    counts_matrix: nalgebra::Matrix<u64, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<T, R, C>>,
 }
 
 fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usize, min_cov: &u64) -> io::Result<String> {
@@ -229,14 +237,34 @@ fn load_per_chunk(fname: &String, format: &String, start: &u64, end: &u64) -> io
     while i < *end {
         let mut line = String::new();
         let _ = reader.read_line(&mut line).unwrap();
+        // Find the new cursor position
         i = reader.seek(SeekFrom::Current(0)).unwrap();
+        // Remove trailing newline character in Unix-like (\n) and Windows (\r)
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
+        // println!("i: {} | {:?}", i, line);
+        // Ignore commented-out lines (i.e. '#' => 35)
+        if line.as_bytes()[0] == 35 as u8 {
+            continue
+        }
+        // Split and extract genome coordinate
+        let vec_line = line.split("\t").collect::<Vec<&str>>();
+        let chr = vec_line[0].to_owned();
+        let pos = match vec_line[1].parse::<u64>() {
+            Ok(x) => x,
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Please check format of the file: ".to_owned() + &fname + " as the position is not a valid integer (i.e. u64) at the line whose first 20 characters are: " + &line[0..20] + ".")),
+        };
         // Load
         if format == &"sync".to_owned() {
             println!("The format is sync.")
         } else if format == &"syncx".to_owned() {
             println!("The format is syncx.")
         } else {
-            println!("Ooopppsssie! LOLOLOL!")
+            return Err(Error::new(ErrorKind::Other, "Unrecognised format: ".to_owned() + format + ". Please check the input file: " + fname + " at the line whose first 20 characters are: " + &line[0..20]));
         }
         println!("{:?}", line)
 
