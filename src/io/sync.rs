@@ -14,11 +14,11 @@ struct SyncxAlleleFreqs {
 }
 
 #[derive(Debug, Clone)]
-struct AlleleCounts <T, R: nalgebra::Dim, C: nalgebra::Dim> {
+struct AlleleCountsOrFrequencies <T, R: nalgebra::Dim, C: nalgebra::Dim> {
     chromosome: String,
     position: u64,
     alleles_vector: Vec<String>,
-    counts_matrix: nalgebra::Matrix<u64, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<T, R, C>>,
+    matrix: nalgebra::Matrix<T, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<T, R, C>>,
 }
 
 fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usize, min_cov: &u64) -> io::Result<String> {
@@ -229,13 +229,13 @@ pub fn sync2syncx(fname: &String, out: &String, min_cov: &u64, n_threads: &u64) 
 }
 
 fn load_per_chunk(fname: &String, format: &String, n_pools: &usize, start: &u64, end: &u64) -> io::Result<i64> {
-    
     let file = File::open(fname).unwrap();
     let mut reader = BufReader::new(file);
     reader.seek(SeekFrom::Start(*start)).unwrap();
     let mut i = *start;
     let vec_alleles: Vec<String> = vec!["A", "T", "C", "G", "D"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(); // Exclude Ns as they are filtered out or ambiguous reads
-    let mut vec_allele_counts: Vec<AlleleCounts<u64, nalgebra::Dyn, nalgebra::Dyn>> = Vec::new(); // Instantiate vector of allele counts across loci
+     // Instantiate vector of allele counts across loci
+    let mut vec_allele_out: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> = Vec::new();
     while i < *end {
         let mut line = String::new();
         let _ = reader.read_line(&mut line).unwrap();
@@ -264,9 +264,9 @@ fn load_per_chunk(fname: &String, format: &String, n_pools: &usize, start: &u64,
         if format == &"sync".to_owned() {
             // println!("The format is sync.");
             // println!("{:?}", vec_line);
-            // allele_counts = AlleleCounts {chromosome: chr, position: pos, alleles_vector: vec!["".to_owned()]};
+            // allele_counts = AlleleCountsOrFrequencies {chromosome: chr, position: pos, alleles_vector: vec!["".to_owned()]};
             // Concatenate allele counts per pool into a single vector
-            let mut vec_counts: Vec<u64> = Vec::new();
+            let mut vec_counts: Vec<f64> = Vec::new();
             for j in 3..vec_line.len() {
                 // println!("Line: {:?}", vec_line[i]);
                 // println!("Counts: {:?}", vec_counts);
@@ -274,8 +274,8 @@ fn load_per_chunk(fname: &String, format: &String, n_pools: &usize, start: &u64,
                                     .split(":")
                                     .collect::<Vec<&str>>()
                                     .into_iter()
-                                    .map(|x| x.to_string().parse::<u64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &line[0..20] + ".")))
-                                    .collect::<Vec<u64>>();
+                                    .map(|x| x.to_string().parse::<f64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &line[0..20] + ".")))
+                                    .collect::<Vec<f64>>();
                 for k in 0..counts.len() {
                     if k == 4 {
                         continue;
@@ -286,8 +286,8 @@ fn load_per_chunk(fname: &String, format: &String, n_pools: &usize, start: &u64,
             // Reshape the vector into a matrix of counts where each row is a pool and each column is an allele excluding Ns
             // let mut counts = DMatrix::from_column_slice(*n_pools, 6, &vec_counts); // generates the matrix column-wise
             let mut counts = DMatrix::from_row_slice(*n_pools, 5, &vec_counts); // generates the matrix row-wise, i.e. n_pools x 5 alleles
-            // Remove non-polymorphic alleles [t9counts): axn * ones: nx1 = sum: ax1]
-            let sum = &(counts.transpose()) * &DVector::from_column_slice(&vec![1, 1, 1, 1, 1]);
+            // Remove non-polymorphic alleles [counts: axn * ones: nx1 = sum: ax1]
+            let sum = &(counts.transpose()) * &DVector::from_column_slice(&vec![1.0, 1.0, 1.0, 1.0, 1.0]);
             // println!("#########################################");
             // println!("Line: {:?}", vec_line);
             // println!("Counts init: {:?}", counts);
@@ -295,7 +295,7 @@ fn load_per_chunk(fname: &String, format: &String, n_pools: &usize, start: &u64,
             // Extract allele names
             let mut alleles: Vec<String> = Vec::new();
             for j in 0..sum.len() {
-                if sum[j] > 0 {
+                if sum[j] > 0.0 {
                     alleles.push(vec_alleles[j].clone());
                 }
             }
@@ -303,21 +303,59 @@ fn load_per_chunk(fname: &String, format: &String, n_pools: &usize, start: &u64,
             // Extract counts matrix'
             let mut idx_counter = 0;
             for j in 0..sum.len() {
-                if sum[j] == 0 {
+                if sum[j] == 0.0 {
                     counts = counts.clone().remove_columns(j-idx_counter, 1);
                     idx_counter += 1;
                 }
             }
             // println!("Counts term: {:?}", counts);            
             // Put everything together into the allele counts sruct
-            vec_allele_counts.push(AlleleCounts{chromosome: chr, position: pos, alleles_vector: alleles, counts_matrix: counts});
+            vec_allele_out.push(AlleleCountsOrFrequencies {chromosome: chr, position: pos, alleles_vector: alleles, matrix: counts});
         } else if format == &"syncx".to_owned() {
-            println!("The format is syncx.")
+            // println!("The format is syncx.")
+            let mut vec_freqs: Vec<f64> = Vec::new();
+            let p = vec_line.len() - (3+1);
+            // println!("line: {:?}", vec_line);
+            // println!("p: {:?}", p);
+            //Extract alleles and frequencies
+            let mut alleles: Vec<String> = Vec::new();
+            for j in 3..(3+p) {
+                // Extract allele
+                let vec_line_parse = vec_line[j].split("|").collect::<Vec<&str>>();
+                alleles.push(vec_line_parse[0].to_owned());
+                let freqs = vec_line_parse[1]
+                                    .split(":")
+                                    .collect::<Vec<&str>>()
+                                    .into_iter()
+                                    .map(|x| x.to_string().parse::<f64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &line[0..20] + ".")))
+                                    .collect::<Vec<f64>>();
+                // println!("line: {:?}", freqs);
+                for k in 0..freqs.len() {
+                    vec_freqs.push(freqs[k]);
+                }
+                // println!("vec_freqs: {:?}", vec_freqs);
+                // println!("n_pools: {:?}", n_pools);
+                // println!("p: {:?}", p);
+            }
+            // Reshape the vector into a matrix of counts where each row is a pool and each column is an allele excluding Ns
+            let mut freqs = DMatrix::from_row_slice(*n_pools, p, &vec_freqs);
+            // // Remove non-polymorphic alleles [freqs: axn * ones: nx1 = sum: ax1]
+            // let sum = &(freqs.transpose()) * &DVector::from_column_slice(&vec![1.0, 1.0, 1.0, 1.0, 1.0]);
+            // let mut idx_counter = 0;
+            // for j in 0..sum.len() {
+            //     if sum[j] == 0.0 {
+            //         freqs = freqs.clone().remove_columns(j-idx_counter, 1);
+            //         // TODO: remove nonb-polymorphic allele ID from alleles
+            //         idx_counter += 1;
+            //     }
+            // }
+            // Put everything together into the allele counts sruct
+            vec_allele_out.push(AlleleCountsOrFrequencies{chromosome: chr, position: pos, alleles_vector: alleles, matrix: freqs});
         } else {
             return Err(Error::new(ErrorKind::Other, "Unrecognised format: ".to_owned() + format + ". Please check the input file: " + fname + " at the line whose first 20 characters are: " + &line[0..20]));
         }
         if i < 1000 {
-            println!("{:?}", vec_allele_counts);
+            println!("{:?}", vec_allele_out);
         }
 
     }
@@ -368,8 +406,20 @@ pub fn load(fname: &String, n_threads: &u64) -> io::Result<i64> {
                     Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input file: ".to_owned() + fname + ". Please use a sync or syncx file.")),
                 },
             };
-            n_pools = vec_line.len() - 3;
-            // println!("{:?}", n_pools);
+            if format == "sync" {
+                n_pools = vec_line.len() - 3;
+            } else {
+                let vec_line_parse = vec_line[3].split("|").collect::<Vec<&str>>();
+                let freqs = vec_line_parse[1]
+                                    .split(":")
+                                    .collect::<Vec<&str>>()
+                                    .into_iter()
+                                    .map(|x| x.to_string().parse::<f64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &line[0..20] + ".")))
+                                    .collect::<Vec<f64>>();
+                n_pools = freqs.len();
+            }
+            // println!("VEC_LINE: {:?}", vec_line);
+            // println!("N_POOLS: {:?}", n_pools);
             caught_1_line = true;
         }
     }
