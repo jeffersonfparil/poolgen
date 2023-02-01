@@ -48,7 +48,7 @@ impl Sync for Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> 
         for i in 1..self.len() {
             let v = &self[i];
             let mut p = v.alleles_vector.len();
-            if keep_n_minus_1 {
+            if keep_n_minus_1 & (p>1){
                 p -= 1;
             }
             for j in 0..p {
