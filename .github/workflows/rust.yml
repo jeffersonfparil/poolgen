@@ -64,3 +64,7 @@ jobs:
           echo "More tests:"
           cargo run -- load -f ./tests/test.sync
           cargo run -- load -f ./tests/test.syncx
+          echo "###############################################################"
+          echo "Clean-up:"
+          rm ./tests/test-*
+          

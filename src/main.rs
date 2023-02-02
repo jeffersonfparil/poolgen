@@ -54,6 +54,8 @@ fn main() {
         println!("{:?}", out);
     } else if args.analysis == String::from("load") {
         let out = io::load(&args.fname, &args.n_threads).unwrap();
-        println!("{:?}", out);
+        println!("{:?}", out[0]);
+        println!("{:?}", out[1]);
+        println!("{:?}", out[1000]);
     }
 }

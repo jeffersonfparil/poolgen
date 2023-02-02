@@ -14,7 +14,7 @@ struct SyncxAlleleFreqs {
 }
 
 #[derive(Debug, Clone)]
-struct AlleleCountsOrFrequencies <T, R: nalgebra::Dim, C: nalgebra::Dim> {
+pub struct AlleleCountsOrFrequencies <T, R: nalgebra::Dim, C: nalgebra::Dim> {
     coordinate: String,
     chromosome: String,
     position: u64,
@@ -22,7 +22,9 @@ struct AlleleCountsOrFrequencies <T, R: nalgebra::Dim, C: nalgebra::Dim> {
     matrix: nalgebra::Matrix<T, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<T, R, C>>, // n pools x p alleles
 }
 
-trait Sync {
+pub trait Sync {
+    fn counts_to_frequencies(&mut self) -> io::Result<&mut Self>;
+    fn filter(&mut self, maf: f64) -> io::Result<&mut Self>;
     fn convert_to_matrix(&self, keep_n_minus_1: bool) -> io::Result<(Vec<String>,
                                                                     Vec<u64>,
                                                                     Vec<String>,
@@ -38,12 +40,50 @@ trait Sync {
 }
 
 impl Sync for Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> {
+    fn counts_to_frequencies(&mut self) -> io::Result<&mut Self> {
+        for a in self.into_iter() {
+            let n = a.matrix.nrows();
+            let p = a.matrix.ncols();
+            for i in 0..n {
+                let s = a.matrix.row(i).sum();
+                for j in 0..p {
+                    a.matrix[(i, j)] = a.matrix[(i, j)] / s;
+                }
+            }
+        }
+        Ok(self)
+    }
+
+    fn filter(&mut self, maf: f64) -> io::Result<&mut Self> {
+        let mut i: usize = 0;
+        let mut n = self.len();
+        while i < n-1 {
+            i += 1;
+            let a = self[i].clone();
+            'per_allele: for j in 0..a.alleles_vector.len() {
+                // println!("i={:?}; n={:?}", i, n);
+                let _ = match (a.matrix.column(j).mean() < maf) | (a.matrix.column(j).mean() > (1.0-maf)) {
+                    true => {self.remove(i); i-=1; n-=1; break 'per_allele},
+                    false => 0,
+                };
+            }
+        }
+        Ok(self)
+        // let mut x = 
+        // self.clone().into_iter()
+        //     .filter(|a| a.matrix.column_iter()
+        //                                                             .map(|c| (c.min() < maf) | (c.max() > (1.0-maf)))
+        //                                                             .reduce(|a, b| a & b)
+        //                                                             .unwrap()
+        //                                                         ).collect::<Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>>();
+        // Ok(&mut x)
+    }
+    
     fn convert_to_matrix(&self, keep_n_minus_1: bool) -> io::Result<(Vec<String>,Vec<u64>,Vec<String>,nalgebra::Matrix<f64, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<f64, nalgebra::Dyn, nalgebra::Dyn>>)> {
         // Extract allele counts or freqs matrix
         let mut chromosomes: Vec<String> = Vec::new();
         let mut positions: Vec<u64> = Vec::new();
         let mut alleles: Vec<String> = Vec::new();
-        let mut X = self[0].matrix.clone();
         let mut X: nalgebra::Matrix<f64, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<f64, nalgebra::Dyn, nalgebra::Dyn>> = self[0].matrix.clone();
         for i in 1..self.len() {
             let v = &self[i];
@@ -385,10 +425,10 @@ fn load_per_chunk(fname: &String, format: &String, n_pools: &usize, start: &u64,
     Ok(vec_allele_out)
 }
 
-pub fn load(fname: &String, n_threads: &u64) -> io::Result<i64> {
+pub fn load(fname: &String, n_threads: &u64) -> io::Result<Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>> {
 
     let chunks = crate::io::find_file_splits(fname, n_threads).unwrap();
-    println!("Chunks: {:?}", chunks);
+    // println!("Chunks: {:?}", chunks);
 
     // Determine the format of the input file
     let file = File::open(fname).unwrap();
@@ -434,9 +474,6 @@ pub fn load(fname: &String, n_threads: &u64) -> io::Result<i64> {
             caught_1_line = true;
         }
     }
-    
-
-    ////////////////////////////////
     // Instantiate thread object for parallel execution
     let mut thread_objects = Vec::new();
     // Vector holding all returns from read_chunk()
@@ -471,22 +508,33 @@ pub fn load(fname: &String, n_threads: &u64) -> io::Result<i64> {
     }
     vec_acf.sort_by(|a, b| a.coordinate.partial_cmp(&b.coordinate).unwrap());
 
-    let (c, p, a, x) = vec_acf.convert_to_matrix(true).unwrap();
-    // let (c, p, a, x) = vec_acf.convert_to_matrix(false).unwrap();
+    // println!("CONVERT TO MATRIX");
+    // let (c, p, a, x) = vec_acf.convert_to_matrix(true).unwrap();
+    // println!("X: {:?}", x);
 
-    println!("X: {:?}", x);
-
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[0], p[0], a[0]);
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[1], p[1], a[1]);
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[2], p[2], a[2]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[0], p[0], a[0]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[1], p[1], a[1]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[2], p[2], a[2]);
     
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[2000], p[2000], a[2000]);
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[2001], p[2001], a[2001]);
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[2002], p[2002], a[2002]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[2000], p[2000], a[2000]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[2001], p[2001], a[2001]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[2002], p[2002], a[2002]);
 
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[5000], p[5000], a[5000]);
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[5001], p[5001], a[5001]);
-    println!("chr: {:?}; pos: {:?}; allele: {:?}", c[5002], p[5002], a[5002]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[5000], p[5000], a[5000]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[5001], p[5001], a[5001]);
+    // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[5002], p[5002], a[5002]);
 
-    Ok(0)
+    // println!("CONVERT TO COUNTS TO FREQS");
+    // println!("X0: {:?}", vec_acf[0]);
+    // vec_acf.counts_to_frequencies();
+    // println!("X1: {:?}", vec_acf[0]);
+
+    // println!("FILTER BY MAF");
+    // println!("X0: {:?}", vec_acf[0]);
+    // println!("X0: n=: {:?}", vec_acf.len());
+    // vec_acf.filter(0.01);
+    // println!("X1: {:?}", vec_acf[0]);
+    // println!("X1: n=: {:?}", vec_acf.len());
+
+    Ok(vec_acf)
 }
