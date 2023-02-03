@@ -1,6 +1,7 @@
 // use std::env;
 use clap::Parser;
 mod io;
+mod tables;
 
 // Instatiate arguments struct
 #[derive(Parser, Debug)]
@@ -57,5 +58,8 @@ fn main() {
         println!("{:?}", out[0]);
         println!("{:?}", out[1]);
         println!("{:?}", out[1000]);
+    } else if args.analysis == String::from("fisher_exact_test") {
+        let vec_acf = io::load(&args.fname, &args.n_threads).unwrap();
+        let out = tables::fisher(vec_acf).unwrap();
     }
 }

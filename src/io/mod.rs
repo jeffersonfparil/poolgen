@@ -6,4 +6,4 @@ pub use self::{
 
 mod file_split;
 mod pileup;
-mod sync;
+pub mod sync;

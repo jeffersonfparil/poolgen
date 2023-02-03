@@ -69,14 +69,6 @@ impl Sync for Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> 
             }
         }
         Ok(self)
-        // let mut x = 
-        // self.clone().into_iter()
-        //     .filter(|a| a.matrix.column_iter()
-        //                                                             .map(|c| (c.min() < maf) | (c.max() > (1.0-maf)))
-        //                                                             .reduce(|a, b| a & b)
-        //                                                             .unwrap()
-        //                                                         ).collect::<Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>>();
-        // Ok(&mut x)
     }
     
     fn convert_to_matrix(&self, keep_n_minus_1: bool) -> io::Result<(Vec<String>,Vec<u64>,Vec<String>,nalgebra::Matrix<f64, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<f64, nalgebra::Dyn, nalgebra::Dyn>>)> {
