@@ -1,12 +1,37 @@
 use std::io::{self, Error, ErrorKind};
-use nalgebra::{self, DVector, DMatrix};
+use nalgebra::{self, DVector, DMatrix, DMatrixView, U3, U4};
 
 use crate::io::sync::Sync;
 use crate::io::sync::AlleleCountsOrFrequencies;
 
-pub fn fisher(vec_acf: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
+pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
     println!("CONVERT TO MATRIX");
+    println!("X0: {:?}", vec_acf[0]);
+    println!("CONVERT TO COUNTS TO FREQS");
+    vec_acf.counts_to_frequencies().unwrap();
+    println!("X1: {:?}", vec_acf[0]);
     let (c, p, a, x) = vec_acf.convert_to_matrix(false).unwrap();
+    let x_tmp = x.view((0,0), (2,2));
+    println!("MATRIX: {:?}", x);
+    println!("MATRIX: {:?}", x);
+    println!("CHROM: {:?}", &c[0..10]);
+    println!("POS: {:?}", &p[0..10]);
+    println!("ALLELE: {:?}", &a[0..10]);
+
+
+    Ok(0)
+}
+
+pub fn barnard(vec_acf: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
+    println!("CONVERT TO MATRIX");
+    let (c, p, a, x) = vec_acf.convert_to_matrix(true).unwrap();
+    println!("X: {:?}", x);
+    Ok(0)
+}
+
+pub fn boschloo(vec_acf: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
+    println!("CONVERT TO MATRIX");
+    let (c, p, a, x) = vec_acf.convert_to_matrix(true).unwrap();
     println!("X: {:?}", x);
 
     // println!("chr: {:?}; pos: {:?}; allele: {:?}", c[0], p[0], a[0]);
@@ -33,19 +58,5 @@ pub fn fisher(vec_acf: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebr
     // println!("X1: {:?}", vec_acf[0]);
     // println!("X1: n=: {:?}", vec_acf.len());
 
-    Ok(0)
-}
-
-pub fn barnard(vec_acf: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
-    println!("CONVERT TO MATRIX");
-    let (c, p, a, x) = vec_acf.convert_to_matrix(true).unwrap();
-    println!("X: {:?}", x);
-    Ok(0)
-}
-
-pub fn boschloo(vec_acf: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
-    println!("CONVERT TO MATRIX");
-    let (c, p, a, x) = vec_acf.convert_to_matrix(true).unwrap();
-    println!("X: {:?}", x);
     Ok(0)
 }
