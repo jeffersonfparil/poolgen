@@ -5,6 +5,63 @@ use crate::io::sync::Sync;
 use crate::io::sync::AlleleCountsOrFrequencies;
 
 pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
+    vec_acf.counts_to_frequencies().unwrap();
+    for acf in vec_acf {
+        if acf.matrix.shape().1 > 1 {
+            let X = acf.matrix.clone();
+            println!("X: {:?}", X);
+            println!("FISHER_BASE: {:?}", fisher_base(&X));
+            println!("NALLELES: {:?}", X.shape().1);
+            println!("ROW 0: {:?}", X.row(0).clone_owned());
+        }
+
+    }
+
+
+    Ok(0)
+}
+
+fn factorial(x: u128) -> io::Result<u128> {
+    match x {
+        0 => Ok(1),
+        1 => Ok(1),
+        _ => Ok(factorial(x - 1).unwrap() * x)
+    }
+}
+
+fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
+    let (n, m) = X.shape();
+    let mut C = DMatrix::from_element(n, m, 0 as u128);
+    
+    // Find the minimum frequency to get the maximum natural number restricted by u128, i.e. n=34 if n! > u128::MAX
+    let mut x = X.iter()
+                                            .filter(|a| *a > &0.0)
+                                            .into_iter()
+                                            .map(|a| a.to_owned())
+                                            .collect::<Vec<f64>>();
+    x.sort_by(|a, b| a.partial_cmp(&b).unwrap());
+    let mut s = (1.0 / x[0]).ceil() as usize;
+    s = match s < 34  {
+        true => s,
+        false => 34,
+    };
+    
+    // Populate the counts matrix
+    for i in 0..n {
+        for j in 0..m {
+            C[(i, j)] = (s as f64 * X[(i, j)]).ceil() as u128;
+        }
+    }
+    println!("COUNTS: {:?}", C);
+
+    let row_sums = X.row_sum();
+    let col_sums = X.column_sum();
+    
+
+    Ok(0.0)
+}
+
+pub fn barnard(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
     println!("CONVERT TO MATRIX");
     println!("X0: {:?}", vec_acf[0]);
     println!("CONVERT TO COUNTS TO FREQS");
@@ -18,18 +75,10 @@ pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, na
     println!("POS: {:?}", &p[0..10]);
     println!("ALLELE: {:?}", &a[0..10]);
 
-
     Ok(0)
 }
 
-pub fn barnard(vec_acf: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
-    println!("CONVERT TO MATRIX");
-    let (c, p, a, x) = vec_acf.convert_to_matrix(true).unwrap();
-    println!("X: {:?}", x);
-    Ok(0)
-}
-
-pub fn boschloo(vec_acf: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
+pub fn boschloo(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
     println!("CONVERT TO MATRIX");
     let (c, p, a, x) = vec_acf.convert_to_matrix(true).unwrap();
     println!("X: {:?}", x);

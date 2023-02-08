@@ -15,11 +15,11 @@ struct SyncxAlleleFreqs {
 
 #[derive(Debug, Clone)]
 pub struct AlleleCountsOrFrequencies <T, R: nalgebra::Dim, C: nalgebra::Dim> {
-    coordinate: String,
-    chromosome: String,
-    position: u64,
-    alleles_vector: Vec<String>,
-    matrix: nalgebra::Matrix<T, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<T, R, C>>, // n pools x p alleles
+    pub coordinate: String,
+    pub chromosome: String,
+    pub position: u64,
+    pub alleles_vector: Vec<String>,
+    pub matrix: nalgebra::Matrix<T, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<T, R, C>>, // n pools x p alleles
 }
 
 pub trait Sync {
@@ -98,7 +98,6 @@ impl Sync for Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> 
         Ok((chromosomes, positions, alleles, X))
     }
 }
-
 
 fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usize, min_cov: &u64) -> io::Result<String> {
     // Add leading zeroes to the start-of-the-chunk index so we can propoerly sort the output files after parallele processing    
