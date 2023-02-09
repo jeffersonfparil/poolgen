@@ -4,23 +4,6 @@ use nalgebra::{self, DVector, DMatrix, DMatrixView, U3, U4};
 use crate::io::sync::Sync;
 use crate::io::sync::AlleleCountsOrFrequencies;
 
-pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
-    vec_acf.counts_to_frequencies().unwrap();
-    for acf in vec_acf {
-        if acf.matrix.shape().1 > 1 {
-            let X = acf.matrix.clone();
-            println!("X: {:?}", X);
-            println!("FISHER_BASE: {:?}", fisher_base(&X));
-            println!("NALLELES: {:?}", X.shape().1);
-            println!("ROW 0: {:?}", X.row(0).clone_owned());
-        }
-
-    }
-
-
-    Ok(0)
-}
-
 fn factorial(x: u128) -> io::Result<u128> {
     match x {
         0 => Ok(1),
@@ -29,7 +12,24 @@ fn factorial(x: u128) -> io::Result<u128> {
     }
 }
 
+fn factorial_inverse(x: u128) -> io::Result<f64> {
+    let mut out: f64 = 1.0;
+    for i in 1..x as usize {
+        out = out * (1.0 / i as f64);
+    }
+    Ok(out)
+}
+
+fn factorial_log10(x: u128) -> io::Result<f64> {
+    let mut out: f64 = 0.0;
+    for i in 1..x as usize {
+        out = out + f64::log10(i as f64);
+    }
+    Ok(out)
+}
+
 fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
+    // Instatiate the counts matrix
     let (n, m) = X.shape();
     let mut C = DMatrix::from_element(n, m, 0 as u128);
     
@@ -45,20 +45,65 @@ fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
         true => s,
         false => 34,
     };
-    
+
     // Populate the counts matrix
     for i in 0..n {
         for j in 0..m {
             C[(i, j)] = (s as f64 * X[(i, j)]).ceil() as u128;
+        println!("FACTORIAL: {:?}", factorial(C[(i, j)]));
+
         }
     }
     println!("COUNTS: {:?}", C);
 
-    let row_sums = X.row_sum();
-    let col_sums = X.column_sum();
+    // Log-Product of the marginal sums
+    let row_sums = C.row_sum().column(0).clone_owned();
+    let col_sums = C.column_sum().row(0).clone_owned();
+    let mut log_prod_fac_marginal_sums = 1 as f64;
+    for r in row_sums.iter() {
+        log_prod_fac_marginal_sums = log_prod_fac_marginal_sums + factorial_log10(*r).unwrap();
+    }
+    for c in col_sums.iter() {
+        log_prod_fac_marginal_sums = log_prod_fac_marginal_sums + factorial_log10(*c).unwrap();
+    }
+
+    // Log-Product of counts
+    let mut prod_fac_sums = 1 as f64;
+    for i in C.iter() {
+        prod_fac_sums = prod_fac_sums + factorial_log10(*i).unwrap();
+    }
+    prod_fac_sums = prod_fac_sums + factorial_log10(C.sum()).unwrap();
+
+    // let p = log_prod_fac_marginal_sums as f64 * factorial_inverse(C.sum()).unwrap() / prod_fac_sums as f64;
+    
+    println!("PROD_FAC_MAR_SUMS: {:?}", log_prod_fac_marginal_sums);
+    println!("PROD_FAC_SUMS: {:?}", prod_fac_sums);
+    // println!("OUT: {:?}", p);
+
+    for i in 0..s {
+        
+    }
     
 
     Ok(0.0)
+}
+
+
+pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
+    vec_acf.counts_to_frequencies().unwrap();
+    for acf in vec_acf {
+        if acf.matrix.shape().1 > 1 {
+            let X = acf.matrix.clone();
+            println!("X: {:?}", X);
+            println!("FISHER_BASE: {:?}", fisher_base(&X));
+            println!("NALLELES: {:?}", X.shape().1);
+            println!("ROW 0: {:?}", X.row(0).clone_owned());
+        }
+
+    }
+
+
+    Ok(0)
 }
 
 pub fn barnard(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
