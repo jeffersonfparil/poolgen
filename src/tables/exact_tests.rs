@@ -4,23 +4,7 @@ use nalgebra::{self, DVector, DMatrix, DMatrixView, U3, U4};
 use crate::io::sync::Sync;
 use crate::io::sync::AlleleCountsOrFrequencies;
 
-fn factorial(x: u128) -> io::Result<u128> {
-    match x {
-        0 => Ok(1),
-        1 => Ok(1),
-        _ => Ok(factorial(x - 1).unwrap() * x)
-    }
-}
-
-fn factorial_inverse(x: u128) -> io::Result<f64> {
-    let mut out: f64 = 1.0;
-    for i in 1..x as usize {
-        out = out * (1.0 / i as f64);
-    }
-    Ok(out)
-}
-
-fn factorial_log10(x: u128) -> io::Result<f64> {
+fn factorial_log10(x: f64) -> io::Result<f64> {
     let mut out: f64 = 0.0;
     for i in 1..x as usize {
         out = out + f64::log10(i as f64);
@@ -28,12 +12,26 @@ fn factorial_log10(x: u128) -> io::Result<f64> {
     Ok(out)
 }
 
+fn hypergeom_ratio(C: &DMatrix<f64>, log_prod_fac_marginal_sums: &f64) -> io::Result<f64> {
+    // Log-Product of counts
+    let mut prod_fac_sums = 1 as f64;
+    for i in C.iter() {
+        prod_fac_sums = prod_fac_sums + factorial_log10(*i).unwrap();
+    }
+    prod_fac_sums = prod_fac_sums + factorial_log10(C.sum()).unwrap();
+    // Calculate the p-value
+    let p = f64::powf(10.0, log_prod_fac_marginal_sums - prod_fac_sums);
+    println!("PROD_FAC_MAR_SUMS: {:?}", log_prod_fac_marginal_sums);
+    println!("PROD_FAC_SUMS: {:?}", prod_fac_sums);
+    println!("OUT: {:?}", p);
+    Ok(p)
+}
+
 fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
     // Instatiate the counts matrix
     let (n, m) = X.shape();
-    let mut C = DMatrix::from_element(n, m, 0 as u128);
-    
-    // Find the minimum frequency to get the maximum natural number restricted by u128, i.e. n=34 if n! > u128::MAX
+    let mut C = DMatrix::from_element(n, m, 0 as f64);
+    // Find the minimum frequency to get the maximum natural number restricted by f64, i.e. n=34 if n! > f64::MAX
     let mut x = X.iter()
                                             .filter(|a| *a > &0.0)
                                             .into_iter()
@@ -45,20 +43,16 @@ fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
         true => s,
         false => 34,
     };
-
     // Populate the counts matrix
     for i in 0..n {
         for j in 0..m {
-            C[(i, j)] = (s as f64 * X[(i, j)]).ceil() as u128;
-        println!("FACTORIAL: {:?}", factorial(C[(i, j)]));
-
+            C[(i, j)] = (s as f64 * X[(i, j)]).ceil() as f64;
         }
     }
     println!("COUNTS: {:?}", C);
-
-    // Log-Product of the marginal sums
-    let row_sums = C.row_sum().column(0).clone_owned();
-    let col_sums = C.column_sum().row(0).clone_owned();
+    // Log-Product of the marginal sums (where C.row_sum() correspond to the the column marginal sums and vice versa)
+    let row_sums = C.column_sum().clone_owned();
+    let col_sums = C.row_sum().clone_owned();
     let mut log_prod_fac_marginal_sums = 1 as f64;
     for r in row_sums.iter() {
         log_prod_fac_marginal_sums = log_prod_fac_marginal_sums + factorial_log10(*r).unwrap();
@@ -66,28 +60,47 @@ fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
     for c in col_sums.iter() {
         log_prod_fac_marginal_sums = log_prod_fac_marginal_sums + factorial_log10(*c).unwrap();
     }
+    // Define the observed hypergeometric ratio, i.e. p of the observed data
+    let p_observed = hypergeom_ratio(&C, &log_prod_fac_marginal_sums).unwrap();
+    // Iterate across all possible combinations of counts with the same marginal sums
+    println!("C shape: {:?}", C.shape());
+    println!("row_sums shape: {:?}", row_sums.shape());
+    println!("col_sums shape: {:?}", col_sums.shape());
+    println!("n: {:?}", n);
+    println!("m: {:?}", m);
 
-    // Log-Product of counts
-    let mut prod_fac_sums = 1 as f64;
-    for i in C.iter() {
-        prod_fac_sums = prod_fac_sums + factorial_log10(*i).unwrap();
+    let mut m_: usize;
+    let mut p: f64;
+    for k in 0..1 {
+        for i in 0..n {
+            for j in 0..m {
+                let vec_m_: Vec<usize> = vec![(row_sums[(i, 0)] - C.index((i, 0..j)).sum().ceil()) as usize,
+                                              (col_sums[(0, j)] - C.index((0..i, j)).sum().ceil()) as usize];
+                m_ = vec_m_.into_iter().min().unwrap();
+                println!("i: {:?}", i);
+                println!("j: {:?}", j);
+                println!("m_: {:?}", m_);
+                // for l in 0..m_ {
+                //     for i_ in 0..n {
+                //         for j_ in 0..m {
+                //             C[(i_, j_)] = l as f64;
+                            C[(i, j)] = m_ as f64;
+                //         }
+                //     }
+                    // Add p calc here
+                    p = hypergeom_ratio(&C, &log_prod_fac_marginal_sums).unwrap();
+                    println!("New C: {:?}", C);
+                    println!("row_sums: {:?}", row_sums);
+                    println!("col_sums: {:?}", col_sums);
+                    println!("p: {:?}", p);
+
+                // }
+            }
+        }
     }
-    prod_fac_sums = prod_fac_sums + factorial_log10(C.sum()).unwrap();
 
-    // let p = log_prod_fac_marginal_sums as f64 * factorial_inverse(C.sum()).unwrap() / prod_fac_sums as f64;
-    
-    println!("PROD_FAC_MAR_SUMS: {:?}", log_prod_fac_marginal_sums);
-    println!("PROD_FAC_SUMS: {:?}", prod_fac_sums);
-    // println!("OUT: {:?}", p);
-
-    for i in 0..s {
-        
-    }
-    
-
-    Ok(0.0)
+    Ok(p_observed)
 }
-
 
 pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
     vec_acf.counts_to_frequencies().unwrap();
