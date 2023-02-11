@@ -71,31 +71,34 @@ fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
 
     let mut m_: usize;
     let mut p: f64;
-    for k in 0..1 {
-        for i in 0..n {
-            for j in 0..m {
-                let vec_m_: Vec<usize> = vec![(row_sums[(i, 0)] - C.index((i, 0..j)).sum().ceil()) as usize,
-                                              (col_sums[(0, j)] - C.index((0..i, j)).sum().ceil()) as usize];
-                m_ = vec_m_.into_iter().min().unwrap();
-                println!("i: {:?}", i);
-                println!("j: {:?}", j);
-                println!("m_: {:?}", m_);
-                // for l in 0..m_ {
-                //     for i_ in 0..n {
-                //         for j_ in 0..m {
-                //             C[(i_, j_)] = l as f64;
-                            C[(i, j)] = m_ as f64;
-                //         }
-                //     }
-                    // Add p calc here
-                    p = hypergeom_ratio(&C, &log_prod_fac_marginal_sums).unwrap();
-                    println!("New C: {:?}", C);
-                    println!("row_sums: {:?}", row_sums);
-                    println!("col_sums: {:?}", col_sums);
-                    println!("p: {:?}", p);
-
-                // }
+    for max_i in 0..n
+        for max_j in 0..m {
+            for i in 0..n {
+                for j in 0..m {
+                    let max: usize = vec![(row_sums[(i, 0)] - C.index((i, 0..j)).sum().ceil()) as usize,
+                                          (col_sums[(0, j)] - C.index((0..i, j)).sum().ceil()) as usize]
+                                          .into_iter().min().unwrap();
+                    println!("i: {:?}", i);
+                    println!("j: {:?}", j);
+                    println!("m_: {:?}", max);
+                    if (max_i != i) & (max_j != j) {
+                        if i < max_i {
+                            C[(i,j)] = 0;
+                        } else {
+                            C[(i,j)] = max;
+                        }
+                    }
+                }
             }
+            // Make sure we kept the marginal sums constant
+            assert!(row_sums == C.column_sum().clone_owned());
+            asset!(col_sums == C.row_sum().clone_owned());
+            // Calculate hypergeometric ratio
+            p = hypergeom_ratio(&C, &log_prod_fac_marginal_sums).unwrap();
+            println!("New C: {:?}", C);
+            println!("row_sums: {:?}", row_sums);
+            println!("col_sums: {:?}", col_sums);
+            println!("p: {:?}", p);
         }
     }
 
