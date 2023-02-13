@@ -48,6 +48,9 @@ impl Sync for Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> 
                 let s = a.matrix.row(i).sum();
                 for j in 0..p {
                     a.matrix[(i, j)] = a.matrix[(i, j)] / s;
+                    if f64::is_nan(a.matrix[(i, j)]) {
+                        a.matrix[(i, j)] = 0.0;
+                    }
                 }
             }
         }

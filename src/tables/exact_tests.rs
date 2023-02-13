@@ -64,35 +64,57 @@ fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
     let p_observed = hypergeom_ratio(&C, &log_prod_fac_marginal_sums).unwrap();
     // Iterate across all possible combinations of counts with the same marginal sums
     println!("C shape: {:?}", C.shape());
-    println!("row_sums shape: {:?}", row_sums.shape());
-    println!("col_sums shape: {:?}", col_sums.shape());
+    println!("row_sums: {:?}", row_sums);
+    println!("col_sums: {:?}", col_sums);
     println!("n: {:?}", n);
     println!("m: {:?}", m);
+    println!("###################################################");
 
-    let mut m_: usize;
+    let mut max: f64;
     let mut p: f64;
-    for max_i in 0..n
+    for max_i in 0..n {
         for max_j in 0..m {
             for i in 0..n {
                 for j in 0..m {
-                    let max: usize = vec![(row_sums[(i, 0)] - C.index((i, 0..j)).sum().ceil()) as usize,
-                                          (col_sums[(0, j)] - C.index((0..i, j)).sum().ceil()) as usize]
-                                          .into_iter().min().unwrap();
-                    println!("i: {:?}", i);
-                    println!("j: {:?}", j);
-                    println!("m_: {:?}", max);
-                    if (max_i != i) & (max_j != j) {
-                        if i < max_i {
-                            C[(i,j)] = 0;
-                        } else {
-                            C[(i,j)] = max;
-                        }
+                    max = vec![(row_sums[(i, 0)] - C.index((i, 0..j)).sum().ceil()) as usize,
+                               (col_sums[(0, j)] - C.index((0..i, j)).sum().ceil()) as usize]
+                               .into_iter().min().unwrap() as f64;
+                    if (i==(n-1)) | (j==(m-1)) {
+                        C[(i,j)] = max;
+                    } else if (i < max_i) | (j < max_j) {
+                        C[(i,j)] = 0.0;
+                    } else {
+                        C[(i,j)] = max;
                     }
+                    // println!("i={:?}; max_i={:?}", i, max_i);
+                    // println!("j={:?}; max_j={:?}", j, max_j);
+                    // println!("max={:?}; C[(i,j)]={:?}", max, C[(i,j)]);
+                }
+            }
+            println!("NEW C: {:?}", C);
+            let mut j: usize;
+            let mut i: usize;
+            for inv_j in 0..m {
+                for inv_i in 0..n {
+                    j = m - (inv_j+1);
+                    i = n - (inv_i+1);
+                    max = vec![(row_sums[(i, 0)] - C.index((i, 0..m)).sum().ceil()) as usize,
+                               (col_sums[(0, j)] - C.index((0..n, j)).sum().ceil()) as usize]
+                               .into_iter().min().unwrap() as f64;
+                    if max > 0.0 {
+                        C[(i,j)] = max;
+                    }
+                    // println!("i={:?}; max_i={:?}", i, max_i);
+                    // println!("j={:?}; max_j={:?}", j, max_j);
+                    // println!("max={:?}; C[(i,j)]={:?}", max, C[(i,j)]);
                 }
             }
             // Make sure we kept the marginal sums constant
+            println!("NEW C: {:?}", C);
+            println!("row_sum: {:?}", C.column_sum().clone_owned());
+            println!("col_sum: {:?}", C.row_sum().clone_owned());
             assert!(row_sums == C.column_sum().clone_owned());
-            asset!(col_sums == C.row_sum().clone_owned());
+            assert!(col_sums == C.row_sum().clone_owned());
             // Calculate hypergeometric ratio
             p = hypergeom_ratio(&C, &log_prod_fac_marginal_sums).unwrap();
             println!("New C: {:?}", C);
@@ -110,6 +132,10 @@ pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, na
     for acf in vec_acf {
         if acf.matrix.shape().1 > 1 {
             let X = acf.matrix.clone();
+            println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+            println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+            println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+            println!("chr-pos: {:?}-{:?}", acf.chromosome, acf.position);
             println!("X: {:?}", X);
             println!("FISHER_BASE: {:?}", fisher_base(&X));
             println!("NALLELES: {:?}", X.shape().1);

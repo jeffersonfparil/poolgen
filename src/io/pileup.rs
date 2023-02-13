@@ -341,7 +341,7 @@ fn pileup2sync_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, m
         end_string = "0".to_owned() + &end_string;
     }
     // Output temp file for the chunk    
-    let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".syncx.tmp";
+    let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + "." + fmt + ".tmp";
     let out = fname_out.clone();
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_out;
     let error_writing_line = "Unable to write line into file: ".to_owned() + &fname_out;
