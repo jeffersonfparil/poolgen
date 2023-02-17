@@ -60,7 +60,6 @@ fn main() {
         println!("{:?}", out[1000]);
     } else if args.analysis == String::from("fisher_exact_test") {
         let mut vec_acf = io::load(&args.fname, &args.n_threads).unwrap();
-        let out = tables::fisher(&mut vec_acf,
-                                      &args.n_threads).unwrap();
+        let out = tables::fisher(&mut vec_acf, &args.output).unwrap();
     }
 }

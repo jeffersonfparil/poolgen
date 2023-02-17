@@ -1,6 +1,9 @@
 use std::io::{self, Error, ErrorKind};
 use nalgebra::{self, DVector, DMatrix, DMatrixView, U3, U4};
 use std::sync::{Arc, Mutex};
+use std::fs::File;
+use std::io::{prelude::*};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::io::sync::Sync;
 use crate::io::sync::AlleleCountsOrFrequencies;
@@ -10,6 +13,7 @@ pub struct SummaryStatistics {
     coordinate: String,
     chromosome: String,
     position: u64,
+    alleles: String,
     statistic: f64,
 }
 
@@ -139,7 +143,13 @@ fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
     Ok(p_observed + p_extremes)
 }
 
-pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>, n_threads: &u64) -> io::Result<Vec<SummaryStatistics>> {
+pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>, out: &String) -> io::Result<String> {
+    let mut out = out.to_owned();
+    if out == "".to_owned() {
+        let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
+        out = "Fisher_exact_test-".to_owned() + &time.to_string() + ".csv";
+    }
+
     vec_acf.counts_to_frequencies().unwrap();
     let n = vec_acf.len();
     // println!("VEC_ACF: {:?}; len={:?}", vec_acf, n);
@@ -167,6 +177,7 @@ pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, na
         let idx = vec_acf[i].coordinate.clone();
         let chr = vec_acf[i].chromosome.clone();
         let pos = vec_acf[i].position.clone();
+        let ale = vec_acf[i].alleles_vector.clone().join("");
         let X = vec_acf[i].matrix.clone();
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
@@ -181,6 +192,7 @@ pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, na
             thread_ouputs_clone.lock().unwrap().push(SummaryStatistics{coordinate: idx,
                                                                        chromosome: chr,
                                                                        position: pos,
+                                                                       alleles: ale,
                                                                        statistic: vec_out_per_thread});
         });
         thread_objects.push(thread);
@@ -197,12 +209,19 @@ pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, na
     }
     p.sort_by(|a, b| a.coordinate.partial_cmp(&b.coordinate).unwrap());
 
-    println!("P: {:?}", p[0]);
-    println!("P: {:?}", p[1]);
-    println!("P: {:?}", p[2]);
-    println!("P: {:?}", p[500]);
-    println!("P: {:?}", p[501]);
-    Ok(p)
+// Instatiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &out;
+    let mut file_out = File::create(&out).expect(&error_writing_file);
+    file_out.write_all("chr,pos,alleles,Fisher_exact_test_pval\n".to_owned().as_bytes()).unwrap();
+    for v in p.into_iter() {
+        let mut line = vec![v.chromosome,
+                                    v.position.to_string(),
+                                    v.alleles,
+                                    v.statistic.to_string()]
+                                .join(",") + "\n";
+        file_out.write_all(line.to_owned().as_bytes()).unwrap();
+    }
+    Ok(out)
 }
 
 pub fn barnard(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
