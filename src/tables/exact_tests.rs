@@ -6,6 +6,7 @@ use std::io::{prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::io::sync::Sync;
+use crate::io::sync::load;
 use crate::io::sync::AlleleCountsOrFrequencies;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -143,11 +144,15 @@ fn fisher_base(X: &DMatrix<f64>) -> io::Result<f64> {
     Ok(p_observed + p_extremes)
 }
 
-pub fn fisher(vec_acf: &mut Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>, out: &String) -> io::Result<String> {
+pub fn fisher(fname: &String, out: &String, n_threads: &u64) -> io::Result<String> {
+    let mut vec_acf = load(fname, n_threads).unwrap();
     let mut out = out.to_owned();
     if out == "".to_owned() {
         let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
-        out = "Fisher_exact_test-".to_owned() + &time.to_string() + ".csv";
+        let bname = fname.split(".").into_iter().map(|a| a.to_owned()).collect::<Vec<String>>()
+                        .into_iter().rev().collect::<Vec<String>>()[1..].to_owned().into_iter().rev().collect::<Vec<String>>()
+                        .join(".");
+        out = bname + "-Fisher_exact_test-" + &time.to_string() + ".csv";
     }
 
     vec_acf.counts_to_frequencies().unwrap();

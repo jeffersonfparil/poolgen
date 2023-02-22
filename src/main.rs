@@ -27,6 +27,9 @@ struct Args {
     /// Minimum depth of coverage
     #[clap(long, default_value_t=1)]
     min_cov: u64,
+    /// Remove ambiguous reads during SNP filetering or keep them coded as Ns
+    #[clap(long, default_value_t=true)]
+    remove_ns: bool,
     /// Format of the output file: sync or syncx
     #[clap(long, default_value="sync")]
     file_format: String,
@@ -43,6 +46,7 @@ fn main() {
                                           &args.pool_names,
                                           &args.min_qual,
                                           &args.min_cov,
+                                          &args.remove_ns,
                                           &args.file_format,
                                           &args.n_threads).unwrap();
         println!("{:?}", out);
@@ -59,7 +63,6 @@ fn main() {
         println!("{:?}", out[1]);
         println!("{:?}", out[1000]);
     } else if args.analysis == String::from("fisher_exact_test") {
-        let mut vec_acf = io::load(&args.fname, &args.n_threads).unwrap();
-        let out = tables::fisher(&mut vec_acf, &args.output).unwrap();
+        let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
     }
 }

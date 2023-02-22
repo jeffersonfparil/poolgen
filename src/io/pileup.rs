@@ -231,7 +231,7 @@ impl PileupLine {
         Ok(out)
     }
 
-    fn filter(&mut self, min_coverage: &u64, min_quality: &f64) -> io::Result<&mut Self> {
+    fn filter(&mut self, min_coverage: &u64, min_quality: &f64, remove_ns: &bool) -> io::Result<&mut Self> {
         // Convert low quality bases into Ns
         let n = &self.read_qualities.len();
         for i in 0..*n {
@@ -243,7 +243,11 @@ impl PileupLine {
                 } else {
                     let q = f64::powf(10.0, -(pool[j] as f64 - 33.0) / 10.0); 
                     if q > *min_quality {
-                        self.read_codes[i][j] = 78; // convert to N
+                        if *remove_ns {
+                            self.read_codes[i].remove(j);
+                        } else {
+                            self.read_codes[i][j] = 78; // convert to N
+                        }
                         self.coverages[i] = self.coverages[i] - 1; // remove the coverage for ambiguous alleles
                     }
                 }
@@ -329,7 +333,7 @@ impl PileupLine {
 
 }
 
-fn pileup2sync_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, min_qual: &f64, min_cov: &u64, fmt: &String) -> io::Result<String>{
+fn pileup2sync_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, min_qual: &f64, min_cov: &u64, remove_ns: &bool, fmt: &String) -> io::Result<String>{
     // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
     let mut start_string = start.to_string();
     for  i in 0..(n_digits - start_string.len()) {
@@ -374,7 +378,7 @@ fn pileup2sync_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, m
         let mut p = parse(&line).expect(&("Input file error, i.e. '".to_owned() + fname + "' at line with the first 20 characters as: " + &line[0..20] + "."));
         // println!("i: {} | Raw line: {:?}", i, p);
         // Filter
-        match p.filter(min_cov, min_qual) {
+        match p.filter(min_cov, min_qual, remove_ns) {
             Ok(x) => x,
             Err(_) => continue,
         };
@@ -449,7 +453,7 @@ fn pileup2sync_chunk(fname: &String, start: &u64, end: &u64, n_digits: &usize, m
 }
 
 // Convert pileup into sync or syncx
-pub fn pileup2sync(fname: &String, out: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, file_format: &String, n_threads: &u64) -> io::Result<String> {
+pub fn pileup2sync(fname: &String, out: &String, pool_names: &String, min_qual: &f64, min_cov: &u64, remove_ns: &bool, file_format: &String, n_threads: &u64) -> io::Result<String> {
     // Output filename
     let mut out = out.to_owned();
     if out == "".to_owned() {
@@ -489,10 +493,11 @@ pub fn pileup2sync(fname: &String, out: &String, pool_names: &String, min_qual: 
         let n_digits_clone = n_digits.clone();
         let min_qual_clone = min_qual.clone();
         let min_cov_clone = min_cov.clone();
+        let remove_ns = remove_ns.clone();
         let file_format_clone = file_format.clone();
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
-            let fname_out_per_thread = pileup2sync_chunk(&fname_clone, &start, &end, &n_digits_clone, &min_qual_clone, &min_cov_clone, &file_format_clone).unwrap();
+            let fname_out_per_thread = pileup2sync_chunk(&fname_clone, &start, &end, &n_digits_clone, &min_qual_clone, &min_cov_clone, &remove_ns, &file_format_clone).unwrap();
             thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
         });
         thread_objects.push(thread);

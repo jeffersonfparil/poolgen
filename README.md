@@ -7,7 +7,23 @@ Quantitative and population genetics analyses using pool sequencing data
 
 ## Quickstart
 
-**Rewriting in Rust because of my existential and correctness crises in Julia.**
+1. Install rustup from [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).
+
+2. Download this repository
+```shell
+git clone https://github.com/jeffersonfparil/poolgen.git
+```
+
+3. Compile and run
+```shell
+cd poolgen/
+cargo run -- sync2syncx -h
+cargo run -- sync2syncx \
+                -f ./tests/test-pileup2sync_default.sync \
+                -o ./tests/test-pileup2sync_default_sync2syncx.syncx \
+                --min-cov 2 \
+                --n-threads 2
+```
 
 ## File formats
 
