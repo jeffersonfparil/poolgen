@@ -236,8 +236,8 @@ impl PileupLine {
         let n = &self.read_qualities.len();
         for i in 0..*n {
             let pool = &self.read_qualities[i];
-            let m = pool.len();
-            for j in 0..m {
+            let mut j: usize = 0;
+            while j < self.read_codes[i].len() {
                 if pool[j] < 33 {
                     return Err(Error::new(ErrorKind::Other, "Phred score out of bounds."));
                 } else {
@@ -245,12 +245,16 @@ impl PileupLine {
                     if q > *min_quality {
                         if *remove_ns {
                             self.read_codes[i].remove(j);
+                            if j > 0 {
+                                j -= 1;
+                            }
                         } else {
                             self.read_codes[i][j] = 78; // convert to N
                         }
                         self.coverages[i] = self.coverages[i] - 1; // remove the coverage for ambiguous alleles
                     }
                 }
+                j += 1;
             }
         }
         // All the pools needs be have been covered at least min_coverage times

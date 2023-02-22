@@ -2,7 +2,7 @@
 
 ### Download DRGP raw sequences
 
-
+cd poolgen/
 while read -r line
 do
     # line=$(head -n4 "tests/misc/test_dgrp_fastq_urls.csv" | tail -n1)
@@ -13,11 +13,12 @@ do
     for u in "${urls[@]}"
     do
         # u=${urls[0]}
-        prefetch $u --output-directory ./${u}/
-        for srr in $(find ./${u}/ -name 'SRR*' | grep ".sra$")
+        outdir=./tests/misc/${u}/
+        prefetch $u --output-directory ${outdir}
+        for srr in $(find ${outdir} -name 'SRR*' | grep ".sra$")
         do
             # srr=$(find ./${u}/ -name 'SRR*' | grep ".sra$" | head -n1)
-            fastq-dump --outdir ./${u}/ --split-files $srr
+            fastq-dump --outdir ${outdir} ${srr}
         done
     done
-done < <(tail -n+2 "tests/misc/test_dgrp_fastq_urls.csv")
+done < <(tail -n+2 "./tests/misc/test_dgrp_fastq_urls.csv")

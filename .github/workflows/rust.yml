@@ -50,20 +50,12 @@ jobs:
           cargo run -- pileup2sync -f ./tests/test.pileup                   -o ./tests/test-pileup2sync_mincov2.syncx --pool-names ./tests/test_names.txt --file-format syncx --n-threads 2 --min-cov 2
           cargo run -- sync2syncx  -f ./tests/test-pileup2sync_default.sync -o ./tests/test-pileup2sync_default_sync2syncx.syncx --n-threads 2 --min-cov 2
           cargo run -- sync2syncx  -f ./tests/test-pileup2sync_mincov2.sync -o ./tests/test-pileup2sync_mincov2_sync2syncx.syncx --n-threads 2 --min-cov 2
-          # d1=$(diff ./tests/test-pileup2sync_default_sync2syncx.syncx ./tests/test-pileup2sync_mincov2.syncx | wc -l)
-          # d2=$(diff ./tests/test-pileup2sync_default_sync2syncx.syncx ./tests/test-pileup2sync_mincov2_sync2syncx.syncx | wc -l)
-          # if [ $d1 -gt 0 ]
-          # then
-          #   exit 1
-          # fi
-          # if [ $d2 -gt 0 ]
-          # then
-          #   exit 2
-          # fi
           echo "###############################################################"
           echo "More tests:"
           cargo run -- load -f ./tests/test.sync
           cargo run -- load -f ./tests/test.syncx
+          cargo run -- fisher_exact_test -f ./tests/test.sync
+          cargo run -- fisher_exact_test -f ./tests/test.syncx
           echo "###############################################################"
           echo "Clean-up:"
           rm ./tests/test-*
