@@ -22,7 +22,7 @@ struct Args {
     #[clap(long, default_value="")]
     pool_names: String,
     /// Minimum base quality
-    #[clap(long, default_value_t=0.0001)]
+    #[clap(long, default_value_t=0.01)]
     min_qual: f64,
     /// Minimum depth of coverage
     #[clap(long, default_value_t=1)]

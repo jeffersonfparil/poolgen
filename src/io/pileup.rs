@@ -154,21 +154,22 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
                 //                                  'C'/'c' == 67/99,
                 //                                  'G'/'g' == 71/103, and
                 //                                  '*' == 42 codes for deletion on the current locus which is different from the \-[0-9]+[ACGTNacgtn]+ which encodes for indels in the next position/s)
-                let mut a: u8 = 0;
-                if (code == 44) | (code == 46) {
-                    a = reference_allele.to_string().as_bytes()[0]; // whatever the reference allele is
-                }
-                a = match code {
-                    65 => 65,   // A
-                    97 => 65,   // a -> A
-                    84 => 84,   // T
-                    116 => 84,  // t -> T
-                    67 => 67,   // C
-                    99 => 67,   // c -> C
-                    71 => 71,   // G
-                    103 => 71,  // g -> G
-                    42 => 68,   // * -> D
-                    _ => 78,    // N
+                let a: u8 = if (code == 44) | (code == 46) {
+                    // whatever the reference allele is
+                    reference_allele.to_string().as_bytes()[0]
+                } else {
+                    match code {
+                        65 => 65,   // A
+                        97 => 65,   // a -> A
+                        84 => 84,   // T
+                        116 => 84,  // t -> T
+                        67 => 67,   // C
+                        99 => 67,   // c -> C
+                        71 => 71,   // G
+                        103 => 71,  // g -> G
+                        42 => 68,   // * -> D
+                        _ => 78,    // N
+                    }
                 };
                 alleles.push(a);
             }
@@ -237,18 +238,23 @@ impl PileupLine {
         // Convert low quality bases into Ns
         let n = &self.read_qualities.len();
         for i in 0..*n {
-            let pool = &self.read_qualities[i];
+            // let pool = &self.read_qualities[i];
             let mut j: i64 = 0;
             while j < self.read_codes[i].len() as i64 {
-                if pool[j as usize] < 33 {
+                if self.read_qualities[i][j as usize] < 33 {
                     return Err(Error::new(ErrorKind::Other, "Phred score out of bounds."));
                 } else {
-                    let q = f64::powf(10.0, -(pool[j as usize] as f64 - 33.0) / 10.0); 
+                    let q = f64::powf(10.0, -(self.read_qualities[i][j as usize] as f64 - 33.0) / 10.0); 
+                    // println!("q={:?}; min_quality={:?}", q, min_quality);
                     if q > *min_quality {
+                        println!("FILTER-OUT.....");
                         self.read_codes[i][j as usize] = 78; // convert to N
                     }
                     if *remove_ns & (self.read_codes[i][j as usize] == 78) {
+                        // println!("{:?}---{:?}---{:?}", remove_ns, self.read_codes[i][j as usize], self.read_qualities[i][j as usize]);
+                        // println!("HERE.....");
                         self.read_codes[i].remove(j as usize);
+                        self.read_qualities[i].remove(j as usize);
                         self.coverages[i] = self.coverages[i] - 1; // remove the coverage for ambiguous alleles
                         j -= 1;
                     }
