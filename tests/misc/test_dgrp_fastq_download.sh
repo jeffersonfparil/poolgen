@@ -22,10 +22,9 @@ do
     for srr in $(find ${outdir} -name "SRR*" | grep ".sra$")
     do
         # srr=$(find ${outdir} -name "SRR*" | grep ".sra$" | head -n1)
-        fastq-dump --outdir ${outdir} ${srr}
         srr_name=$(basename $srr)
-        mv ${outdir}/${srr_name%.sra*}.fastq \
-            ${dirbase}/${name}-${srr_name%.sra*}.fastq
+        bam_name=${srr_name%.sra*}.bam
+        sam-dump ${srr} | samtools view -bS - > ${dirbase}/${name}-${bam_name}
     done
     rm -R ${outdir}
 done
@@ -42,3 +41,15 @@ parallel -j 32 \
     ${f} \
     ${d} \
     ::: $(seq 2 $(cat $f | wc -l))
+
+### Download phenotype data
+
+
+### Merge bam files so that each pool correspond to trait-based groupings 
+for name in $(ls ${d} | cut -d'-' -f1 | sort | uniq)
+do
+    samtools merge \
+        ${name}.bam \
+        ${name}-*.bam
+done
+
