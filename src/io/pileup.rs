@@ -154,15 +154,16 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
                 //                                  'C'/'c' == 67/99,
                 //                                  'G'/'g' == 71/103, and
                 //                                  '*' == 42 codes for deletion on the current locus which is different from the \-[0-9]+[ACGTNacgtn]+ which encodes for indels in the next position/s)
-                let a: u8 = match code {
-                    44 => reference_allele.to_string().as_bytes()[0], // whatever the reference allele is
-                    46 => reference_allele.to_string().as_bytes()[0], // whatever the reference allele is
+if (code == 44) | (code == 46) {
+  reference_allele.to_string().as_bytes()[0], // whatever the reference allele is
+}
+let a: u8 = match code {
                     65 => 65,   // A
                     97 => 65,   // a -> A
                     84 => 84,   // T
                     116 => 84,  // t -> T
                     67 => 67,   // C
-                    99 => 67,   // c -> c
+                    99 => 67,   // c -> C
                     71 => 71,   // G
                     103 => 71,  // g -> G
                     42 => 68,   // * -> D
