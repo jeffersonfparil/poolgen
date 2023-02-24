@@ -154,10 +154,11 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
                 //                                  'C'/'c' == 67/99,
                 //                                  'G'/'g' == 71/103, and
                 //                                  '*' == 42 codes for deletion on the current locus which is different from the \-[0-9]+[ACGTNacgtn]+ which encodes for indels in the next position/s)
-if (code == 44) | (code == 46) {
-  reference_allele.to_string().as_bytes()[0]; // whatever the reference allele is
-}
-let a: u8 = match code {
+                let mut a: u8 = 0;
+                if (code == 44) | (code == 46) {
+                    a = reference_allele.to_string().as_bytes()[0]; // whatever the reference allele is
+                }
+                a = match code {
                     65 => 65,   // A
                     97 => 65,   // a -> A
                     84 => 84,   // T
@@ -244,13 +245,12 @@ impl PileupLine {
                 } else {
                     let q = f64::powf(10.0, -(pool[j as usize] as f64 - 33.0) / 10.0); 
                     if q > *min_quality {
-                        if *remove_ns {
-                            self.read_codes[i].remove(j as usize);
-                            j -= 1;
-                        } else {
-                            self.read_codes[i][j as usize] = 78; // convert to N
-                        }
+                        self.read_codes[i][j as usize] = 78; // convert to N
+                    }
+                    if *remove_ns & (self.read_codes[i][j as usize] == 78) {
+                        self.read_codes[i].remove(j as usize);
                         self.coverages[i] = self.coverages[i] - 1; // remove the coverage for ambiguous alleles
+                        j -= 1;
                     }
                 }
                 j += 1;
@@ -263,6 +263,9 @@ impl PileupLine {
                 return Err(Error::new(ErrorKind::Other, "Filtered out."));
             }
         }
+        println!("{:?}", self);
+        println!("{:?}", remove_ns);
+        println!("######################################");
         Ok(self)
     }
 

@@ -17,7 +17,7 @@ git clone https://github.com/jeffersonfparil/poolgen.git
 3. Compile and run
 ```shell
 cd poolgen/
-cargo run -- sync2syncx -h
+cargo run -- -h
 cargo run -- sync2syncx \
                 -f ./tests/test-pileup2sync_default.sync \
                 -o ./tests/test-pileup2sync_default_sync2syncx.syncx \
