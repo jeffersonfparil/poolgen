@@ -263,9 +263,9 @@ impl PileupLine {
                 return Err(Error::new(ErrorKind::Other, "Filtered out."));
             }
         }
-        println!("{:?}", self);
-        println!("{:?}", remove_ns);
-        println!("######################################");
+        // println!("{:?}", self);
+        // println!("{:?}", remove_ns);
+        // println!("######################################");
         Ok(self)
     }
 
