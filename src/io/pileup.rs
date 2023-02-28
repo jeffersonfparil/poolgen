@@ -1,5 +1,5 @@
 use std;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, prelude::*, SeekFrom, BufReader, BufWriter};
 use std::io::{Error, ErrorKind};
 use std::str;
@@ -18,6 +18,7 @@ pub struct PileupLine {
     read_qualities: Vec<Vec<u8>>,   // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
 }
 
+// Struct of allele counts to convert reads into sync
 #[derive(Debug)]
 pub struct AlleleCounts {
     chromosome: String, // chromosome or scaffold name
@@ -30,6 +31,7 @@ pub struct AlleleCounts {
     d: Vec<u64>,        // allele DEL or deletion counts counts
 }
 
+// Struct of allele frequencies to convert reads into syncx
 #[derive(Debug)]
 pub struct AlleleFrequencies {
     chromosome: String, // chromosome or scaffold name
@@ -214,26 +216,8 @@ fn parse(line: &String) -> io::Result<Box<PileupLine>> {
     return Ok(out);
 }
 
+// Methods on a line of pileup (i.e. for a locus across pools) to filter by coverage and quality, and convert reads into counts and frequencies
 impl PileupLine {
-    fn mean_quality(&self) -> io::Result<f64> {
-        let mut s: f64 = 0.0;
-        let mut n: f64 = 0.0;
-        for q in &self.read_qualities {
-            for x in q.iter().map(|&x| f64::from(x)).collect::<Vec<f64>>().iter() {
-                // println!("{:?}", x);
-                if *x < 33.0 {
-                    return Err(Error::new(ErrorKind::Other, "Phred score out of bounds."));
-                } else {
-                    s += x - 33.0; // Assumes PHRED 33 (i.e. !=10^(-0/10) to I=10^(-40/10))
-                    n += 1.0;
-                }
-            }
-        }
-        let out = f64::powf(10.0, -s/(10.0*n));
-        // println!("{:?}", out);
-        Ok(out)
-    }
-
     fn filter(&mut self, min_coverage: &u64, min_quality: &f64, remove_ns: &bool) -> io::Result<&mut Self> {
         // Convert low quality bases into Ns
         let n = &self.read_qualities.len();
@@ -475,6 +459,14 @@ pub fn pileup2sync(fname: &String, out: &String, pool_names: &String, min_qual: 
                                     .into_iter().rev().collect::<Vec<String>>().join(".");
         out = bname.to_owned() + "-" + &time.to_string() + "." + &(file_format.to_owned());
     }
+    // Instatiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &out;
+    // let mut file_out = File::create(&out).expect(&error_writing_file);
+    let mut file_out = OpenOptions::new().create_new(true)
+                                               .write(true)
+                                               .append(false)
+                                               .open(&out)
+                                               .expect(&error_writing_file);
     // Pool names
     let mut names: Vec<String> = Vec::new();
     let file_names = match File::open(pool_names) {
@@ -518,9 +510,6 @@ pub fn pileup2sync(fname: &String, out: &String, pool_names: &String, min_qual: 
     for thread in thread_objects {
         let _ = thread.join().expect("Unknown thread error occured.");
     }
-    // Instatiate output file
-    let error_writing_file = "Unable to create file: ".to_owned() + &out;
-    let mut file_out = File::create(&out).expect(&error_writing_file);
     let _ = match &file_format[..] {
         "sync" => file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()),
         "syncx" => file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()),

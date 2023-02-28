@@ -1,7 +1,9 @@
 pub use self::{
-    exact_tests::{fisher, barnard, boschloo},
-    cmh::cmh,
+    fisher_exact_test::fisher,
+    chisq_test::chisq,
+    cmh_test::cmh,
 };
 
-mod exact_tests;
-mod cmh;
+mod fisher_exact_test;
+mod chisq_test;
+mod cmh_test;

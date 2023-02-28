@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ### Download DRGP raw sequences (List of SRA experiment IDs from: https://www.hgsc.bcm.edu/arthropods/dgrp-lines)
-cd poolgen/
+cd poolgen/tests/misc
 
 echo '#!/bin/bash
 i=$1
@@ -32,8 +32,8 @@ done
 chmod +x download_dgrp_for_parallelisation.sh
 
 ### Execute in parallel
-f="tests/misc/test_dgrp_fastq_urls.csv"
-d="tests/misc"
+f="test_dgrp_fastq_urls.csv"
+d="."
 time \
 parallel -j 32 \
 ./download_dgrp_for_parallelisation.sh \
@@ -41,6 +41,30 @@ parallel -j 32 \
     ${f} \
     ${d} \
     ::: $(seq 2 $(cat $f | wc -l))
+
+### Remove empty bam files
+for f in $(ls *.bam)
+do
+    n=$(head $f | wc -l)
+    if [ $n -lt 10 ]
+    then
+        rm $f
+    fi
+done
+
+### Index bam files
+parallel samtools index {} ::: $(ls *bam)
+
+### Remove poorly indexed files
+for f in $(ls *.bam.bai)
+do
+    # f=$(ls *.bam.bai | head -n1 | tail -n1)
+    n=$(head $f | wc -l)
+    if [ $n -lt 10 ]
+    then
+        rm ${f%.bam*}*
+    fi
+done
 
 ### Download phenotype data
 wget -O DGRP_phenotype_lifetime_fecundity.tmp.xlsx  \
@@ -51,37 +75,52 @@ tail -n+3 DGRP_phenotype_lifetime_fecundity.tmp.csv | \
     cut -d',' -f1,13 > DGRP_phenotype_lifetime_fecundity.csv
 rm *.tmp*
 
-### Determin the pooling based on the phenotypes
-R
-args = commandArgs(trailingOnly=TRUE)
-args = c("DGRP_phenotype_lifetime_fecundity.csv", "1", "2", "Lifetime_fecundity", "5", "0.2", "0.2", "0.2", "0.2", "0.2")
-fname = args[1]
-line_col = as.numeric(args[2])
-phen_col = as.numeric(args[3])
-phen_name = args[4]
-n_pools = as.numeric(args[5])
-pool_sizes = as.numeric(args[6:(n_pools+5)])
+### Download the GWAS results using individual genotype data
+wget https://static-content.springer.com/esm/art%3A10.1038%2Fncomms5338/MediaObjects/41467_2014_BFncomms5338_MOESM1247_ESM.xlsx
 
-dat = read.csv(fname, header=FALSE)
-dat = data.frame(Line=dat[,line_col], Pheno=dat[,phen_col])
-colnames(dat) = c("Line", phen_name)
-dat = dat[order(dat[,2], decreasing=FALSE), ]
-n = nrow(dat)
-pool_sizes = cumsum(floor(pool_sizes * n))
-if (pool_sizes[n_pools] < n) {
-    idx = ceiling(n_pools/2)
-    add = n - pool_sizes[n_pools]
-    pool_sizes[idx:n_pools] = pool_sizes[idx:n_pools] + add
-}
+### Determine the pooling based on the phenotypes
+Rscript test_dgrp_pooling.r DGRP_phenotype_lifetime_fecundity.csv \
+                            1 \
+                            2 \
+                            Lifetime_fecundity \
+                            5 \
+                            0.2 0.2 0.2 0.2 0.2
 
-
-
+### Fix name prefix from RAL to DGRP
+for f in $(ls *_Pool_*_bam_list.txt)
+do
+    sed -i 's/RAL/DGRP/g' $f
+done
 
 ### Merge bam files so that each pool correspond to trait-based groupings 
-for name in $(ls ${d} | cut -d'-' -f1 | sort | uniq)
+echo '#!/bin/bash
+f=$1
+i=$2
+n=$3
+# f=$(ls *_Pool_*_bam_list.txt | head -n3 | tail -n1)
+# i=2
+# n=100000
+wild_bam=$(head -n${i} $f | tail -n1)
+bam=$(ls ${wild_bam} | head -n1) ### use only 1 bam per line
+echo "##########################"
+echo $bam
+frac=$( samtools idxstats ${bam} | cut -f3 | awk -v n=$n @BEGIN {total=0} {total += $1} END {frac=n/total; if (frac > 1) {print 1} else {print frac}}@ )
+samtools view -bs ${frac} ${bam} > ${bam%.bam*}-subsample.bam
+' | sed "s/@/'/g" > subsample_parallel.sh
+chmod +x subsample_parallel.sh
+n=100000
+for f in $(ls *_Pool_*_bam_list.txt)
 do
+    # f=$(ls *_Pool_*_bam_list.txt | head -n3 | tail -n1)
+    name=${f%_bam_*}
+    ### Downsample
+    parallel ./subsample_parallel.sh ${f} {} ${n} ::: $(seq 1 $(cat $f | wc -l))
+    ### Merge
     samtools merge \
         ${name}.bam \
-        ${name}-*.bam
+        $(cat $f | sed 's/*.bam/*-subsample.bam/g')\
+    ### Cleanup
+    rm $(cat $f | sed 's/*.bam/*-subsample.bam/g')
 done
+
 

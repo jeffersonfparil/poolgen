@@ -10,7 +10,7 @@ mod tables;
        about="Quantitative and population genetics analyses using pool sequencing data.",
        long_about="Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust.")]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "load")
+    /// Analysis to perform (i.e. "pileup2sync", "sync2syncx", "load", "fisher_exact_test")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -63,6 +63,8 @@ fn main() {
         println!("{:?}", out[1]);
         println!("{:?}", out[1000]);
     } else if args.analysis == String::from("fisher_exact_test") {
+        let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
+    } else if args.analysis == String::from("chisq_test") {
         let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
     }
 }

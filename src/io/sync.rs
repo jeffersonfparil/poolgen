@@ -1,5 +1,5 @@
 use std;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, prelude::*, SeekFrom, BufReader, BufWriter};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::{Error, ErrorKind};
@@ -102,15 +102,37 @@ impl Sync for Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> 
     }
 }
 
+fn parse_sync_line (reader: &mut BufReader<File>) -> Option<Vec<String>> {
+    // Instatiate the line
+    let mut line = String::new();
+    // Read the line which automatically movesthe cursor position to the next line
+    let _ = reader.read_line(&mut line).unwrap();
+    // Remove trailing newline character in Unix-like (\n) and Windows (\r)
+    if line.ends_with('\n') {
+        line.pop();
+        if line.ends_with('\r') {
+            line.pop();
+        }
+    }
+    // println!("i: {} | {:?}", i, line);
+    // Ignore commented-out lines (i.e. '#' => 35)
+    if line.as_bytes()[0] == 35 as u8 {
+        return None
+    }
+    // Parse the sync line
+    let vec_line = line.split("\t").collect::<Vec<&str>>().into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+    Some(vec_line)
+}
+
 fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usize, min_cov: &u64) -> io::Result<String> {
     // Add leading zeroes to the start-of-the-chunk index so we can propoerly sort the output files after parallele processing    
     let mut start_string = start.to_string();
-    for i in 0..(n_digits - start_string.len()) {
+    for _i in 0..(n_digits - start_string.len()) {
         start_string = "0".to_owned() + &start_string;
     }
     // Add leading zeroes to the end-of-the-chunk index so we can propoerly sort the output files after parallele processing
     let mut end_string = end.to_string();
-    for i in 0..(n_digits - end_string.len()) {
+    for _i in 0..(n_digits - end_string.len()) {
         end_string = "0".to_owned() + &end_string;
     }
     // Output file name for the current chunk
@@ -128,60 +150,44 @@ fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usiz
     let mut i: u64 = *start;
     reader.seek(SeekFrom::Start(*start)).unwrap();
     // Read and parse until the end of the chunk
+    // Instantiate the variables to be reused in each loop
+    let mut chr: String;
+    let mut pos: u64;
+    let mut vec_line: Vec<String>;
+    let mut ref_allele: String;
     'lines: while i < *end {
-        // Instantiate the line
-        let mut line = String::new();
-        // Read the line which automatically movesthe cursor position to the next line
-        let _ = reader.read_line(&mut line).unwrap();
-        // Find the new cursor position
-        i = reader.seek(SeekFrom::Current(0)).unwrap();
-        // Remove trailing newline character in Unix-like (\n) and Windows (\r)
-        if line.ends_with('\n') {
-            line.pop();
-            if line.ends_with('\r') {
-                line.pop();
-            }
-        }
-        // println!("i: {} | {:?}", i, line);
-        // Ignore commented-out lines (i.e. '#' => 35)
-        if line.as_bytes()[0] == 35 as u8 {
-            continue
-        }
-        // Parse the sync line
-        let vec_line = line.split("\t").collect::<Vec<&str>>();
-        let chr = vec_line[0].to_owned();
-        let pos = match vec_line[1].parse::<u64>() {
+        vec_line = match parse_sync_line(&mut reader) {
+            None => continue 'lines,
+            Some(x) => x,
+        };
+        chr = vec_line[0].to_owned();
+        pos = match vec_line[1].parse::<u64>() {
             Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Please check format of the file: ".to_owned() + &fname + " as the position is not a valid integer (i.e. u64) at the line whose first 20 characters are: " + &line[0..20] + ".")),
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Please check format of the file: ".to_owned() + &fname + " as the position is not a valid integer (i.e. u64) at the line whose first 20 characters are: " + &vec_line.join("\t")[0..20] + ".")),
         };
-        let ref_allele = match vec_line[2] {
-            "A" => "A".to_owned(),
-            "T" => "T".to_owned(),
-            "C" => "C".to_owned(),
-            "G" => "G".to_owned(),
-            _ => return Err(Error::new(ErrorKind::Other, "Please check format of the file: ".to_owned() + &fname + " as the reference allele is neither A, T, C, nor G, at the line whose first 20 characters are: " + &line[0..20] + ".")),
-        };
+        ref_allele = vec_line[2].clone();
         // Read the allele counts and convert them into frequencies excluding the Ns
-        let n_pools = vec_line.len();
+        let mut coverage: f64;
         let mut a: Vec<f64> = Vec::new();
         let mut t: Vec<f64> = Vec::new();
         let mut c: Vec<f64> = Vec::new();
         let mut g: Vec<f64> = Vec::new();
         let mut d: Vec<f64> = Vec::new();
-        for i in 3..n_pools {
-            let counts = vec_line[i]
+        for j in 3..vec_line.len() {
+            let counts = vec_line[j]
                                                     .split(":")
                                                     .collect::<Vec<&str>>()
                                                     .into_iter()
-                                                    .map(|x| x.to_string().parse::<f64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &line[0..20] + ".")))
+                                                    .map(|x| x.to_string().parse::<f64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &vec_line.join("\t")[0..20] + ".")))
                                                     .collect::<Vec<f64>>();
-            let sum = counts[0] + counts[1] + counts[2] + counts[3] + counts[5]; // Exclude Ns
-            if sum >= *min_cov as f64 {
-                a.push(counts[0] / sum);
-                t.push(counts[1] / sum);
-                c.push(counts[2] / sum);
-                g.push(counts[3] / sum);
-                d.push(counts[5] / sum);
+            coverage = counts[0] + counts[1] + counts[2] + counts[3] + counts[5]; // Exclude Ns
+            if coverage >= *min_cov as f64 {
+                a.push(counts[0] / coverage);
+                t.push(counts[1] / coverage);
+                c.push(counts[2] / coverage);
+                g.push(counts[3] / coverage);
+                // Exclude Ns
+                d.push(counts[5] / coverage);
             } else {
                 continue 'lines;
             }
@@ -226,6 +232,8 @@ fn sync2syncx_per_chunk (fname: &String, start: &u64, end: &u64, n_digits: &usiz
         } else {
             continue;
         }
+        // Find the new cursor position
+        i = reader.seek(SeekFrom::Current(0)).unwrap();
     }
     Ok(out)
 }
@@ -239,7 +247,13 @@ pub fn sync2syncx(fname: &String, out: &String, min_cov: &u64, n_threads: &u64) 
                         .join(".");
         out = bname + "-" + &time.to_string() + ".syncx";
     }
-
+    // Instatiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &out;
+    let mut file_out = OpenOptions::new().create_new(true)
+                                               .write(true)
+                                               .append(false)
+                                               .open(&out)
+                                               .expect(&error_writing_file);
     let chunks = crate::io::find_file_splits(fname, n_threads).unwrap();
     let n_digits = chunks[*n_threads as usize].to_string().len();
     println!("Chunks: {:?}", chunks);
@@ -267,10 +281,7 @@ pub fn sync2syncx(fname: &String, out: &String, min_cov: &u64, n_threads: &u64) 
     for thread in thread_objects {
         let _ = thread.join().expect("Unknown thread error occured.");
     }
-    // Instatiate output file
-    let error_writing_file = "Unable to create file: ".to_owned() + &out;
-    let mut file_out = File::create(&out).expect(&error_writing_file);
-    // But first, extract header lines, i.e. starting with '#' => 35 ascii u8 code
+    // Extract header lines, i.e. starting with '#' => 35 ascii u8 code
     let file_in = File::open(fname).unwrap();
     let mut file_in = BufReader::new(file_in);
     let mut header_end = false;
