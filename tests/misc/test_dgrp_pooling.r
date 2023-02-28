@@ -25,6 +25,7 @@ dat = dat[dat$Line != "RAL_852", ]
 dat = dat[dat$Line != "RAL_476", ]
 dat = dat[dat$Line != "RAL_313", ]
 dat = dat[dat$Line != "RAL_589", ]
+dat = dat[dat$Line != "RAL_378", ]
 
 n = nrow(dat)
 pool_sizes = cumsum(floor(pool_sizes * n))
