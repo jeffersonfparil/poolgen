@@ -65,6 +65,6 @@ fn main() {
     } else if args.analysis == String::from("fisher_exact_test") {
         let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
     } else if args.analysis == String::from("chisq_test") {
-        let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
+        let out = tables::chisq(&args.fname, &args.output, &args.n_threads).unwrap();
     }
 }

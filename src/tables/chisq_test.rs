@@ -9,6 +9,8 @@ use crate::io::sync::Sync;
 use crate::io::sync::load;
 use crate::io::sync::AlleleCountsOrFrequencies;
 
+use statrs::distribution::{ChiSquared, ContinuousCDF};
+
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct SummaryStatistics {
     coordinate: String,
@@ -18,21 +20,32 @@ pub struct SummaryStatistics {
     statistic: f64,
 }
 
-fn chisq_base(X: &DMatrix<f64>) -> io::Result<f64> {
-    // Instatiate the counts matrix
-    let (n, m) = X.shape();
-    let mut C = DMatrix::from_element(n, m, 0 as f64);
-    // Find the minimum frequency to get the maximum natural number restricted by f64, i.e. n=34 if n! > f64::MAX
-    let mut x = X.iter()
-                                            .filter(|a| *a > &0.0)
-                                            .into_iter()
-                                            .map(|a| a.to_owned())
-                                            .collect::<Vec<f64>>();
-    // Return error if we have no coverage
-    if x.len() == 0 {
-        return Err(Error::new(ErrorKind::Other, "No coverage"))
+fn chisq_base(X: &DMatrix<f64>) -> Option<f64> {
+    // Check if we have a table and if we have a vector return None
+    let (r, c) =  X.shape();
+    let t = (r as f64) * (c as f64);
+    let n = X.sum();
+    if (c == 1) | (n == 0.0) {
+        return None
     }
-    Ok(0.0)
+    // Marginal frequencies
+    let row_marginals = X.column_sum().clone_owned() / n;
+    let col_marginals = X.row_sum().clone_owned() / n;
+    // println!("X = {:?}", X);
+    // println!("row_marginals = {:?}", row_marginals);
+    // println!("col_marginals = {:?}", col_marginals);
+    let mut denominator: f64 = 0.0;
+    for i in 0..r {
+        for j in 0..c {
+            denominator += f64::powf(X[(i,j)] - (row_marginals[i] * col_marginals[j]), 2.0);
+        }
+    }
+    let chi2 = denominator / t;
+    // println!("Demom={:?}; r={:?}; c={:?}; chisq= {:?}; t={:?}", denominator, r, c, chi2, t);
+    let d = ChiSquared::new(t - 1.0).unwrap();
+    let pval = d.cdf(chi2);
+    // println!("pval = {:?}", pval);
+    Some(pval)
 }
 
 pub fn chisq(fname: &String, out: &String, n_threads: &u64) -> io::Result<String> {
@@ -63,8 +76,8 @@ pub fn chisq(fname: &String, out: &String, n_threads: &u64) -> io::Result<String
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
             let vec_out_per_thread = match chisq_base(&X) {
-                Ok(x) => x,
-                Err(_) => 1.0,
+                Some(x) => x,
+                None => 1.0,
             };
             // println!("OUT: {:?}", vec_out_per_thread);
             thread_ouputs_clone.lock().unwrap().push(SummaryStatistics{coordinate: idx,
