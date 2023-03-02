@@ -66,5 +66,8 @@ fn main() {
         let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
     } else if args.analysis == String::from("chisq_test") {
         let out = tables::chisq(&args.fname, &args.output, &args.n_threads).unwrap();
+    } else if args.analysis == String::from("test") {
+        let test = io::load_phen(&args.fname);
+        println!("TEST: {:?}", test);
     }
 }

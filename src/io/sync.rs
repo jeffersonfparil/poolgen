@@ -397,9 +397,9 @@ fn load_per_chunk(fname: &String, format: &String, n_pools: &usize, start: &u64,
             return Err(Error::new(ErrorKind::Other, "Unrecognised format: ".to_owned() + format + ". Please check the input file: " + fname + " at the line whose first 20 characters are: " + &line[0..20]));
         }
         // Reshape the vector into a matrix of counts where each row is a pool and each column is an allele excluding Ns
-        let mut mat_counts_or_freqs = DMatrix::from_row_slice(*n_pools, p, &vec_counts_or_freqs); // generates the matrix column-wise
+        let mut mat_counts_or_freqs = DMatrix::from_row_slice(*n_pools, p, &vec_counts_or_freqs); // generates the matrix row-wise
         if format == &"syncx".to_owned() {
-            mat_counts_or_freqs = DMatrix::from_column_slice(*n_pools, p, &vec_counts_or_freqs); // generates the matrix row-wise, i.e. n_pools x 5 alleles
+            mat_counts_or_freqs = DMatrix::from_column_slice(*n_pools, p, &vec_counts_or_freqs); // generates the matrix column-wise, i.e. n_pools x 5 alleles
         }
         // Remove non-polymorphic alleles [counts: axn * ones: nx1 = sum: ax1]
         let var = mat_counts_or_freqs.row_variance();
