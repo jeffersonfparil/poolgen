@@ -229,6 +229,113 @@ pub fn fisher(fname: &String, out: &String, n_threads: &u64) -> io::Result<Strin
     Ok(out)
 }
 
-pub fn fisher_base_new(vec_acf: &Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
-    Ok(0)
-}
+// pub fn fisher_base_new(acf: &AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>) -> io::Result<String> {
+//     acf.counts_to_frequencies().unwrap();
+//     let idx = acf[i].coordinate.clone();
+//     let chr = acf[i].chromosome.clone();
+//     let pos = acf[i].position.clone();
+//     let ale = acf[i].alleles_vector.clone().join("");
+//     let X = acf[i].matrix.clone();
+
+//     let (n, m) = X.shape();
+//     let mut C = DMatrix::from_element(n, m, 0 as f64);
+//     // Find the minimum frequency to get the maximum natural number restricted by f64, i.e. n=34 if n! > f64::MAX
+//     let mut x = X.iter()
+//                                             .filter(|a| *a > &0.0)
+//                                             .into_iter()
+//                                             .map(|a| a.to_owned())
+//                                             .collect::<Vec<f64>>();
+//     // Return error if we have no coverage
+//     if x.len() == 0 {
+//         return Err(Error::new(ErrorKind::Other, "No coverage"))
+//     }
+//     x.sort_by(|a, b| a.partial_cmp(&b).unwrap());
+//     let mut s = (1.0 / x[0]).ceil() as usize;
+//     s = match s < 34  {
+//         true => s,
+//         false => 34,
+//     };
+//     // Populate the counts matrix
+//     for i in 0..n {
+//         for j in 0..m {
+//             C[(i, j)] = (s as f64 * X[(i, j)]).ceil() as f64;
+//         }
+//     }
+//     // println!("COUNTS: {:?}", C);
+//     // Log-Product of the marginal sums (where C.row_sum() correspond to the the column marginal sums and vice versa)
+//     let row_sums = C.column_sum().clone_owned();
+//     let col_sums = C.row_sum().clone_owned();
+//     let mut log_prod_fac_marginal_sums = 1 as f64;
+//     for r in row_sums.iter() {
+//         log_prod_fac_marginal_sums = log_prod_fac_marginal_sums + factorial_log10(*r).unwrap();
+//     }
+//     for c in col_sums.iter() {
+//         log_prod_fac_marginal_sums = log_prod_fac_marginal_sums + factorial_log10(*c).unwrap();
+//     }
+//     // Define the observed hypergeometric ratio, i.e. p of the observed data
+//     let p_observed = hypergeom_ratio(&C, &log_prod_fac_marginal_sums).unwrap();
+//     // Iterate across all possible combinations of counts with the same marginal sums
+//     // println!("C shape: {:?}", C.shape());
+//     // println!("row_sums: {:?}", row_sums);
+//     // println!("col_sums: {:?}", col_sums);
+//     // println!("n: {:?}", n);
+//     // println!("m: {:?}", m);
+//     // println!("###################################################");
+
+//     let mut p_extremes: f64 = 0.0;
+//     let mut max: f64;
+//     for max_i in 0..n {
+//         for max_j in 0..m {
+//             for i in 0..n {
+//                 for j in 0..m {
+//                     max = vec![(row_sums[(i, 0)] - C.index((i, 0..j)).sum().ceil()) as usize,
+//                                (col_sums[(0, j)] - C.index((0..i, j)).sum().ceil()) as usize]
+//                                .into_iter().min().unwrap() as f64;
+//                     if (i==(n-1)) | (j==(m-1)) {
+//                         C[(i,j)] = max;
+//                     } else if (i < max_i) | (j < max_j) {
+//                         C[(i,j)] = 0.0;
+//                     } else {
+//                         C[(i,j)] = max;
+//                     }
+//                     // println!("i={:?}; max_i={:?}", i, max_i);
+//                     // println!("j={:?}; max_j={:?}", j, max_j);
+//                     // println!("max={:?}; C[(i,j)]={:?}", max, C[(i,j)]);
+//                 }
+//             }
+//             // println!("NEW C: {:?}", C);
+//             let mut j: usize;
+//             let mut i: usize;
+//             for inv_j in 0..m {
+//                 for inv_i in 0..n {
+//                     j = m - (inv_j+1);
+//                     i = n - (inv_i+1);
+//                     max = vec![(row_sums[(i, 0)] - C.index((i, 0..m)).sum().ceil()) as usize,
+//                                (col_sums[(0, j)] - C.index((0..n, j)).sum().ceil()) as usize]
+//                                .into_iter().min().unwrap() as f64;
+//                     if max > 0.0 {
+//                         C[(i,j)] = max;
+//                     }
+//                     // println!("i={:?}; max_i={:?}", i, max_i);
+//                     // println!("j={:?}; max_j={:?}", j, max_j);
+//                     // println!("max={:?}; C[(i,j)]={:?}", max, C[(i,j)]);
+//                 }
+//             }
+//             // Make sure we kept the marginal sums constant
+//             // println!("NEW C: {:?}", C);
+//             // println!("row_sum: {:?}", C.column_sum().clone_owned());
+//             // println!("col_sum: {:?}", C.row_sum().clone_owned());
+//             assert!(row_sums == C.column_sum().clone_owned());
+//             assert!(col_sums == C.row_sum().clone_owned());
+//             // Calculate hypergeometric ratio
+//             p_extremes += hypergeom_ratio(&C, &log_prod_fac_marginal_sums).unwrap();
+//             // println!("New C: {:?}", C);
+//             // println!("row_sums: {:?}", row_sums);
+//             // println!("col_sums: {:?}", col_sums);
+//             // println!("p_out: {:?}", p_extremes);
+//         }
+//     }
+//     Ok(p_observed + p_extremes)
+
+//     Ok("0")
+// }

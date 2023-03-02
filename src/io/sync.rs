@@ -39,6 +39,62 @@ pub trait Sync {
                                                                     )>;
 }
 
+// impl Sync for AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn> {
+//     fn counts_to_frequencies(&mut self) -> io::Result<&mut Self> {
+//         let n = self.matrix.nrows();
+//         let p = self.matrix.ncols();
+//         for i in 0..n {
+//             let s = self.matrix.row(i).sum();
+//             for j in 0..p {
+//                 self.matrix[(i, j)] = self.matrix[(i, j)] / s;
+//                 if f64::is_nan(self.matrix[(i, j)]) {
+//                     self.matrix[(i, j)] = 0.0;
+//                 }
+//             }
+//         }
+//         Ok(self)
+//     }
+
+//     fn filter(&mut self, maf: f64) -> Option<&mut Self> {
+//         let a = self.clone();
+//         'per_allele: for j in 0..a.alleles_vector.len() {
+//             // println!("i={:?}; n={:?}", i, n);
+//             let _ = match (a.matrix.column(j).mean() < maf) | (a.matrix.column(j).mean() > (1.0-maf)) {
+//                 true => return None,
+//                 false => 0,
+//             };
+//         }
+//         Some(self)
+//     }
+    
+//     fn convert_to_matrix(&self, keep_n_minus_1: bool) -> io::Result<(Vec<String>,Vec<u64>,Vec<String>,nalgebra::Matrix<f64, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<f64, nalgebra::Dyn, nalgebra::Dyn>>)> {
+//         // Extract allele counts or freqs matrix
+//         let mut chromosomes: Vec<String> = Vec::new();
+//         let mut positions: Vec<u64> = Vec::new();
+//         let mut alleles: Vec<String> = Vec::new();
+//         let mut X: nalgebra::Matrix<f64, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<f64, nalgebra::Dyn, nalgebra::Dyn>> = self[0].matrix.clone();
+//         for i in 1..self.len() {
+//             let v = &self[i];
+//             let mut p = v.alleles_vector.len();
+//             if keep_n_minus_1 & (p>1){
+//                 p -= 1;
+//             }
+//             for j in 0..p {
+//                 let a = v.alleles_vector[j].clone();
+//                 chromosomes.push(v.chromosome.to_owned());
+//                 positions.push(v.position);
+//                 alleles.push(a);
+//                 X = X.insert_column(i, 0.0);
+//                 X.set_column(i, &v.matrix.column(j));
+//             }
+//         }
+//         // println!("X: {:?}", X);
+//         // println!("X0: {:?}", X.column(0));
+//         // println!("X1: {:?}", X.column(100));
+//         Ok((chromosomes, positions, alleles, X))
+//     }
+// }
+
 impl Sync for Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> {
     fn counts_to_frequencies(&mut self) -> io::Result<&mut Self> {
         for a in self.into_iter() {
@@ -544,16 +600,36 @@ pub fn load(fname: &String, n_threads: &u64) -> io::Result<Vec<AlleleCountsOrFre
     Ok(vec_acf)
 }
 
-pub fn loader_with_fun<F>(fname: &String, format: &String, n_pools: &usize, start: &u64, end: &u64, function: F) -> io::Result<Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>> 
+pub fn sync_analyser_and_csv_write_single_thread<F>(fname: &String, format: &String, n_pools: &usize, start: &u64, end: &u64, n_digits: &usize, function: F) -> io::Result<String> 
 where
-    F: Fn(&Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>),
+    F: Fn(&AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>) -> io::Result<String>,
  {
+    // Add leading zeroes to the start-of-the-chunk index so we can propoerly sort the output files after parallele processing    
+    let mut start_string = start.to_string();
+    for _i in 0..(n_digits - start_string.len()) {
+        start_string = "0".to_owned() + &start_string;
+    }
+    // Add leading zeroes to the end-of-the-chunk index so we can propoerly sort the output files after parallele processing
+    let mut end_string = end.to_string();
+    for _i in 0..(n_digits - end_string.len()) {
+        end_string = "0".to_owned() + &end_string;
+    }
+    // Output file name for the current chunk
+    let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".tmp";
+    let out = fname_out.clone();
+    let error_writing_file = "Unable to create file: ".to_owned() + &fname_out;
+    let error_writing_line = "Unable to write line into file: ".to_owned() + &fname_out;
+    // println!("{}", fname_out);
+    let file_out = File::create(fname_out).expect(&error_writing_file);
+    let mut file_out = BufWriter::new(file_out);
+    // Input file chunk
     let file = File::open(fname).unwrap();
     let mut reader = BufReader::new(file);
     reader.seek(SeekFrom::Start(*start)).unwrap();
     let mut i = *start;
-     // Instantiate vector of allele counts across loci
-    let mut vec_allele_out: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> = Vec::new();
+    //  // Instantiate vector of allele counts across loci
+    // let mut vec_allele_out: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> = Vec::new();
+    let mut acf: AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>;
     while i < *end {
         let mut line = String::new();
         let _ = reader.read_line(&mut line).unwrap();
@@ -649,11 +725,14 @@ where
         // Put everything together into the allele counts sruct
         let coordinate = chr.to_owned() + "-" + &pos.to_string();
         // println!("COOR: {:?}", coordinate);
-        vec_allele_out.push(AlleleCountsOrFrequencies {coordinate: coordinate, chromosome: chr, position: pos, alleles_vector: vec_alleles, matrix: mat_counts_or_freqs});
-        let out = function(&vec_allele_out);
+        // vec_allele_out.push(AlleleCountsOrFrequencies {coordinate: coordinate, chromosome: chr, position: pos, alleles_vector: vec_alleles, matrix: mat_counts_or_freqs});
+        acf = AlleleCountsOrFrequencies {coordinate: coordinate, chromosome: chr, position: pos, alleles_vector: vec_alleles, matrix: mat_counts_or_freqs};
+        let write_me = function(&acf).unwrap();
+        file_out.write_all(write_me.as_bytes()).expect(&error_writing_line);
+
     }
     // println!("OUT: {:?}", vec_allele_out[vec_allele_out.len()-1]);
     // let x = vec_allele_out[vec_allele_out.len()-1].matrix.clone() * DVector::from_element(3, 1.0);
     // println!("x: {:?}", x);
-    Ok(vec_allele_out)
+    Ok(out)
 }
