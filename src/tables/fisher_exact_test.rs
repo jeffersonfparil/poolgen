@@ -228,3 +228,7 @@ pub fn fisher(fname: &String, out: &String, n_threads: &u64) -> io::Result<Strin
     }
     Ok(out)
 }
+
+pub fn fisher_base_new(vec_acf: &Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>) -> io::Result<i32> {
+    Ok(0)
+}

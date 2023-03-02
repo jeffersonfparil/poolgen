@@ -543,3 +543,117 @@ pub fn load(fname: &String, n_threads: &u64) -> io::Result<Vec<AlleleCountsOrFre
 
     Ok(vec_acf)
 }
+
+pub fn loader_with_fun<F>(fname: &String, format: &String, n_pools: &usize, start: &u64, end: &u64, function: F) -> io::Result<Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>> 
+where
+    F: Fn(&Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>>),
+ {
+    let file = File::open(fname).unwrap();
+    let mut reader = BufReader::new(file);
+    reader.seek(SeekFrom::Start(*start)).unwrap();
+    let mut i = *start;
+     // Instantiate vector of allele counts across loci
+    let mut vec_allele_out: Vec<AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>> = Vec::new();
+    while i < *end {
+        let mut line = String::new();
+        let _ = reader.read_line(&mut line).unwrap();
+        // Find the new cursor position
+        i = reader.seek(SeekFrom::Current(0)).unwrap();
+        // Remove trailing newline character in Unix-like (\n) and Windows (\r)
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
+        // println!("i: {} | {:?}", i, line);
+        // Ignore commented-out lines (i.e. '#' => 35)
+        if line.as_bytes()[0] == 35 as u8 {
+            continue
+        }
+        // Split and extract genome coordinate
+        let vec_line = line.split("\t").collect::<Vec<&str>>();
+        let chr = vec_line[0].to_owned();
+        let pos = match vec_line[1].parse::<u64>() {
+            Ok(x) => x,
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Please check format of the file: ".to_owned() + &fname + " as the position is not a valid integer (i.e. u64) at the line whose first 20 characters are: " + &line[0..20] + ".")),
+        };
+        // Load counts or frequencies into a vector
+        let p = vec_line.len() - (3+0);
+        let mut vec_counts_or_freqs: Vec<f64> = Vec::new();
+        let mut alleles: Vec<String> = Vec::new();
+        if format == &"sync".to_owned() {
+            // Extract and merge alleles IDs and counts per pool into a single vector
+            let vec_alleles: Vec<String> = vec!["A", "T", "C", "G", "D"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(); // Exclude Ns as they are filtered out or ambiguous reads
+            for j in 3..(3+p) {
+                alleles.push(vec_alleles[j-3].to_owned());
+                let counts = vec_line[j]
+                                    .split(":")
+                                    .collect::<Vec<&str>>()
+                                    .into_iter()
+                                    .map(|x| x.to_string().parse::<f64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &line[0..20] + ".")))
+                                    .collect::<Vec<f64>>();
+                for k in 0..counts.len() {
+                    if k == 4 {
+                        continue;
+                    }
+                    vec_counts_or_freqs.push(counts[k]);
+                }
+            }
+        } else if format == &"syncx".to_owned() {
+            // Extract and merge alleles IDs and frequencies per pool into a single vector
+            for j in 3..(3+p) {
+                // Extract allele
+                let vec_line_parse = vec_line[j].split("|").collect::<Vec<&str>>();
+                alleles.push(vec_line_parse[0].to_owned());
+                let freqs = vec_line_parse[1]
+                                    .split(":")
+                                    .collect::<Vec<&str>>()
+                                    .into_iter()
+                                    .map(|x| x.to_string().parse::<f64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &line[0..20] + ".")))
+                                    .collect::<Vec<f64>>();
+                // println!("line: {:?}", freqs);
+                for k in 0..freqs.len() {
+                    vec_counts_or_freqs.push(freqs[k]);
+                }
+                // println!("vec_freqs: {:?}", vec_counts_or_freqs);
+                // println!("n_pools: {:?}", n_pools);
+                // println!("p: {:?}", p);
+            }
+        } else {
+            return Err(Error::new(ErrorKind::Other, "Unrecognised format: ".to_owned() + format + ". Please check the input file: " + fname + " at the line whose first 20 characters are: " + &line[0..20]));
+        }
+        // Reshape the vector into a matrix of counts where each row is a pool and each column is an allele excluding Ns
+        let mut mat_counts_or_freqs = DMatrix::from_row_slice(*n_pools, p, &vec_counts_or_freqs); // generates the matrix row-wise
+        if format == &"syncx".to_owned() {
+            mat_counts_or_freqs = DMatrix::from_column_slice(*n_pools, p, &vec_counts_or_freqs); // generates the matrix column-wise, i.e. n_pools x 5 alleles
+        }
+        // Remove non-polymorphic alleles [counts: axn * ones: nx1 = sum: ax1]
+        let var = mat_counts_or_freqs.row_variance();
+        // println!("#################################");
+        // println!("LINE: {:?}", line);
+        // println!("p: {:?}", p);
+        // println!("MAT: {:?}", mat_counts_or_freqs);
+        // println!("VAR: {:?}", var);
+        let mut vec_alleles: Vec<String> = Vec::new();
+        let mut idx_counter = 0;
+        for j in 0..p {
+            if var[j] == 0.0 {
+                mat_counts_or_freqs = mat_counts_or_freqs.clone().remove_columns(j-idx_counter, 1);
+                idx_counter += 1;
+            } else {
+                vec_alleles.push(alleles[j].clone());
+            }
+        }
+        // println!("Counts term: {:?}", counts);            
+        // Put everything together into the allele counts sruct
+        let coordinate = chr.to_owned() + "-" + &pos.to_string();
+        // println!("COOR: {:?}", coordinate);
+        vec_allele_out.push(AlleleCountsOrFrequencies {coordinate: coordinate, chromosome: chr, position: pos, alleles_vector: vec_alleles, matrix: mat_counts_or_freqs});
+        let out = function(&vec_allele_out);
+    }
+    // println!("OUT: {:?}", vec_allele_out[vec_allele_out.len()-1]);
+    // let x = vec_allele_out[vec_allele_out.len()-1].matrix.clone() * DVector::from_element(3, 1.0);
+    // println!("x: {:?}", x);
+    Ok(vec_allele_out)
+}

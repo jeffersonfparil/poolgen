@@ -57,17 +57,13 @@ fn main() {
                                          &args.min_cov,
                                          &args.n_threads).unwrap();
         println!("{:?}", out);
-    } else if args.analysis == String::from("load") {
-        let out = io::load(&args.fname, &args.n_threads).unwrap();
-        println!("{:?}", out[0]);
-        println!("{:?}", out[1]);
-        println!("{:?}", out[1000]);
     } else if args.analysis == String::from("fisher_exact_test") {
         let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
     } else if args.analysis == String::from("chisq_test") {
         let out = tables::chisq(&args.fname, &args.output, &args.n_threads).unwrap();
     } else if args.analysis == String::from("test") {
         let test = io::load_phen(&args.fname);
+        // let test = loader_with_fun(&args.fname, &String::From(".sync"), );
         println!("TEST: {:?}", test);
     }
 }
