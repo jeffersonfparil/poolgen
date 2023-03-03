@@ -9,13 +9,12 @@ pub struct Phenotypes <T, R: nalgebra::Dim, C: nalgebra::Dim> {
     pub phen: nalgebra::Matrix<T, nalgebra::Dyn, nalgebra::Dyn, nalgebra::VecStorage<T, R, C>>,
 }
 
-pub fn load_phen(fname: &String) -> io::Result<Phenotypes <f64, nalgebra::Dyn, nalgebra::Dyn>> {
-
-    // Other parameters
-    let delim: &String = &String::from(",");
-    let header: &bool = &true;
-    let name_col: usize = 0;
-    let phen_col: Vec<usize> = vec![1, 2];
+pub fn load_phen(fname: &String, delim: &String, header: &bool, name_col: &usize, phen_col: &Vec<usize>) -> io::Result<Phenotypes <f64, nalgebra::Dyn, nalgebra::Dyn>> {
+    // // Other parameters
+    // let delim: &String = &String::from(",");
+    // let header: &bool = &true;
+    // let name_col: &usize = &0;
+    // let phen_col: &Vec<usize> = &vec![1, 2];
 
     // Determine the format of the input file
     let file = File::open(fname).unwrap();
@@ -31,7 +30,7 @@ pub fn load_phen(fname: &String) -> io::Result<Phenotypes <f64, nalgebra::Dyn, n
     for l in all_lines {
         line = l.unwrap().split(delim).collect::<Vec<&str>>().into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
         println!("LINE: {:?}", line);
-        name.push(line[name_col].clone());
+        name.push(line[*name_col].clone());
         for c in phen_col.iter() {
             let x = line[*c].parse::<f64>().expect(&("Check if column ".to_owned() + &(c + 1).to_string() + " is a valid number or if there are leading or trailing whitespace in line: " + &line.join(",")));
             println!("x={:?}", x);

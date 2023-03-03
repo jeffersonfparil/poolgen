@@ -2,6 +2,7 @@
 use clap::Parser;
 mod io;
 mod tables;
+mod regression;
 
 // Instatiate arguments struct
 #[derive(Parser, Debug)]
@@ -33,6 +34,21 @@ struct Args {
     /// Format of the output file: sync or syncx
     #[clap(long, default_value="sync")]
     file_format: String,
+    /// Input phenotype file: csv or tsv or any delimited file
+    #[clap(long, default_value="")]
+    phen_fname: String,
+    /// Delimiter of the input phenotype file: comma, tab, etc...
+    #[clap(long, default_value=",")]
+    phen_delim: String,
+    /// Does the input phenotype file have a header?
+    #[clap(long, default_value_t=true)]
+    phen_header: bool,
+    /// Column index containing the names or IDs of the indivudals in the input phenotype file: 0, 1, 2, ...
+    #[clap(long, default_value_t=0)]
+    phen_name_col: usize,
+    /// Column indexes containing the phenotype values in the input phenotype file: 0, 1, 2, ...
+    #[clap(long, default_value="[1]")]
+    phen_phen_col: String,
     /// Number of threads to use for parallel processing
     #[clap(long, default_value_t=1)]
     n_threads: u64,
@@ -62,8 +78,12 @@ fn main() {
     } else if args.analysis == String::from("chisq_test") {
         let out = tables::chisq(&args.fname, &args.output, &args.n_threads).unwrap();
     } else if args.analysis == String::from("test") {
-        let test = io::load_phen(&args.fname);
+        // let test = io::load_phen(&args.fname, &delim, &);
         // let test = loader_with_fun(&args.fname, &String::From(".sync"), );
+
+        let phen_col: Vec<usize> = vec![1];
+        let test = regression::correlation(&args.fname, &args.phen_fname, &args.phen_delim, &args.phen_header, &args.phen_name_col,
+                &phen_col, &args.output, &args.n_threads);
         println!("TEST: {:?}", test);
     }
 }

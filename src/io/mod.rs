@@ -1,8 +1,8 @@
 pub use self::{
     file_split::find_file_splits,
     pileup::pileup2sync,
-    sync::{AlleleCountsOrFrequencies, Sync, sync2syncx, load},
-    phen::load_phen,
+    sync::{AlleleCountsOrFrequencies, Sync, sync2syncx},
+    phen::{Phenotypes, load_phen},
 };
 
 mod file_split;
