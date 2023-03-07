@@ -1,5 +1,5 @@
 use std::io::{self, prelude::*, Error, ErrorKind, BufReader};
-use nalgebra::{self, DMatrix};
+use nalgebra::{self, DMatrix, DVector};
 use std::sync::{Arc, Mutex};
 use std::fs::{File, OpenOptions};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -8,9 +8,30 @@ use crate::io::sync::{Sync, sync_analyser_and_writer_single_thread};
 use crate::io::sync::AlleleCountsOrFrequencies;
 use crate::io::phen::{Phenotypes, load_phen};
 
-// use statrs::distribution::{ChiSquared, ContinuousCDF};
+use statrs::distribution::{StudentsT, ContinuousCDF};
 
-pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>) -> Option<String> {
+fn pearsons_correlation(x: DVector<f64>, y: DVector<f64>) -> io::Result<(f64, f64)> {
+    let n = x.len();
+    if n != y.len() {
+        return Err(Error::new(ErrorKind::Other, "Input vectors are not the same size."));
+    }
+    let mu_x = x.mean();
+    let mu_y = y.mean();
+    let x_less_mu_x = x.map(|x| x-mu_x);
+    let y_less_mu_y = y.map(|y| y-mu_y);
+    let x_less_mu_x_squared = x_less_mu_x.map(|x| x.powf(2.0));
+    let y_less_mu_y_squared = y_less_mu_y.map(|y| y.powf(2.0));
+    let numerator = (x_less_mu_x * y_less_mu_y).sum();
+    let denominator = x_less_mu_x_squared.sum().sqrt() * y_less_mu_y_squared.sum().sqrt();
+    let r = numerator / denominator;
+    let sigma_r = ((1.0 - r.powf(2.0)) / (n as f64 - 2.0)).sqrt();
+    let t = r / sigma_r;
+    let d = StudentsT::new(0.0, 1.0, n as f64 - 1.0).unwrap();
+    let pval = d.cdf(t.abs());
+    Ok((r, pval))
+}
+
+pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, Y: DMatrix<f64>) -> Option<String> {
     acf.counts_to_frequencies().unwrap();
     let idx = acf.coordinate.clone();
     let chr = acf.chromosome.clone();
@@ -18,16 +39,31 @@ pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, 
     let ale = acf.alleles_vector.clone().join("");
     let X = acf.matrix.clone();
 
-    // Check if we have a table and if we have a vector return None
-    let (r, c) =  X.shape();
-    let t = (r as f64) * (c as f64);
-    let n = X.sum();
-    if (c == 1) | (n == 0.0) {
+    // Check if we have a compatible allele frequency and phenotype matrix or vector
+    let (n, p) =  X.shape();
+    let (m, k) = Y.shape();
+    if n != m {
         return None
     }
-  
 
-    Some("0".to_owned())
+    // Iterate across alleles
+    let (mut x, mut y): (DVector<f64>, DVector<f64>);
+    let (mut corr, mut pval): (f64, f64);
+    let first_2_col = vec![chr, pos.to_string()];
+    let mut line: Vec<String> = vec![];
+    for i in 0..p {
+        x = DVector::from(X.column(i));
+        for j in 0..k {
+            line.append(&mut first_2_col.clone());
+            line.push((&ale[..]).chars().nth(p).unwrap().to_string());
+            line.push("Pheno_".to_string() + &(k.to_string())[..]);
+            y = DVector::from(Y.column(j));
+            (corr, pval) = pearsons_correlation(x, y).unwrap();
+            line.push(corr.to_string());
+            line.push(pval.to_string() + "\n");
+        }
+    }
+    Some(line.join(","))
 }
 
 pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: &bool, name_col: &usize, phen_col: &Vec<usize>, out: &String, n_threads: &u64) -> io::Result<String> {
