@@ -4,13 +4,13 @@ use std::sync::{Arc, Mutex};
 use std::fs::{File, OpenOptions};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::io::sync::{Sync, sync_analyser_and_writer_single_thread};
+use crate::io::sync::{Sync, sync_and_pheno_analyser_and_writer_single_thread};
 use crate::io::sync::AlleleCountsOrFrequencies;
 use crate::io::phen::{Phenotypes, load_phen};
 
 use statrs::distribution::{StudentsT, ContinuousCDF};
 
-fn pearsons_correlation(x: DVector<f64>, y: DVector<f64>) -> io::Result<(f64, f64)> {
+fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f64, f64)> {
     let n = x.len();
     if n != y.len() {
         return Err(Error::new(ErrorKind::Other, "Input vectors are not the same size."));
@@ -31,7 +31,7 @@ fn pearsons_correlation(x: DVector<f64>, y: DVector<f64>) -> io::Result<(f64, f6
     Ok((r, pval))
 }
 
-pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, Y: DMatrix<f64>) -> Option<String> {
+pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, Y: &DMatrix<f64>) -> Option<String> {
     acf.counts_to_frequencies().unwrap();
     let idx = acf.coordinate.clone();
     let chr = acf.chromosome.clone();
@@ -47,18 +47,17 @@ pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, 
     }
 
     // Iterate across alleles
-    let (mut x, mut y): (DVector<f64>, DVector<f64>);
     let (mut corr, mut pval): (f64, f64);
     let first_2_col = vec![chr, pos.to_string()];
     let mut line: Vec<String> = vec![];
     for i in 0..p {
-        x = DVector::from(X.column(i));
+        let x = DVector::from(X.column(i));
         for j in 0..k {
             line.append(&mut first_2_col.clone());
             line.push((&ale[..]).chars().nth(p).unwrap().to_string());
             line.push("Pheno_".to_string() + &(k.to_string())[..]);
-            y = DVector::from(Y.column(j));
-            (corr, pval) = pearsons_correlation(x, y).unwrap();
+            let y  = DVector::from(Y.column(j));
+            (corr, pval) = pearsons_correlation(&x, &y).unwrap();
             line.push(corr.to_string());
             line.push(pval.to_string() + "\n");
         }
@@ -147,9 +146,10 @@ pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: 
         let end = chunks[i+1].clone();
         let n_pools_clone = n_pools.clone();
         let n_digits_clone = n_digits.clone();
+        let Y_clone = Y.clone();
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
-            let vec_out_per_thread = sync_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &start, &end, &n_digits_clone, correlation_base).unwrap();
+            let vec_out_per_thread = sync_and_pheno_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &start, &end, &n_digits_clone, &Y_clone, correlation_base).unwrap();
             thread_ouputs_clone.lock().unwrap().push(vec_out_per_thread);
         });
         thread_objects.push(thread);
