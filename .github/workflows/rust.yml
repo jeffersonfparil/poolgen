@@ -52,10 +52,12 @@ jobs:
           cargo run -- sync2syncx  -f ./tests/test-pileup2sync_mincov2.sync -o ./tests/test-pileup2sync_mincov2_sync2syncx.syncx --n-threads 2 --min-cov 2
           echo "###############################################################"
           echo "More tests:"
-          cargo run -- load -f ./tests/test.sync
-          cargo run -- load -f ./tests/test.syncx
-          cargo run -- fisher_exact_test -f ./tests/test.sync
-          cargo run -- fisher_exact_test -f ./tests/test.syncx
+          cargo run -- fisher_exact_test -f ./tests/test.sync --n-threads 2
+          cargo run -- fisher_exact_test -f ./tests/test.syncx --n-threads 2
+          cargo run -- chisq_test -f ./tests/test.sync --n-threads 2
+          cargo run -- chisq_test -f ./tests/test.syncx --n-threads 2
+          cargo run -- pearson_corr -f ./tests/test.sync --phen-fname ./tests/test.csv --phen-header true --phen-delim , --phen-name-col 0 --phen-value-col 1,2  --n-threads 2
+          cargo run -- pearson_corr -f ./tests/test.syncx --phen-fname ./tests/test.csv --phen-header true --phen-delim , --phen-name-col 0 --phen-value-col 1,2  --n-threads 2
           echo "###############################################################"
           echo "Clean-up:"
           rm ./tests/test-*

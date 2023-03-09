@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 use nalgebra::{self, DVector, DMatrix};
+use crate::io::phen::{Phenotypes};
 
 // Struct for ordering the allele columns by variance in allele frequencies across pools for the syncx format
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -414,9 +415,9 @@ where
     Ok(out)
 }
 
-pub fn sync_and_pheno_analyser_and_writer_single_thread<F>(fname: &String, format: &String, n_pools: &usize, start: &u64, end: &u64, n_digits: &usize, Y: &DMatrix<f64>, function: F) -> io::Result<String> 
+pub fn sync_and_pheno_analyser_and_writer_single_thread<F>(fname: &String, format: &String, n_pools: &usize, start: &u64, end: &u64, n_digits: &usize, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>, function: F) -> io::Result<String> 
 where
-    F: Fn(&mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, &DMatrix<f64>) -> Option<String>,
+    F: Fn(&mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>) -> Option<String>,
  {
     // Add leading zeroes to the start-of-the-chunk index so we can propoerly sort the output files after parallele processing    
     let mut start_string = start.to_string();
@@ -541,7 +542,7 @@ where
         // println!("COOR: {:?}", coordinate);
         // vec_allele_out.push(AlleleCountsOrFrequencies {coordinate: coordinate, chromosome: chr, position: pos, alleles_vector: vec_alleles, matrix: mat_counts_or_freqs});
         acf = AlleleCountsOrFrequencies {coordinate: coordinate, chromosome: chr, position: pos, alleles_vector: vec_alleles, matrix: mat_counts_or_freqs};
-        let write_me = function(&mut acf, Y);
+        let write_me = function(&mut acf, phen);
         let _ = match write_me {
             Some(x) => file_out.write_all(x.as_bytes()).expect(&error_writing_line),
             None => (),

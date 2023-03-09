@@ -12,6 +12,7 @@ use statrs::distribution::{StudentsT, ContinuousCDF};
 
 fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f64, f64)> {
     let n = x.len();
+    // println!("x={:?}; y={:?}", x, y);
     if n != y.len() {
         return Err(Error::new(ErrorKind::Other, "Input vectors are not the same size."));
     }
@@ -21,24 +22,34 @@ fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f64, 
     let y_less_mu_y = y.map(|y| y-mu_y);
     let x_less_mu_x_squared = x_less_mu_x.map(|x| x.powf(2.0));
     let y_less_mu_y_squared = y_less_mu_y.map(|y| y.powf(2.0));
-    let numerator = (x_less_mu_x * y_less_mu_y).sum();
+    // println!("x_less_mu_x={:?}", x_less_mu_x);
+    // println!("y_less_mu_y={:?}", y_less_mu_y);
+    let numerator = x_less_mu_x.component_mul(&y_less_mu_y).sum();
     let denominator = x_less_mu_x_squared.sum().sqrt() * y_less_mu_y_squared.sum().sqrt();
-    let r = numerator / denominator;
+    let r_tmp = numerator / denominator;
+    let r = match r_tmp.is_nan() {
+        true => 0.0,
+        false => r_tmp,
+    };
+    // println!("numeratorr={:?}; demonitatorr={:?}; r={:?}", numerator, denominator, r);
     let sigma_r = ((1.0 - r.powf(2.0)) / (n as f64 - 2.0)).sqrt();
     let t = r / sigma_r;
     let d = StudentsT::new(0.0, 1.0, n as f64 - 1.0).unwrap();
-    let pval = d.cdf(t.abs());
+    let pval = 1.00 - d.cdf(t.abs());
     Ok((r, pval))
 }
 
-pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, Y: &DMatrix<f64>) -> Option<String> {
+pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>) -> Option<String> {
     acf.counts_to_frequencies().unwrap();
     let idx = acf.coordinate.clone();
     let chr = acf.chromosome.clone();
     let pos = acf.position.clone();
-    let ale = acf.alleles_vector.clone().join("");
+    let ale = acf.alleles_vector.clone();
     let X = acf.matrix.clone();
-
+    let nam = phen.name.clone();
+    let Y = phen.phen.clone();
+    // println!("ACF={:?}", acf);
+    // println!("Y={:?}", Y);
     // Check if we have a compatible allele frequency and phenotype matrix or vector
     let (n, p) =  X.shape();
     let (m, k) = Y.shape();
@@ -49,20 +60,26 @@ pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, 
     // Iterate across alleles
     let (mut corr, mut pval): (f64, f64);
     let first_2_col = vec![chr, pos.to_string()];
+    // println!("first_2_col: {:?}", first_2_col);
+    // println!("ale: {:?}", ale);
+    // println!("p: {:?}", p);
     let mut line: Vec<String> = vec![];
     for i in 0..p {
         let x = DVector::from(X.column(i));
         for j in 0..k {
             line.append(&mut first_2_col.clone());
-            line.push((&ale[..]).chars().nth(p).unwrap().to_string());
-            line.push("Pheno_".to_string() + &(k.to_string())[..]);
+            line.push(ale[i].clone());
+            line.push("Pheno_".to_string() + &(j.to_string())[..]);
             let y  = DVector::from(Y.column(j));
+            // println!("LINE: {:?}", line);
+            // println!("x={:?}; y={:?}", x, y);
             (corr, pval) = pearsons_correlation(&x, &y).unwrap();
             line.push(corr.to_string());
             line.push(pval.to_string() + "\n");
         }
     }
-    Some(line.join(","))
+    let out = line.join(",").replace("\n,", "\n");
+    Some(out)
 }
 
 pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: &bool, name_col: &usize, phen_col: &Vec<usize>, out: &String, n_threads: &u64) -> io::Result<String> {
@@ -72,7 +89,7 @@ pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: 
         let bname = fname.split(".").into_iter().map(|a| a.to_owned()).collect::<Vec<String>>()
                         .into_iter().rev().collect::<Vec<String>>()[1..].to_owned().into_iter().rev().collect::<Vec<String>>()
                         .join(".");
-        out = bname + "-Chisquared_test-" + &time.to_string() + ".csv";
+        out = bname + "-Pearsons_correlation_test-" + &time.to_string() + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &out;
@@ -132,7 +149,6 @@ pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: 
 
     // Load the phnoetypes
     let phen = load_phen(phen_fname, delim, header, name_col, phen_col).unwrap();
-    let Y = phen.phen.clone();
     // Instantiate thread object for parallel execution
     let mut thread_objects = Vec::new();
     // Vector holding all returns from read_chunk()
@@ -146,10 +162,10 @@ pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: 
         let end = chunks[i+1].clone();
         let n_pools_clone = n_pools.clone();
         let n_digits_clone = n_digits.clone();
-        let Y_clone = Y.clone();
+        let phen_clone = phen.clone();
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
-            let vec_out_per_thread = sync_and_pheno_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &start, &end, &n_digits_clone, &Y_clone, correlation_base).unwrap();
+            let vec_out_per_thread = sync_and_pheno_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &start, &end, &n_digits_clone, &phen_clone, correlation_base).unwrap();
             thread_ouputs_clone.lock().unwrap().push(vec_out_per_thread);
         });
         thread_objects.push(thread);
@@ -166,7 +182,7 @@ pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: 
     fnames_out.sort();
     // println!("{:?}", fnames_out);
     // Add header
-    let header = "#chr,pos,alleles,pvalue\n".to_owned();
+    let header = "#chr,pos,allele,Pearsons_correlation,pvalue\n".to_owned();
     file_out.write_all(header.as_bytes()).unwrap();
     // Iterate across output files from each thread, and concatenate non-empty files
     for f in fnames_out {

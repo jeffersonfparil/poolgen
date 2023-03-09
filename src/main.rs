@@ -11,7 +11,7 @@ mod regression;
        about="Quantitative and population genetics analyses using pool sequencing data.",
        long_about="Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust.")]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "sync2syncx", "load", "fisher_exact_test")
+    /// Analysis to perform (i.e. "pileup2sync", "sync2syncx", "fisher_exact_test", "chisq_test", "pearson_corr")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -46,9 +46,9 @@ struct Args {
     /// Column index containing the names or IDs of the indivudals in the input phenotype file: 0, 1, 2, ...
     #[clap(long, default_value_t=0)]
     phen_name_col: usize,
-    /// Column indexes containing the phenotype values in the input phenotype file: 0, 1, 2, ...
-    #[clap(long, default_value="[1]")]
-    phen_phen_col: String,
+    /// Column indexes containing the phenotype values in the input phenotype file, e.g. 1 or 1,2,3 or 1,2,3,4 etc ...
+    #[clap(long, use_value_delimiter=true, value_delimiter=',', default_value="1")]
+    phen_value_col: Vec<String>,
     /// Number of threads to use for parallel processing
     #[clap(long, default_value_t=1)]
     n_threads: u64,
@@ -77,10 +77,19 @@ fn main() {
         let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
     } else if args.analysis == String::from("chisq_test") {
         let out = tables::chisq(&args.fname, &args.output, &args.n_threads).unwrap();
+    } else if args.analysis == String::from("pearson_corr") {
+        let phen_col = args.phen_value_col.into_iter().map(|x| x.parse::<usize>().expect("Invalid integer input for the phenotype column/s (--phen-value-col).")).collect::<Vec<usize>>();
+        let out = regression::correlation(&args.fname,
+                                                                 &args.phen_fname,
+                                                                 &args.phen_delim,
+                                                                 &args.phen_header,
+                                                                 &args.phen_name_col,
+                                                                 &phen_col,
+                                                                 &args.output,
+                                                                 &args.n_threads).unwrap();
     } else if args.analysis == String::from("test") {
         // let test = io::load_phen(&args.fname, &delim, &);
         // let test = loader_with_fun(&args.fname, &String::From(".sync"), );
-
         let phen_col: Vec<usize> = vec![1];
         let test = regression::correlation(&args.fname, &args.phen_fname, &args.phen_delim, &args.phen_header, &args.phen_name_col,
                 &phen_col, &args.output, &args.n_threads);
