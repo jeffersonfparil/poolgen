@@ -1,5 +1,5 @@
 use std::io::{self, prelude::*, Error, ErrorKind, BufReader};
-use nalgebra::{self, DMatrix, DVector};
+use nalgebra::{self, DVector};
 use std::sync::{Arc, Mutex};
 use std::fs::{File, OpenOptions};
 use std::time::{SystemTime, UNIX_EPOCH};
