@@ -35,11 +35,15 @@ fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f64, 
     let sigma_r = ((1.0 - r.powf(2.0)) / (n as f64 - 2.0)).sqrt();
     let t = r / sigma_r;
     let d = StudentsT::new(0.0, 1.0, n as f64 - 1.0).unwrap();
-    let pval = 1.00 - d.cdf(t.abs());
+    let pval = 2.00 * ( 1.00 - d.cdf(t.abs()));
     Ok((r, pval))
 }
 
-pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>) -> Option<String> {
+pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>, maf: &f64) -> Option<String> {
+    let _ = match acf.filter(*maf) {
+        Some(x) => x,
+        None => return None,
+    };
     acf.counts_to_frequencies().unwrap();
     let idx = acf.coordinate.clone();
     let chr = acf.chromosome.clone();
@@ -82,7 +86,7 @@ pub fn correlation_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, 
     Some(out)
 }
 
-pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: &bool, name_col: &usize, phen_col: &Vec<usize>, out: &String, n_threads: &u64) -> io::Result<String> {
+pub fn correlation(fname: &String, maf: &f64, phen_fname: &String, delim: &String, header: &bool, name_col: &usize, phen_col: &Vec<usize>, out: &String, n_threads: &u64) -> io::Result<String> {
     let mut out = out.to_owned();
     if out == "".to_owned() {
         let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
@@ -161,11 +165,12 @@ pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: 
         let start = chunks[i].clone();
         let end = chunks[i+1].clone();
         let n_pools_clone = n_pools.clone();
+        let maf_clone = maf.clone();
         let n_digits_clone = n_digits.clone();
         let phen_clone = phen.clone();
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
-            let vec_out_per_thread = sync_and_pheno_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &start, &end, &n_digits_clone, &phen_clone, correlation_base).unwrap();
+            let vec_out_per_thread = sync_and_pheno_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &maf_clone, &start, &end, &n_digits_clone, &phen_clone, correlation_base).unwrap();
             thread_ouputs_clone.lock().unwrap().push(vec_out_per_thread);
         });
         thread_objects.push(thread);
@@ -182,7 +187,7 @@ pub fn correlation(fname: &String, phen_fname: &String, delim: &String, header: 
     fnames_out.sort();
     // println!("{:?}", fnames_out);
     // Add header
-    let header = "#chr,pos,allele,Pearsons_correlation,pvalue\n".to_owned();
+    let header = "#chr,pos,allele,trait,Pearsons_correlation,pvalue\n".to_owned();
     file_out.write_all(header.as_bytes()).unwrap();
     // Iterate across output files from each thread, and concatenate non-empty files
     for f in fnames_out {

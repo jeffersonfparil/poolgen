@@ -8,36 +8,68 @@ use crate::io::sync::{Sync, sync_and_pheno_analyser_and_writer_single_thread};
 use crate::io::sync::AlleleCountsOrFrequencies;
 use crate::io::phen::{Phenotypes, load_phen};
 
-use statrs::distribution::{Normal, ContinuousCDF};
+use statrs::distribution::{StudentsT, ContinuousCDF};
 
 fn ols(X: &DMatrix<f64>, Y: &DMatrix<f64>) -> io::Result<(DMatrix<f64>, DMatrix<f64>)> {
     let (n, p) = X.shape();
-    let (n_, m) = Y.shape();
-    // println!("x={:?}; y={:?}", x, y);
+    let (n_, k) = Y.shape();
+    // println!("X={:?}; Y={:?}", X, Y);
     if n != n_ {
         return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
     }
-    let beta: DMatrix<f64>;
-    let var_cov: DMatrix<f64>;
-    if n < p {
-        let Xt = X.transpose();
-        let inv_XXt = (X * &Xt).try_inverse().unwrap();
-        beta = &Xt * &inv_XXt * Y;
-        let error = Y - (X * &beta);
-        let se = (&error.transpose() * &error) / (n as f64 - p as f64);
-        var_cov = &Xt * &inv_XXt * &inv_XXt * X  * &se;
-    } else {
-        let Xt = X.transpose();
-        let inv_XtX = (&Xt * X).try_inverse().unwrap();
-        beta = &inv_XtX * &Xt * Y;
-        let error = Y - (X * &beta);
-        let se = (&error.transpose() * &error) / (n as f64 - p as f64);
-        var_cov = &inv_XtX * &se;
+    let mut b: DVector<f64>;
+    let mut C: DMatrix<f64>;
+    let mut beta = DMatrix::from_element(p, k, 0.0);
+    let mut var_beta = DMatrix::from_element(p, k, 0.0);
+    for j in 0..k {
+        let y = Y.column(j);
+        if n < p {
+            let Xt = X.transpose();
+            let inv_XXt = match (X * &Xt).try_inverse() {
+                Some(x) => x,
+                None => return Err(Error::new(ErrorKind::Other, "Non-invertible X")),
+            };
+            if inv_XXt.determinant() == 0.0 {
+                return Err(Error::new(ErrorKind::Other, "Non-invertible X"))
+            }
+            b = &Xt * &inv_XXt * y;
+            C = &Xt * &inv_XXt * &inv_XXt * X;
+        } else {
+            let Xt = X.transpose();
+            let inv_XtX = match (&Xt * X).try_inverse(){
+                Some(x) => x,
+                None => return Err(Error::new(ErrorKind::Other, "Non-invertible X")),
+            };
+            if inv_XtX.determinant() == 0.0 {
+                return Err(Error::new(ErrorKind::Other, "Non-invertible X"))
+            }
+            b = &inv_XtX * &Xt * y;
+            C = inv_XtX;
+        }
+        let e = y - (X * &b);
+        let se = (&e.transpose() * &e).sum() / (n as f64 - p as f64);
+        let vb = se * &C;
+        for i in 0..p {
+            beta[(i,j)] = b[i];
+            var_beta[(i,j)] = vb[(i, i)];
+        }
+        // println!("#################################");
+        // println!("b={:?}", b);
+        // println!("C={:?}", C);
+        // println!("e={:?}", e);
+        // println!("se={:?}", se);
+        // println!("vb={:?}", vb);
+        // println!("beta={:?}", beta);
+        // println!("var_beta={:?}", var_beta);
     }
-    Ok((beta, var_cov))
+    Ok((beta, var_beta))
 }
 
-pub fn ols_iterate_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>) -> Option<String> {
+pub fn ols_iterate_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>, maf: &f64) -> Option<String> {
+    let _ = match acf.filter(*maf) {
+        Some(x) => x,
+        None => return None,
+    };
     acf.counts_to_frequencies().unwrap();
     let idx = acf.coordinate.clone();
     let chr = acf.chromosome.clone();
@@ -46,12 +78,13 @@ pub fn ols_iterate_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, 
     let mut X = acf.matrix.clone();
     let nam = phen.name.clone();
     let Y = phen.phen.clone();
-    // println!("ACF={:?}", acf);
-    // println!("Y={:?}", Y);
     // Check if we have a compatible allele frequency and phenotype matrix or vector
     let (n, mut p) =  X.shape();
     let (m, k) = Y.shape();
     if n != m {
+        return None
+    }
+    if (p < 1) | (m < 1) {
         return None
     }
     // Keep p-1 alleles if p >= 2 so we have degrees of freedom to fit the intercept
@@ -59,33 +92,59 @@ pub fn ols_iterate_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, 
         X = X.clone().remove_columns(p-1, 1);
         p -= 1;
     }
-
-    let (beta, var_cov) = ols(&X, &Y).unwrap();
-    
-    // Iterate across alleles
-    let first_3_col = vec![chr, pos.to_string(), ale.join("")];
-    let mut line: Vec<String> = vec![];
-    for i in 0..k {
-        line.append(&mut first_3_col.clone());
-        line.push("Pheno_".to_string() + &(i.to_string())[..]);
-        line.push(beta.column(i).iter().map(|x| x.to_string()).collect::<Vec<String>>().join(","));
-        // line.push(pval.to_string() + "\n");
+    X = X.clone().insert_column(0, 1.0);
+    p += 1;
+    // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+    // println!("X={:?}", X);
+    // println!("ACF={:?}", acf);
+    // println!("Y={:?}", Y);
+    // println!("###################");
+    // OLS and compute the p-values associated with each estimate
+    let (beta, var_beta) = match ols(&X, &Y) {
+        Ok(x) => x,
+        Err(_) => return None,
+    };
+    let d = StudentsT::new(0.0, 1.0, p as f64 - 1.0).unwrap();
+    let mut t: f64;
+    let mut pval = DMatrix::from_element(p, k, 0.0);
+    for i in 0..p {
+        for j in 0..k {
+            t = beta[(i, j)] / var_beta[(i, j)];
+            if t.is_infinite() {
+                pval[(i,j)] = 0.0
+            } else if t.is_nan() {
+                pval[(i,j)] = 1.0
+            } else {
+                pval[(i, j)] = 2.00 * (1.00 - d.cdf(t.abs()));
+            }
+        }
     }
-    let out = line.join(",").replace("\n,", "\n");
 
-
+    // Iterate across alleles
+    let first_2_col = vec![chr, pos.to_string()];
+    let mut line: Vec<String> = vec![];
+    for i in 1..p {
+        // excluding the intercept
+        for j in 0..k {
+            line.append(&mut first_2_col.clone());
+            line.push(ale[i-1].clone());
+            line.push("Pheno_".to_string() + &(j.to_string())[..]);
+            line.push(beta[(i,j)].to_string());
+            line.push(pval[(i,j)].to_string() + "\n");
+        }
+    }
     let out = line.join(",").replace("\n,", "\n");
     Some(out)
 }
 
-pub fn ols_iterate(fname: &String, phen_fname: &String, delim: &String, header: &bool, name_col: &usize, phen_col: &Vec<usize>, out: &String, n_threads: &u64) -> io::Result<String> {
+pub fn ols_iterate(fname: &String, maf: &f64, phen_fname: &String, delim: &String, header: &bool, name_col: &usize, phen_col: &Vec<usize>, out: &String, n_threads: &u64) -> io::Result<String> {
     let mut out = out.to_owned();
     if out == "".to_owned() {
         let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
         let bname = fname.split(".").into_iter().map(|a| a.to_owned()).collect::<Vec<String>>()
                         .into_iter().rev().collect::<Vec<String>>()[1..].to_owned().into_iter().rev().collect::<Vec<String>>()
                         .join(".");
-        out = bname + "-Pearsons_correlation_test-" + &time.to_string() + ".csv";
+        out = bname + "-OLS_iterative-" + &time.to_string() + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &out;
@@ -157,11 +216,12 @@ pub fn ols_iterate(fname: &String, phen_fname: &String, delim: &String, header: 
         let start = chunks[i].clone();
         let end = chunks[i+1].clone();
         let n_pools_clone = n_pools.clone();
+        let maf_clone = maf.clone();
         let n_digits_clone = n_digits.clone();
         let phen_clone = phen.clone();
         let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
         let thread = std::thread::spawn(move || {
-            let vec_out_per_thread = sync_and_pheno_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &start, &end, &n_digits_clone, &phen_clone, ols_iterate_base).unwrap();
+            let vec_out_per_thread = sync_and_pheno_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &maf_clone, &start, &end, &n_digits_clone, &phen_clone, ols_iterate_base).unwrap();
             thread_ouputs_clone.lock().unwrap().push(vec_out_per_thread);
         });
         thread_objects.push(thread);
@@ -178,7 +238,7 @@ pub fn ols_iterate(fname: &String, phen_fname: &String, delim: &String, header: 
     fnames_out.sort();
     // println!("{:?}", fnames_out);
     // Add header
-    let header = "#chr,pos,allele,Pearsons_correlation,pvalue\n".to_owned();
+    let header = "#chr,pos,allele,trait,beta,pvalue\n".to_owned();
     file_out.write_all(header.as_bytes()).unwrap();
     // Iterate across output files from each thread, and concatenate non-empty files
     for f in fnames_out {

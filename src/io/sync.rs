@@ -25,7 +25,7 @@ pub struct AlleleCountsOrFrequencies <T, R: nalgebra::Dim, C: nalgebra::Dim> {
 
 pub trait Sync {
     fn counts_to_frequencies(&mut self) -> io::Result<&mut Self>;
-    fn filter(&mut self, maf: f64) -> Option<&mut Self>;
+    fn filter(&self, maf: f64) -> Option<bool>;
 }
 
 impl Sync for AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn> {
@@ -44,7 +44,7 @@ impl Sync for AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn> {
         Ok(self)
     }
 
-    fn filter(&mut self, maf: f64) -> Option<&mut Self> {
+    fn filter(&self, maf: f64) -> Option<bool> {
         let a = self.clone();
         for j in 0..a.alleles_vector.len() {
             // println!("i={:?}; n={:?}", i, n);
@@ -53,10 +53,9 @@ impl Sync for AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn> {
                 false => 0,
             };
         }
-        Some(self)
+        Some(true)
     }    
 }
-
 
 fn parse_sync_line (reader: &mut BufReader<File>) -> Option<Vec<String>> {
     // Instatiate the line
@@ -415,9 +414,9 @@ where
     Ok(out)
 }
 
-pub fn sync_and_pheno_analyser_and_writer_single_thread<F>(fname: &String, format: &String, n_pools: &usize, start: &u64, end: &u64, n_digits: &usize, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>, function: F) -> io::Result<String> 
+pub fn sync_and_pheno_analyser_and_writer_single_thread<F>(fname: &String, format: &String, n_pools: &usize, maf: &f64, start: &u64, end: &u64, n_digits: &usize, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>, function: F) -> io::Result<String> 
 where
-    F: Fn(&mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>) -> Option<String>,
+    F: Fn(&mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>, &f64) -> Option<String>,
  {
     // Add leading zeroes to the start-of-the-chunk index so we can propoerly sort the output files after parallele processing    
     let mut start_string = start.to_string();
@@ -542,7 +541,7 @@ where
         // println!("COOR: {:?}", coordinate);
         // vec_allele_out.push(AlleleCountsOrFrequencies {coordinate: coordinate, chromosome: chr, position: pos, alleles_vector: vec_alleles, matrix: mat_counts_or_freqs});
         acf = AlleleCountsOrFrequencies {coordinate: coordinate, chromosome: chr, position: pos, alleles_vector: vec_alleles, matrix: mat_counts_or_freqs};
-        let write_me = function(&mut acf, phen);
+        let write_me = function(&mut acf, phen, maf);
         let _ = match write_me {
             Some(x) => file_out.write_all(x.as_bytes()).expect(&error_writing_line),
             None => (),

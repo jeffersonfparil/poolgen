@@ -11,7 +11,7 @@ mod regression;
        about="Quantitative and population genetics analyses using pool sequencing data.",
        long_about="Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust.")]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "sync2syncx", "fisher_exact_test", "chisq_test", "pearson_corr")
+    /// Analysis to perform (i.e. "pileup2sync", "sync2syncx", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -28,6 +28,9 @@ struct Args {
     /// Minimum depth of coverage
     #[clap(long, default_value_t=1)]
     min_cov: u64,
+    /// Minimum allele frequency for associating the genotypes with the phenotype/s
+    #[clap(long, default_value_t=0.001)]
+    maf: f64,
     /// Remove ambiguous reads during SNP filetering or keep them coded as Ns
     #[clap(long, default_value_t=true)]
     remove_ns: bool,
@@ -80,19 +83,29 @@ fn main() {
     } else if args.analysis == String::from("pearson_corr") {
         let phen_col = args.phen_value_col.into_iter().map(|x| x.parse::<usize>().expect("Invalid integer input for the phenotype column/s (--phen-value-col).")).collect::<Vec<usize>>();
         let out = regression::correlation(&args.fname,
-                                                                 &args.phen_fname,
-                                                                 &args.phen_delim,
-                                                                 &args.phen_header,
-                                                                 &args.phen_name_col,
-                                                                 &phen_col,
-                                                                 &args.output,
-                                                                 &args.n_threads).unwrap();
-    } else if args.analysis == String::from("test") {
+                                                  &args.maf,
+                                                  &args.phen_fname,
+                                                  &args.phen_delim,
+                                                  &args.phen_header,
+                                                  &args.phen_name_col,
+                                                  &phen_col,
+                                                  &args.output,
+                                                  &args.n_threads).unwrap();
+    } else if args.analysis == String::from("ols_iter") {
+        let phen_col = args.phen_value_col.into_iter().map(|x| x.parse::<usize>().expect("Invalid integer input for the phenotype column/s (--phen-value-col).")).collect::<Vec<usize>>();
+        let out = regression::ols_iterate(&args.fname,
+                                          &args.maf,
+                                          &args.phen_fname,
+                                          &args.phen_delim,
+                                          &args.phen_header,
+                                          &args.phen_name_col,
+                                          &phen_col,
+                                          &args.output,
+                                          &args.n_threads).unwrap();
+    }else if args.analysis == String::from("test") {
         // let test = io::load_phen(&args.fname, &delim, &);
         // let test = loader_with_fun(&args.fname, &String::From(".sync"), );
         let phen_col: Vec<usize> = vec![1];
-        let test = regression::correlation(&args.fname, &args.phen_fname, &args.phen_delim, &args.phen_header, &args.phen_name_col,
-                &phen_col, &args.output, &args.n_threads);
-        println!("TEST: {:?}", test);
+        
     }
 }
