@@ -3,6 +3,7 @@ use clap::Parser;
 mod io;
 mod tables;
 mod regression;
+mod gwalpha;
 
 // Instatiate arguments struct
 #[derive(Parser, Debug)]
@@ -43,9 +44,6 @@ struct Args {
     /// Delimiter of the input phenotype file: comma, tab, etc...
     #[clap(long, default_value=",")]
     phen_delim: String,
-    /// Does the input phenotype file have a header?
-    #[clap(long, default_value_t=true)]
-    phen_header: bool,
     /// Column index containing the names or IDs of the indivudals in the input phenotype file: 0, 1, 2, ...
     #[clap(long, default_value_t=0)]
     phen_name_col: usize,
@@ -86,7 +84,6 @@ fn main() {
                                                   &args.maf,
                                                   &args.phen_fname,
                                                   &args.phen_delim,
-                                                  &args.phen_header,
                                                   &args.phen_name_col,
                                                   &phen_col,
                                                   &args.output,
@@ -97,7 +94,6 @@ fn main() {
                                           &args.maf,
                                           &args.phen_fname,
                                           &args.phen_delim,
-                                          &args.phen_header,
                                           &args.phen_name_col,
                                           &phen_col,
                                           &args.output,

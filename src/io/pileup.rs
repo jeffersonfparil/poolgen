@@ -9,7 +9,7 @@ use nalgebra::DVector;
 
 // Struct for a locus from a pileup line
 #[derive(Debug)]
-pub struct PileupLine {
+struct PileupLine {
     chromosome: String,             // chromosome or scaffold name
     position: u64,                  // position in number of bases
     reference_allele: char,         // reference allele
@@ -20,7 +20,7 @@ pub struct PileupLine {
 
 // Struct of allele counts to convert reads into sync
 #[derive(Debug)]
-pub struct AlleleCounts {
+struct AlleleCounts {
     chromosome: String, // chromosome or scaffold name
     position: u64,      // position in number of bases
     a: Vec<u64>,        // allele A counts
@@ -33,7 +33,7 @@ pub struct AlleleCounts {
 
 // Struct of allele frequencies to convert reads into syncx
 #[derive(Debug)]
-pub struct AlleleFrequencies {
+struct AlleleFrequencies {
     chromosome: String, // chromosome or scaffold name
     position: u64,      // position in number of bases
     a: Vec<f64>,        // allele A counts
@@ -54,9 +54,9 @@ struct IndelMarker {
 
 // Struct for ordering the allele columns by variance in allele frequencies across pools for the syncx format
 #[derive(Debug, PartialEq, PartialOrd)]
-struct SyncxAlleleFreqs {
-    var_x_ave: f64,
-    freqs: String,
+pub struct SyncxAlleleFreqs {
+    pub var_x_ave: f64,
+    pub freqs: String,
 }
 
 // Parse each line

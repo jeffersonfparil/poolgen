@@ -66,7 +66,7 @@ fn ols(X: &DMatrix<f64>, Y: &DMatrix<f64>) -> io::Result<(DMatrix<f64>, DMatrix<
 }
 
 pub fn ols_iterate_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>, phen: &Phenotypes<f64, nalgebra::Dyn, nalgebra::Dyn>, maf: &f64) -> Option<String> {
-    let _ = match acf.filter(*maf) {
+    let acf = match acf.filter(*maf) {
         Some(x) => x,
         None => return None,
     };
@@ -137,7 +137,7 @@ pub fn ols_iterate_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, 
     Some(out)
 }
 
-pub fn ols_iterate(fname: &String, maf: &f64, phen_fname: &String, delim: &String, header: &bool, name_col: &usize, phen_col: &Vec<usize>, out: &String, n_threads: &u64) -> io::Result<String> {
+pub fn ols_iterate(fname: &String, maf: &f64, phen_fname: &String, delim: &String, name_col: &usize, phen_col: &Vec<usize>, out: &String, n_threads: &u64) -> io::Result<String> {
     let mut out = out.to_owned();
     if out == "".to_owned() {
         let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
@@ -203,7 +203,7 @@ pub fn ols_iterate(fname: &String, maf: &f64, phen_fname: &String, delim: &Strin
     }
 
     // Load the phnoetypes
-    let phen = load_phen(phen_fname, delim, header, name_col, phen_col).unwrap();
+    let phen = load_phen(phen_fname, delim, &false, name_col, phen_col).unwrap();
     // Instantiate thread object for parallel execution
     let mut thread_objects = Vec::new();
     // Vector holding all returns from read_chunk()

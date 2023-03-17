@@ -6,13 +6,7 @@ use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 use nalgebra::{self, DVector, DMatrix};
 use crate::io::phen::{Phenotypes};
-
-// Struct for ordering the allele columns by variance in allele frequencies across pools for the syncx format
-#[derive(Debug, PartialEq, PartialOrd)]
-struct SyncxAlleleFreqs {
-    var_x_ave: f64,
-    freqs: String,
-}
+use crate::io::pileup::{SyncxAlleleFreqs};
 
 #[derive(Debug, Clone)]
 pub struct AlleleCountsOrFrequencies <T, R: nalgebra::Dim, C: nalgebra::Dim> {
@@ -25,7 +19,7 @@ pub struct AlleleCountsOrFrequencies <T, R: nalgebra::Dim, C: nalgebra::Dim> {
 
 pub trait Sync {
     fn counts_to_frequencies(&mut self) -> io::Result<&mut Self>;
-    fn filter(&self, maf: f64) -> Option<bool>;
+    fn filter(&mut self, maf: f64) -> Option<&mut Self>;
 }
 
 impl Sync for AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn> {
@@ -44,16 +38,29 @@ impl Sync for AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn> {
         Ok(self)
     }
 
-    fn filter(&self, maf: f64) -> Option<bool> {
-        let a = self.clone();
-        for j in 0..a.alleles_vector.len() {
-            // println!("i={:?}; n={:?}", i, n);
-            let _ = match (a.matrix.column(j).mean() < maf) | (a.matrix.column(j).mean() > (1.0-maf)) {
-                true => return None,
-                false => 0,
-            };
+    fn filter(&mut self, maf: f64) -> Option<&mut Self> {
+        let mut p = self.matrix.ncols();
+        if p != self.alleles_vector.len() {
+            return None
         }
-        Some(true)
+        let mut f: f64;
+        let mut j: usize = 0;
+        while j < p {
+            f = self.matrix.column(j).mean();
+            if (f < maf) | (f > (1.0-maf)) {
+                p -= 1;
+                let matrix = self.matrix.clone();
+                self.matrix = matrix.remove_column(j);
+                self.alleles_vector.remove(j);
+            } else {
+                j += 1;
+            }
+        }
+        if p < 1 {
+            return None
+        } else {
+            return Some(self)
+        }
     }    
 }
 
