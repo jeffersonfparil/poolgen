@@ -46,10 +46,9 @@ jobs:
           echo "###############################################################"
           echo "Run with multiple custom parameters:"
           cargo run -- pileup2sync -f ./tests/test.pileup                   -o ./tests/test-pileup2sync_default.sync  --pool-names ./tests/test_names.txt
-          cargo run -- pileup2sync -f ./tests/test.pileup                   -o ./tests/test-pileup2sync_mincov2.sync  --pool-names ./tests/test_names.txt --n-threads 2 --min-cov 2
-          cargo run -- pileup2sync -f ./tests/test.pileup                   -o ./tests/test-pileup2sync_mincov2.syncx --pool-names ./tests/test_names.txt --file-format syncx --n-threads 2 --min-cov 2
-          cargo run -- sync2syncx  -f ./tests/test-pileup2sync_default.sync -o ./tests/test-pileup2sync_default_sync2syncx.syncx --n-threads 2 --min-cov 2
-          cargo run -- sync2syncx  -f ./tests/test-pileup2sync_mincov2.sync -o ./tests/test-pileup2sync_mincov2_sync2syncx.syncx --n-threads 2 --min-cov 2
+          cargo run -- pileup2sync -f ./tests/test.pileup                   -o ./tests/test-pileup2sync_mincov2.sync  --pool-names ./tests/test_names.txt --n-threads 2 --min-coverage 2
+          cargo run -- sync2syncx  -f ./tests/test-pileup2sync_default.sync -o ./tests/test-pileup2sync_default_sync2syncx.syncx --n-threads 2 --min-coverage 2
+          cargo run -- sync2syncx  -f ./tests/test-pileup2sync_mincov2.sync -o ./tests/test-pileup2sync_mincov2_sync2syncx.syncx --n-threads 2 --min-coverage 2
           cargo run -- fisher_exact_test -f ./tests/test.sync  --n-threads 2
           cargo run -- fisher_exact_test -f ./tests/test.syncx --n-threads 2
           cargo run -- chisq_test -f ./tests/test.sync  --n-threads 2
