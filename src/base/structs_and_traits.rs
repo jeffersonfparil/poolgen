@@ -11,6 +11,7 @@ pub struct FilePileup {
 #[derive(Debug, Clone)]
 pub struct FileSync {
     pub filename: String,
+    pub test: String,
 }
 
 #[derive(Debug, Clone)]
@@ -82,5 +83,6 @@ pub trait Filter {
 pub trait ChunkyReadAnalyseWrite<T, F> {
     fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: F) -> io::Result<String>
         where F: Fn(&mut T, &FilterStats) -> Option<String>;
-    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64) -> io::Result<String>;
+    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: F) -> io::Result<String>
+        where F: Fn(&mut T, &FilterStats) -> Option<String>;
 }

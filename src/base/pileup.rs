@@ -257,7 +257,7 @@ impl Filter for PileupLine {
     }
 }
 
-fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) -> Option<String> {
+pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) -> Option<String> {
     // let mut pileup_line: Box<PileupLine> = line.lparse().unwrap();
     // Filter
     match pileup_line.filter(filter_stats) {
@@ -282,8 +282,7 @@ fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) -> O
 }
 
 impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Option<String>> for FilePileup {
-    fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: fn(&mut PileupLine, &FilterStats) -> Option<String>) -> io::Result<String>
-    where fn(&mut PileupLine, &FilterStats) -> Option<String>: Fn(&mut PileupLine, &FilterStats) -> Option<String> {
+    fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: fn(&mut PileupLine, &FilterStats) -> Option<String>) -> io::Result<String> {
         let fname = self.filename.clone();
         // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
         let mut start_string = start.to_string();
@@ -336,7 +335,7 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
         Ok(out)
     }
     
-    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64) -> io::Result<String> {
+    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: fn(&mut PileupLine, &FilterStats) -> Option<String>) -> io::Result<String> {
         // Unpack pileup and pool names filenames
         let fname = self.filename.clone();
         let pool_names = self.pool_names.clone();
@@ -387,7 +386,7 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
             let filter_stats = filter_stats.clone();
             let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
-                let fname_out_per_thread = self_clone.per_chunk(&start, &end, &outname_ndigits, &filter_stats, pileup_to_sync).unwrap();
+                let fname_out_per_thread = self_clone.per_chunk(&start, &end, &outname_ndigits, &filter_stats, function).unwrap();
                 thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
             });
             thread_objects.push(thread);
@@ -396,7 +395,7 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
         for thread in thread_objects {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
-        file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes());
+        file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()).unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();
         for f in thread_ouputs.lock().unwrap().iter() {

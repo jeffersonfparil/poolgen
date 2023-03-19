@@ -1,167 +1,40 @@
-use std::io::{self, prelude::*, Error, ErrorKind, BufReader};
-use nalgebra;
-use std::sync::{Arc, Mutex};
-use std::fs::{File, OpenOptions};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use crate::io::sync::{Sync, sync_analyser_and_writer_single_thread};
-use crate::io::sync::AlleleCountsOrFrequencies;
+use crate::base::*;
+use nalgebra::DMatrix;
 
 use statrs::distribution::{ChiSquared, ContinuousCDF};
 
-pub fn chisq_base(acf: &mut AlleleCountsOrFrequencies<f64, nalgebra::Dyn, nalgebra::Dyn>) -> Option<String> {
-    acf.counts_to_frequencies().unwrap();
-    let idx = acf.coordinate.clone();
-    let chr = acf.chromosome.clone();
-    let pos = acf.position.clone();
-    let ale = acf.alleles_vector.clone().join("");
-    let X = acf.matrix.clone();
-
-    // Check if we have a table and if we have a vector return None
-    let (r, c) =  X.shape();
-    let t = (r as f64) * (c as f64);
-    let n = X.sum();
-    if (c == 1) | (n == 0.0) {
-        return None
-    }
-    // Marginal frequencies
-    let row_marginals = X.column_sum().clone_owned() / n;
-    let col_marginals = X.row_sum().clone_owned() / n;
-    // println!("X = {:?}", X);
-    // println!("row_marginals = {:?}", row_marginals);
-    // println!("col_marginals = {:?}", col_marginals);
+pub fn chisq(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Option<String> {
+    let locus_counts = match locus_counts.filter(filter_stats) {
+        Ok(x) => x,
+        Err(_) => return None
+    };
+    // Marginal sums and total count
+    let (n, p) = locus_counts.matrix.shape();
+    let t = (n * p) as f64;
+    let total = locus_counts.matrix.sum() as f64;
+    let row_sums = locus_counts.matrix.column_sum();
+    let col_sums = locus_counts.matrix.row_sum();
+    // Caculate the chi-square test statistic
     let mut denominator: f64 = 0.0;
-    for i in 0..r {
-        for j in 0..c {
-            denominator += f64::powf(X[(i,j)] - (row_marginals[i] * col_marginals[j]), 2.0);
+    let mut observed: f64;
+    let mut expected: f64;
+    for i in 0..n {
+        for j in 0..p {
+            observed = locus_counts.matrix[(i,j)] as f64;
+            expected = (row_sums[i] * col_sums[j]) as f64 / total;
+            denominator += f64::powf( observed - expected, 2.0);
         }
     }
     let chi2 = denominator / t;
-    // println!("Demom={:?}; r={:?}; c={:?}; chisq= {:?}; t={:?}", denominator, r, c, chi2, t);
+    // Calculate the significance, i.e. how far away are we from the expected mean of the chi-squared distribution?
     let d = ChiSquared::new(t - 1.0).unwrap();
     let pval = d.cdf(chi2);
-    // println!("pval = {:?}", pval);
-
-    let out = vec![chr,
-                           pos.to_string(),
-                           ale,
+    // Output line
+    let out = vec![locus_counts.chromosome.clone(),
+                           locus_counts.position.to_string(),
+                           locus_counts.alleles_vector.join(""),
                            pval.to_string()]
                       .join(",") + "\n";
 
     Some(out)
-}
-
-pub fn chisq(fname: &String, out: &String, n_threads: &u64) -> io::Result<String> {
-    let mut out = out.to_owned();
-    if out == "".to_owned() {
-        let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
-        let bname = fname.split(".").into_iter().map(|a| a.to_owned()).collect::<Vec<String>>()
-                        .into_iter().rev().collect::<Vec<String>>()[1..].to_owned().into_iter().rev().collect::<Vec<String>>()
-                        .join(".");
-        out = bname + "-Chisquared_test-" + &time.to_string() + ".csv";
-    }
-    // Instatiate output file
-    let error_writing_file = "Unable to create file: ".to_owned() + &out;
-    let mut file_out = OpenOptions::new().create_new(true)
-                                               .write(true)
-                                               .append(false)
-                                               .open(&out)
-                                               .expect(&error_writing_file);
-    let chunks = crate::io::find_file_splits(fname, n_threads).unwrap();
-    let n_digits = chunks[*n_threads as usize].to_string().len();
-    println!("Chunks: {:?}", chunks);
-
-    // Determine the format of the input file as well as the number of pools
-    let file = File::open(fname).unwrap();
-    let mut reader = BufReader::new(file);
-    let mut format: String = "sync".to_owned();
-    let mut caught_1_line = false;
-    let mut n_pools: usize = 0;
-    while caught_1_line == false {
-        let mut line = String::new();
-        let _ = reader.read_line(&mut line).unwrap();
-        if line.as_bytes()[0] == 35 as u8 {
-            continue;
-        } else {
-            let vec_line = line.split("\t").collect::<Vec<&str>>();
-            let allele_column = vec_line[3]
-                                                .split(":")
-                                                .collect::<Vec<&str>>()
-                                                .into_iter().map(|a| a.to_owned())
-                                                .collect::<Vec<String>>();
-            // println!("{:?}", allele_column[0]);
-            // println!("{:?}", allele_column[0].split("|").collect::<Vec<&str>>()[1]);
-            format = match allele_column[0].parse::<i64>() {
-                Ok(_) => "sync".to_owned(),
-                Err(_) => match allele_column[0].split("|").collect::<Vec<&str>>()[1].parse::<f64>() {
-                    Ok(_) => "syncx".to_owned(),
-                    Err(_) => return Err(Error::new(ErrorKind::Other, "Please check the format of the input file: ".to_owned() + fname + ". Please use a sync or syncx file.")),
-                },
-            };
-            if format == "sync" {
-                n_pools = vec_line.len() - 3;
-            } else {
-                let vec_line_parse = vec_line[3].split("|").collect::<Vec<&str>>();
-                let freqs = vec_line_parse[1]
-                                    .split(":")
-                                    .collect::<Vec<&str>>()
-                                    .into_iter()
-                                    .map(|x| x.to_string().parse::<f64>().expect(&("Please check format of the file: ".to_owned() + &fname + " as the allele counts are not numbers (i.e. f64), at the line whose first 20 characters are: " + &line[0..20] + ".")))
-                                    .collect::<Vec<f64>>();
-                n_pools = freqs.len();
-            }
-            // println!("VEC_LINE: {:?}", vec_line);
-            // println!("N_POOLS: {:?}", n_pools);
-            caught_1_line = true;
-        }
-    }
-
-    // Instantiate thread object for parallel execution
-    let mut thread_objects = Vec::new();
-    // Vector holding all returns from read_chunk()
-    let mut thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
-    // Making four separate threads calling the `search_for_word` function
-    for i in 0..(*n_threads as usize) {
-        // Clone read_chunk parameters
-        let fname_clone = fname.clone();
-        let format_clone = format.clone();
-        let start = chunks[i].clone();
-        let end = chunks[i+1].clone();
-        let n_pools_clone = n_pools.clone();
-        let n_digits_clone = n_digits.clone();
-        let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
-        let thread = std::thread::spawn(move || {
-            let vec_out_per_thread = sync_analyser_and_writer_single_thread(&fname_clone, &format_clone, &n_pools_clone, &start, &end, &n_digits_clone, chisq_base).unwrap();
-            thread_ouputs_clone.lock().unwrap().push(vec_out_per_thread);
-        });
-        thread_objects.push(thread);
-    }
-    // Waiting for all threads to finish
-    for thread in thread_objects {
-        let _ = thread.join().expect("Unknown thread error occured.");
-    }
-    // Extract output filenames from each thread into a vector and sort them
-    let mut fnames_out: Vec<String> = Vec::new();
-    for f in thread_ouputs.lock().unwrap().iter() {
-        fnames_out.push(f.to_owned());
-    }
-    fnames_out.sort();
-    // println!("{:?}", fnames_out);
-    // Add header
-    let header = "#chr,pos,alleles,pvalue\n".to_owned();
-    file_out.write_all(header.as_bytes()).unwrap();
-    // Iterate across output files from each thread, and concatenate non-empty files
-    for f in fnames_out {
-        let mut file: File = File::open(&f).unwrap();
-        if file.metadata().unwrap().len() == 0 {
-        } else {
-            io::copy(&mut file, &mut file_out).unwrap();
-            // println!("{:?}", f);
-        }
-        // Clean-up: remove temporary output files from each thread
-        let error_deleting_file = "Unable to remove file: ".to_owned() + &f;
-        std::fs::remove_file(f).expect(&error_deleting_file);
-    }
-    
-    Ok(out)
 }

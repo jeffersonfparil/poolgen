@@ -56,16 +56,25 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+    let filter_stats = base::FilterStats{ remove_ns: args.remove_ns, min_quality: args.min_quality, min_coverage: args.min_coverage, min_allele_frequency: args.min_allele_frequency };
     if args.analysis == String::from("pileup2sync") {
         let file_pileup = base::FilePileup{ filename: args.fname, pool_names: args.pool_names };
-        let filter_stats = base::FilterStats{ remove_ns: args.remove_ns, min_quality: args.min_quality, min_coverage: args.min_coverage, min_allele_frequency: args.min_allele_frequency };
         let out: String = file_pileup.read_analyse_write(&filter_stats,
                                                          &args.output,
-                                                         &args.n_threads).unwrap();
+                                                         &args.n_threads,
+                                                        base::pileup_to_sync).unwrap();
     } else if args.analysis == String::from("fisher_exact_test") {
-        let out = tables::fisher(&args.fname, &args.output, &args.n_threads).unwrap();
+        let file_sync = base::FileSync{ filename: args.fname, test: String::from("fisher_exact_test") };
+        let out: String = file_sync.read_analyse_write(&filter_stats,
+                                                         &args.output,
+                                                         &args.n_threads,
+                                                        tables::fisher).unwrap();
     } else if args.analysis == String::from("chisq_test") {
-        let out = tables::chisq(&args.fname, &args.output, &args.n_threads).unwrap();
+        let file_sync = base::FileSync{ filename: args.fname, test: String::from("chisq_test") };
+        let out: String = file_sync.read_analyse_write(&filter_stats,
+                                                         &args.output,
+                                                         &args.n_threads,
+                                                        tables::chisq).unwrap();
     } else if args.analysis == String::from("pearson_corr") {
         let phen_col = args.phen_value_col.into_iter().map(|x| x.parse::<usize>().expect("Invalid integer input for the phenotype column/s (--phen-value-col).")).collect::<Vec<usize>>();
         let out = regression::correlation(&args.fname,
@@ -86,7 +95,7 @@ fn main() {
                                           &phen_col,
                                           &args.output,
                                           &args.n_threads).unwrap();
-    }else if args.analysis == String::from("test") {
+    } else if args.analysis == String::from("test") {
         let out = 0;
         println!("TEST={:?}", out);
         

@@ -1,11 +1,11 @@
 pub use self::{
     structs_and_traits::*,
-    find_splits::*,
+    helpers::*,
     pileup::*,
     sync::*,
 };
 
 mod structs_and_traits;
-mod find_splits;
+mod helpers;
 mod pileup;
 mod sync;
