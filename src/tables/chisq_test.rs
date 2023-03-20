@@ -1,6 +1,4 @@
 use crate::base::*;
-use nalgebra::DMatrix;
-
 use statrs::distribution::{ChiSquared, ContinuousCDF};
 
 pub fn chisq(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Option<String> {

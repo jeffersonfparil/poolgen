@@ -17,12 +17,17 @@ pub struct FileSync {
 #[derive(Debug, Clone)]
 pub struct FilePhen {
     pub filename: String,
+    pub phen_delim: String,
+    pub phen_name_col: usize,
+    pub phen_value_col: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FileSyncPhen {
     pub filename_sync: String,
-    pub filename_phen: String,
+    pub pool_names: Vec<String>,
+    pub phen_matrix: DMatrix<f64>,
+    pub test: String,
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +72,14 @@ pub struct IndelMarker {
     pub indel: bool,    // insertion or deletion, i.e. +/- codes
     pub count: usize,   // size of the indel, i.e. how many bases
     pub left: usize,    // how many indel bases are left to be removed (initialised with the maximum possible value of 4294967295)
+}
+
+// Struct of allele counts and phenotypes per pool
+#[derive(Debug, Clone)]
+pub struct LocusCountsAndPhenotypes {
+    pub locus_counts: LocusCounts,
+    pub phenotypes: DMatrix<f64>, // n pools x k traits
+    pub pool_names: Vec<String>,
 }
 
 // TRAITS

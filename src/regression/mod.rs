@@ -1,6 +1,6 @@
 pub use self::{
-    correlation_test::correlation,
-    ols::ols_iterate,
+    correlation_test::*,
+    ols::*,
 };
 
 mod correlation_test;

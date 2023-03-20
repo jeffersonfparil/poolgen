@@ -219,7 +219,8 @@ impl Filter for LocusFrequencies {
     }
 }
 
-impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> Option<String>> for FileSync {
+impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> Option<String>>
+for FileSync {
     fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: fn(&mut LocusCounts, &FilterStats) -> Option<String>) -> io::Result<String> {
         let fname = self.filename.clone();
         // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
@@ -328,6 +329,139 @@ impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> O
         }
         // Write out
         file_out.write_all(("#chr,pos,alleles,pvalue\n").as_bytes()).unwrap();
+        // Extract output filenames from each thread into a vector and sort them
+        let mut fnames_out: Vec<String> = Vec::new();
+        for f in thread_ouputs.lock().unwrap().iter() {
+            fnames_out.push(f.to_owned());
+        }
+        fnames_out.sort();
+        // Iterate across output files from each thread, and concatenate non-empty files
+        for f in fnames_out {
+            let mut file: File = File::open(&f).unwrap();
+            if file.metadata().unwrap().len() > 0 {
+                io::copy(&mut file, &mut file_out).unwrap();
+            }
+            // Clean-up: remove temporary output files from each thread
+            let error_deleting_file = "Unable to remove file: ".to_owned() + &f;
+            std::fs::remove_file(f).expect(&error_deleting_file);
+        }
+        Ok(out)
+    }
+}
+
+impl ChunkyReadAnalyseWrite<LocusCountsAndPhenotypes, fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>>
+for FileSyncPhen {
+    fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>) -> io::Result<String> {
+        let fname = self.filename_sync.clone();
+        // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
+        let mut start_string = start.to_string();
+        for _ in 0..(outname_ndigits - start_string.len()) {
+            start_string = "0".to_owned() + &start_string;
+        }
+        // Add leading zeros in front of the end file position so that we can sort the output files per chuck or thread properly
+        let mut end_string = end.to_string();
+        for _ in 0..(outname_ndigits - end_string.len()) {
+            end_string = "0".to_owned() + &end_string;
+        }
+        // Output temp file for the chunk    
+        let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".fisher_test.tmp";
+        let out = fname_out.clone();
+        let error_writing_file = "T_T Unable to create file: ".to_owned() + &fname_out;
+        let error_writing_line = "T_T Unable to write line into file: ".to_owned() + &fname_out;
+        let file_out = File::create(fname_out).expect(&error_writing_file);
+        let mut file_out = BufWriter::new(file_out);
+        // Input file chunk
+        let file = File::open(fname.clone()).unwrap();
+        let mut reader = BufReader::new(file);
+        // Navigate to the start of the chunk
+        let mut i: u64 = *start;
+        reader.seek(SeekFrom::Start(*start)).unwrap();
+        // Read and parse until the end of the chunk
+        while i < *end {
+            // Instantiate the line
+            let mut line = String::new();
+            // Read the line which automatically movesthe cursor position to the next line
+            let _ = reader.read_line(&mut line).unwrap();
+            // Find the new cursor position
+            i = reader.seek(SeekFrom::Current(0)).unwrap();
+            // Remove trailing newline character in Unix-like (\n) and Windows (\r)
+            if line.ends_with('\n') {
+                line.pop();
+                if line.ends_with('\r') {
+                    line.pop();
+                }
+            }
+            // Parse the pileup line
+            let locus_counts: Box<LocusCounts> = match line.lparse() {
+                Ok(x) => x,
+                Err(x) => match x.kind() {
+                    ErrorKind::Other => continue,
+                    _ => return Err(Error::new(ErrorKind::Other, "T_T Input sync file error, i.e. '".to_owned() + &fname + "' at line with the first 20 characters as: " + &line[0..20] + "."))
+                }
+            };
+            let mut locus_counts_and_phenotypes = LocusCountsAndPhenotypes{ locus_counts: *locus_counts.clone(),
+                                                                                                      pool_names: self.pool_names.clone(),
+                                                                                                      phenotypes: self.phen_matrix.clone() };
+            // Write the line
+            let _ = match function(&mut locus_counts_and_phenotypes, filter_stats) {
+                Some(x) => file_out.write_all(x.as_bytes()).expect(&error_writing_line),
+                None => continue,
+            };
+        }
+        Ok(out)
+    }
+    
+    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>) -> io::Result<String> {
+        // Unpack pileup and pool names filenames
+        let fname = self.filename_sync.clone();
+        let test = self.test.clone();
+        // Output filename
+        let mut out = out.to_owned();
+        if out == "".to_owned() {
+            let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
+            let bname = fname.split(".").collect::<Vec<&str>>().into_iter().map(|a| a.to_owned())
+                                        .collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>()[1..].to_owned()
+                                        .into_iter().rev().collect::<Vec<String>>().join(".");
+            out = bname.to_owned() + "-" + &time.to_string() + "-" + &test + ".csv";
+        }
+        // Instatiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        // let mut file_out = File::create(&out).expect(&error_writing_file);
+        let mut file_out = OpenOptions::new().create_new(true)
+                                                .write(true)
+                                                .append(false)
+                                                .open(&out)
+                                                .expect(&error_writing_file);
+        // // Find the positions whereto split the file into n_threads pieces
+        let chunks = find_file_splits(&fname, n_threads).unwrap();
+        let outname_ndigits = chunks[*n_threads as usize].to_string().len();
+        println!("Chunks: {:?}", chunks);
+        // Tuple arguments of pileup2sync_chunks
+        // Instantiate thread object for parallel execution
+        let mut thread_objects = Vec::new();
+        // Vector holding all returns from pileup2sync_chunk()
+        let mut thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
+        // Making four separate threads calling the `search_for_word` function
+        for i in 0..(*n_threads as usize) {
+            // Clone pileup2sync_chunk parameters
+            let self_clone = self.clone();
+            let start = chunks[i].clone();
+            let end = chunks[i+1].clone();
+            let outname_ndigits = outname_ndigits.clone();
+            let filter_stats = filter_stats.clone();
+            let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
+            let thread = std::thread::spawn(move || {
+                let fname_out_per_thread = self_clone.per_chunk(&start, &end, &outname_ndigits, &filter_stats, function).unwrap();
+                thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
+            });
+            thread_objects.push(thread);
+        }
+        // Waiting for all threads to finish
+        for thread in thread_objects {
+            let _ = thread.join().expect("Unknown thread error occured.");
+        }
+        // Write out
+        file_out.write_all(("#chr,pos,alleles,pheno,statistic,pvalue\n").as_bytes()).unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();
         for f in thread_ouputs.lock().unwrap().iter() {

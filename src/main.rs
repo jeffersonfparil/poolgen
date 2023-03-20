@@ -1,7 +1,7 @@
 // use std::env;
 use clap::Parser;
 mod base;
-use base::ChunkyReadAnalyseWrite;
+use base::{Parse, ChunkyReadAnalyseWrite};
 mod io;
 mod tables;
 mod regression;
@@ -56,48 +56,54 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+    let mut output: String = String::from("");
     let filter_stats = base::FilterStats{ remove_ns: args.remove_ns, min_quality: args.min_quality, min_coverage: args.min_coverage, min_allele_frequency: args.min_allele_frequency };
     if args.analysis == String::from("pileup2sync") {
         let file_pileup = base::FilePileup{ filename: args.fname, pool_names: args.pool_names };
-        let out: String = file_pileup.read_analyse_write(&filter_stats,
+        output = file_pileup.read_analyse_write(&filter_stats,
                                                          &args.output,
                                                          &args.n_threads,
                                                         base::pileup_to_sync).unwrap();
     } else if args.analysis == String::from("fisher_exact_test") {
         let file_sync = base::FileSync{ filename: args.fname, test: String::from("fisher_exact_test") };
-        let out: String = file_sync.read_analyse_write(&filter_stats,
+        output = file_sync.read_analyse_write(&filter_stats,
                                                          &args.output,
                                                          &args.n_threads,
                                                         tables::fisher).unwrap();
     } else if args.analysis == String::from("chisq_test") {
         let file_sync = base::FileSync{ filename: args.fname, test: String::from("chisq_test") };
-        let out: String = file_sync.read_analyse_write(&filter_stats,
+        output = file_sync.read_analyse_write(&filter_stats,
                                                          &args.output,
                                                          &args.n_threads,
                                                         tables::chisq).unwrap();
     } else if args.analysis == String::from("pearson_corr") {
+        let file_sync = base::FileSync{ filename: args.fname, test: String::from("pearson_corr") };
         let phen_col = args.phen_value_col.into_iter().map(|x| x.parse::<usize>().expect("Invalid integer input for the phenotype column/s (--phen-value-col).")).collect::<Vec<usize>>();
-        let out = regression::correlation(&args.fname,
-                                                  &args.min_allele_frequency,
-                                                  &args.phen_fname,
-                                                  &args.phen_delim,
-                                                  &args.phen_name_col,
-                                                  &phen_col,
-                                                  &args.output,
-                                                  &args.n_threads).unwrap();
+        let file_phen = base::FilePhen{ filename: args.phen_fname,
+                                                  phen_delim: args.phen_delim,
+                                                  phen_name_col: args.phen_name_col,
+                                                  phen_value_col: phen_col };
+        let file_sync_phen = (file_sync, file_phen).lparse().unwrap();
+        output = file_sync_phen.read_analyse_write(&filter_stats,
+                                                            &args.output,
+                                                            &args.n_threads,
+                                                            regression::correlation).unwrap();
     } else if args.analysis == String::from("ols_iter") {
+        let file_sync = base::FileSync{ filename: args.fname, test: String::from("ols_iter") };
         let phen_col = args.phen_value_col.into_iter().map(|x| x.parse::<usize>().expect("Invalid integer input for the phenotype column/s (--phen-value-col).")).collect::<Vec<usize>>();
-        let out = regression::ols_iterate(&args.fname,
-                                          &args.min_allele_frequency,
-                                          &args.phen_fname,
-                                          &args.phen_delim,
-                                          &args.phen_name_col,
-                                          &phen_col,
-                                          &args.output,
-                                          &args.n_threads).unwrap();
+        let file_phen = base::FilePhen{ filename: args.phen_fname,
+                                                  phen_delim: args.phen_delim,
+                                                  phen_name_col: args.phen_name_col,
+                                                  phen_value_col: phen_col };
+        let file_sync_phen = (file_sync, file_phen).lparse().unwrap();
+        output = file_sync_phen.read_analyse_write(&filter_stats,
+                                                            &args.output,
+                                                            &args.n_threads,
+                                                            regression::ols_iterate).unwrap();
     } else if args.analysis == String::from("test") {
-        let out = 0;
-        println!("TEST={:?}", out);
+        let output = 0;
+        println!("TEST={:?}", output);
         
     }
+    println!("{}", output);
 }
