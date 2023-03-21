@@ -46,11 +46,11 @@ pub fn correlation(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, f
         Err(_) => return None
     };
     // Extract the genotype and phenotypes
-    let X = locus_frequencies.matrix.clone();
-    let Y = locus_counts_and_phenotypes.phenotypes.clone();
+    let x_matrix = locus_frequencies.matrix.clone();
+    let y_matrix = locus_counts_and_phenotypes.phenotypes.clone();
     // Check if we have a compatible allele frequency and phenotype matrix or vector
-    let (n, p) =  X.shape();
-    let (m, k) = Y.shape();
+    let (n, p) =  x_matrix.shape();
+    let (m, k) = y_matrix.shape();
     if n != m {
         return None
     }
@@ -59,12 +59,12 @@ pub fn correlation(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, f
     let first_2_col = vec![locus_frequencies.chromosome, locus_frequencies.position.to_string()];
     let mut line: Vec<String> = vec![];
     for i in 0..p {
-        let x = DVector::from(X.column(i));
+        let x = DVector::from(x_matrix.column(i));
         for j in 0..k {
             line.append(&mut first_2_col.clone());
             line.push(locus_frequencies.alleles_vector[i].clone());
             line.push("Pheno_".to_string() + &(j.to_string())[..]);
-            let y  = DVector::from(Y.column(j));
+            let y  = DVector::from(y_matrix.column(j));
             (corr, pval) = pearsons_correlation(&x, &y).unwrap();
             line.push(corr.to_string());
             line.push(pval.to_string() + "\n");

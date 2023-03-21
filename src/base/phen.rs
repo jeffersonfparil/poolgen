@@ -71,7 +71,7 @@ impl Parse<FileSyncPhen> for (FileSync, FilePhen) {
             for line in reader.lines() {
                 all_lines.push(line.expect("T_T Phenotype file in GWAlpha format is missing some lines, e.g. Pheno_name, sig, MIN, MAX, perc and/or q."));
             }
-            let name = all_lines[0].split("=").collect::<Vec<&str>>()[1].replace(";", "").trim().to_string();
+            let _name = all_lines[0].split("=").collect::<Vec<&str>>()[1].replace(";", "").trim().to_string();
             let sig = all_lines[1].split("=").collect::<Vec<&str>>()[1].replace(";", "").trim().parse::<f64>().expect("T_T Error parsing the standard deviation of the trait as f64 in the GWAlpha formatted phenotype file.");
             let min = all_lines[2].split("=").collect::<Vec<&str>>()[1].replace(";", "").trim().parse::<f64>().expect("T_T Error parsing the minimum value of the trait as f64 in the GWAlpha formatted phenotype file.");
             let max = all_lines[3].split("=").collect::<Vec<&str>>()[1].replace(";", "").trim().parse::<f64>().expect("T_T Error parsing the maximum value of the trait as f64 in the GWAlpha formatted phenotype file.");

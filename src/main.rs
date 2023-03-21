@@ -1,8 +1,9 @@
-// use std::env;
+// For quick tests
+#[allow(warnings)]
+
 use clap::Parser;
 mod base;
 use base::{Parse, ChunkyReadAnalyseWrite};
-mod io;
 mod tables;
 mod regression;
 mod gwalpha;
@@ -50,7 +51,7 @@ struct Args {
     #[clap(long, use_value_delimiter=true, value_delimiter=',', default_value="1")]
     phen_value_col: Vec<String>,
     /// Format of the input phenotype file, e.g. default or gwalpha_fmt
-    #[clap(long, default_value="gwalpha_fmt")]
+    #[clap(long, default_value="default")]
     phen_format: String,
     /// Number of threads to use for parallel processing
     #[clap(long, default_value_t=1)]

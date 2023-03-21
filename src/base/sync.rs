@@ -307,7 +307,7 @@ for FileSync {
         // Instantiate thread object for parallel execution
         let mut thread_objects = Vec::new();
         // Vector holding all returns from pileup2sync_chunk()
-        let mut thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
+        let thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
         // Making four separate threads calling the `search_for_word` function
         for i in 0..(*n_threads as usize) {
             // Clone pileup2sync_chunk parameters
@@ -316,7 +316,7 @@ for FileSync {
             let end = chunks[i+1].clone();
             let outname_ndigits = outname_ndigits.clone();
             let filter_stats = filter_stats.clone();
-            let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
+            let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
                 let fname_out_per_thread = self_clone.per_chunk(&start, &end, &outname_ndigits, &filter_stats, function).unwrap();
                 thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
@@ -440,7 +440,7 @@ for FileSyncPhen {
         // Instantiate thread object for parallel execution
         let mut thread_objects = Vec::new();
         // Vector holding all returns from pileup2sync_chunk()
-        let mut thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
+        let thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
         // Making four separate threads calling the `search_for_word` function
         for i in 0..(*n_threads as usize) {
             // Clone pileup2sync_chunk parameters
@@ -449,7 +449,7 @@ for FileSyncPhen {
             let end = chunks[i+1].clone();
             let outname_ndigits = outname_ndigits.clone();
             let filter_stats = filter_stats.clone();
-            let mut thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
+            let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
                 let fname_out_per_thread = self_clone.per_chunk(&start, &end, &outname_ndigits, &filter_stats, function).unwrap();
                 thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);

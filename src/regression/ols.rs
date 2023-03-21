@@ -1,57 +1,55 @@
 use std::io::{self, Error, ErrorKind};
 use nalgebra::{self, DMatrix, DVector};
 use crate::base::*;
-use crate::io::sync::AlleleCountsOrFrequencies;
-use crate::io::phen::{Phenotypes, load_phen};
 
 use statrs::distribution::{StudentsT, ContinuousCDF};
 
-fn ols(X: &DMatrix<f64>, Y: &DMatrix<f64>) -> io::Result<(DMatrix<f64>, DMatrix<f64>)> {
-    let (n, p) = X.shape();
-    let (n_, k) = Y.shape();
-    // println!("X={:?}; Y={:?}", X, Y);
+fn ols(x_matrix: &DMatrix<f64>, y_matrix: &DMatrix<f64>) -> io::Result<(DMatrix<f64>, DMatrix<f64>)> {
+    let (n, p) = x_matrix.shape();
+    let (n_, k) = y_matrix.shape();
+    // println!("x_matrix={:?}; y_matrix={:?}", x_matrix, y_matrix);
     if n != n_ {
         return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
     }
     let mut b: DVector<f64>;
-    let mut C: DMatrix<f64>;
+    let mut c_martix: DMatrix<f64>;
     let mut beta = DMatrix::from_element(p, k, 0.0);
     let mut var_beta = DMatrix::from_element(p, k, 0.0);
     for j in 0..k {
-        let y = Y.column(j);
+        let y_vector = y_matrix.column(j);
         if n < p {
-            let Xt = X.transpose();
-            let inv_XXt = match (X * &Xt).try_inverse() {
+            let xt_matrix = x_matrix.transpose();
+            let inv_xxt_matrix = match (x_matrix * &xt_matrix).try_inverse() {
                 Some(x) => x,
-                None => return Err(Error::new(ErrorKind::Other, "Non-invertible X")),
+                None => return Err(Error::new(ErrorKind::Other, "Non-invertible x_matrix")),
             };
-            if inv_XXt.determinant() == 0.0 {
-                return Err(Error::new(ErrorKind::Other, "Non-invertible X"))
+            if inv_xxt_matrix.determinant() == 0.0 {
+                return Err(Error::new(ErrorKind::Other, "Non-invertible x_matrix"))
             }
-            b = &Xt * &inv_XXt * y;
-            C = &Xt * &inv_XXt * &inv_XXt * X;
+            b = &xt_matrix * &inv_xxt_matrix * y_vector;
+            c_martix = &xt_matrix * &inv_xxt_matrix * &inv_xxt_matrix * x_matrix;
         } else {
-            let Xt = X.transpose();
-            let inv_XtX = match (&Xt * X).try_inverse(){
+            let xt_matrix = x_matrix.transpose();
+            let inv_xtx_matrix = match (&xt_matrix * x_matrix).try_inverse(){
                 Some(x) => x,
-                None => return Err(Error::new(ErrorKind::Other, "Non-invertible X")),
+                None => return Err(Error::new(ErrorKind::Other, "Non-invertible x_matrix")),
             };
-            if inv_XtX.determinant() == 0.0 {
-                return Err(Error::new(ErrorKind::Other, "Non-invertible X"))
+            if inv_xtx_matrix.determinant() == 0.0 {
+                return Err(Error::new(ErrorKind::Other, "Non-invertible x_matrix"))
             }
-            b = &inv_XtX * &Xt * y;
-            C = inv_XtX;
+            b = &inv_xtx_matrix * &xt_matrix * y_vector;
+            c_martix = inv_xtx_matrix;
         }
-        let e = y - (X * &b);
+        let e = y_vector - (x_matrix * &b);
         let se = (&e.transpose() * &e).sum() / (n as f64 - p as f64);
-        let vb = se * &C;
+        let vb = se * &c_martix;
         for i in 0..p {
             beta[(i,j)] = b[i];
             var_beta[(i,j)] = vb[(i, i)];
         }
         // println!("#################################");
         // println!("b={:?}", b);
-        // println!("C={:?}", C);
+        // println!("c_martix={:?}", c_martix);
         // println!("e={:?}", e);
         // println!("se={:?}", se);
         // println!("vb={:?}", vb);
@@ -74,23 +72,23 @@ pub fn ols_iterate(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, f
         Err(_) => return None
     };
     // Extract the genotype and phenotypes
-    let mut X = locus_frequencies.matrix.clone();
-    let Y = locus_counts_and_phenotypes.phenotypes.clone();
+    let mut x_matrix = locus_frequencies.matrix.clone();
+    let y_matrix = locus_counts_and_phenotypes.phenotypes.clone();
     // Check if we have a compatible allele frequency and phenotype matrix or vector
-    let (n, mut p) =  X.shape();
-    let (m, k) = Y.shape();
+    let (n, mut p) =  x_matrix.shape();
+    let (m, k) = y_matrix.shape();
     if n != m {
         return None
     }
     // Keep p-1 alleles if p >= 2 so we have degrees of freedom to fit the intercept
     if p >= 2 {
-        X = X.clone().remove_columns(p-1, 1);
+        x_matrix = x_matrix.clone().remove_columns(p-1, 1);
         p -= 1;
     }
-    X = X.clone().insert_column(0, 1.0);
+    x_matrix = x_matrix.clone().insert_column(0, 1.0);
     p += 1;
     // OLS and compute the p-values associated with each estimate
-    let (beta, var_beta) = match ols(&X, &Y) {
+    let (beta, var_beta) = match ols(&x_matrix, &y_matrix) {
         Ok(x) => x,
         Err(_) => return None,
     };
