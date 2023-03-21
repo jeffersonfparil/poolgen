@@ -2,7 +2,7 @@ use std::io::{self, Error, ErrorKind};
 use nalgebra::{self, DMatrix};
 use crate::base::*;
 
-use statrs::distribution::{StudentsT, ContinuousCDF};
+use statrs::distribution::{Beta, ContinuousCDF};
 
 fn neg_loglik_beta() -> io::Result<f64> {
     Ok(0.0)
