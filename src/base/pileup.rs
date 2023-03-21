@@ -281,7 +281,8 @@ pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) 
     Some(out)
 }
 
-impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Option<String>> for FilePileup {
+impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Option<String>>
+for FilePileup {
     fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: fn(&mut PileupLine, &FilterStats) -> Option<String>) -> io::Result<String> {
         let fname = self.filename.clone();
         // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly

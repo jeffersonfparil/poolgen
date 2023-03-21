@@ -49,6 +49,9 @@ struct Args {
     /// Column indexes containing the phenotype values in the input phenotype file, e.g. 1 or 1,2,3 or 1,2,3,4 etc ...
     #[clap(long, use_value_delimiter=true, value_delimiter=',', default_value="1")]
     phen_value_col: Vec<String>,
+    /// Format of the input phenotype file, e.g. default or gwalpha_fmt
+    #[clap(long, default_value="gwalpha_fmt")]
+    phen_format: String,
     /// Number of threads to use for parallel processing
     #[clap(long, default_value_t=1)]
     n_threads: u64,
@@ -82,7 +85,8 @@ fn main() {
         let file_phen = base::FilePhen{ filename: args.phen_fname,
                                                   phen_delim: args.phen_delim,
                                                   phen_name_col: args.phen_name_col,
-                                                  phen_value_col: phen_col };
+                                                  phen_value_col: phen_col,
+                                                  format: args.phen_format };
         let file_sync_phen = (file_sync, file_phen).lparse().unwrap();
         output = file_sync_phen.read_analyse_write(&filter_stats,
                                                             &args.output,
@@ -94,7 +98,8 @@ fn main() {
         let file_phen = base::FilePhen{ filename: args.phen_fname,
                                                   phen_delim: args.phen_delim,
                                                   phen_name_col: args.phen_name_col,
-                                                  phen_value_col: phen_col };
+                                                  phen_value_col: phen_col,
+                                                format: args.phen_format };
         let file_sync_phen = (file_sync, file_phen).lparse().unwrap();
         output = file_sync_phen.read_analyse_write(&filter_stats,
                                                             &args.output,

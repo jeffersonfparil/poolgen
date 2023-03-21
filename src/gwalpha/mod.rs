@@ -1,5 +1,5 @@
 pub use self::{
-    gwalpha::gwalpha,
+    gwalpha::*,
 };
 
 mod gwalpha;

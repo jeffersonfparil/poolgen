@@ -20,6 +20,7 @@ pub struct FilePhen {
     pub phen_delim: String,
     pub phen_name_col: usize,
     pub phen_value_col: Vec<usize>,
+    pub format: String,
 }
 
 #[derive(Debug, Clone)]
