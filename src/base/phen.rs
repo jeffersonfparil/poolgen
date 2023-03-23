@@ -89,18 +89,18 @@ impl Parse<FileSyncPhen> for (FileSync, FilePhen) {
             let mut _perc1 = vec![0.0]; _perc1.append(&mut perc.clone());
             let perc1: DMatrix<f64> = DMatrix::from_vec(_perc1.len(), 1, _perc1);
             let bins = perc0 - perc1;
-            let mut n = bins.len() + 1;
+            let mut n = bins.len();
             if n < 3 {
                 n = 3;
             }
             // For LS
-            let _q: DMatrix<f64> = DMatrix::from_vec(q.len(), 1, q.clone());
-            let _q_min: DMatrix<f64> = DMatrix::from_element(q.len(), 1, min);
             let mut q_prime: DMatrix<f64> = DMatrix::from_element(n, 1, 0.0);
-            for i in 0..n {
-                q_prime[i] = (_q[i] - _q_min[i]) / (max-min);
+            for i in 0..q.len() {
+                q_prime[i+1] = (q[i] - min) / (max-min);
             }
-            let mut phen_matrix = DMatrix::from_element(n, 3, f64::NEG_INFINITY);
+            let mut phen_matrix = DMatrix::from_element(n, 
+                                                                                       3,
+                                                                                        f64::NEG_INFINITY);
             for i in 0..bins.nrows() {
                 phen_matrix[(i, 0)] = bins[i];
                 phen_matrix[(i, 1)] = q_prime[i];

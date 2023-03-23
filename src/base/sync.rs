@@ -234,7 +234,7 @@ for FileSync {
             end_string = "0".to_owned() + &end_string;
         }
         // Output temp file for the chunk    
-        let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".fisher_test.tmp";
+        let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".tmp";
         let out = fname_out.clone();
         let error_writing_file = "T_T Unable to create file: ".to_owned() + &fname_out;
         let error_writing_line = "T_T Unable to write line into file: ".to_owned() + &fname_out;
@@ -364,7 +364,7 @@ for FileSyncPhen {
             end_string = "0".to_owned() + &end_string;
         }
         // Output temp file for the chunk    
-        let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".fisher_test.tmp";
+        let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".tmp";
         let out = fname_out.clone();
         let error_writing_file = "T_T Unable to create file: ".to_owned() + &fname_out;
         let error_writing_line = "T_T Unable to write line into file: ".to_owned() + &fname_out;

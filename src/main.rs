@@ -50,9 +50,9 @@ struct Args {
     /// Column indexes containing the phenotype values in the input phenotype file, e.g. 1 or 1,2,3 or 1,2,3,4 etc ...
     #[clap(long, use_value_delimiter=true, value_delimiter=',', default_value="1")]
     phen_value_col: Vec<String>,
-    /// Format of the input phenotype file, e.g. default or gwalpha_fmt
-    #[clap(long, default_value="default")]
-    phen_format: String,
+    // /// Format of the input phenotype file, e.g. default or gwalpha_fmt
+    // #[clap(long, default_value="default")]
+    // phen_format: String,
     /// Number of threads to use for parallel processing
     #[clap(long, default_value_t=1)]
     n_threads: u64,
@@ -62,6 +62,7 @@ fn main() {
     let args = Args::parse();
     let mut output: String = String::from("");
     let filter_stats = base::FilterStats{ remove_ns: args.remove_ns, min_quality: args.min_quality, min_coverage: args.min_coverage, min_allele_frequency: args.min_allele_frequency };
+    let mut phen_format = "default".to_string();
     if args.analysis == String::from("pileup2sync") {
         let file_pileup = base::FilePileup{ filename: args.fname, pool_names: args.pool_names };
         output = file_pileup.read_analyse_write(&filter_stats,
@@ -87,7 +88,7 @@ fn main() {
                                                   phen_delim: args.phen_delim,
                                                   phen_name_col: args.phen_name_col,
                                                   phen_value_col: phen_col,
-                                                  format: args.phen_format };
+                                                  format: phen_format };
         let file_sync_phen = (file_sync, file_phen).lparse().unwrap();
         output = file_sync_phen.read_analyse_write(&filter_stats,
                                                             &args.output,
@@ -100,12 +101,26 @@ fn main() {
                                                   phen_delim: args.phen_delim,
                                                   phen_name_col: args.phen_name_col,
                                                   phen_value_col: phen_col,
-                                                format: args.phen_format };
+                                                format: phen_format };
         let file_sync_phen = (file_sync, file_phen).lparse().unwrap();
         output = file_sync_phen.read_analyse_write(&filter_stats,
                                                             &args.output,
                                                             &args.n_threads,
                                                             regression::ols_iterate).unwrap();
+    } else if args.analysis == String::from("gwalpha") {
+        phen_format = "gwalpha_fmt".to_string();
+        let file_sync = base::FileSync{ filename: args.fname, test: String::from("gwalpha") };
+        let phen_col = args.phen_value_col.into_iter().map(|x| x.parse::<usize>().expect("Invalid integer input for the phenotype column/s (--phen-value-col).")).collect::<Vec<usize>>();
+        let file_phen = base::FilePhen{ filename: args.phen_fname,
+                                                  phen_delim: args.phen_delim,
+                                                  phen_name_col: args.phen_name_col,
+                                                  phen_value_col: phen_col,
+                                                format: phen_format };
+        let file_sync_phen = (file_sync, file_phen).lparse().unwrap();
+        output = file_sync_phen.read_analyse_write(&filter_stats,
+                                                            &args.output,
+                                                            &args.n_threads,
+                                                            gwalpha::gwalpha).unwrap();
     } else if args.analysis == String::from("test") {
         let output = 0;
         println!("TEST={:?}", output);
