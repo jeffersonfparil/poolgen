@@ -99,9 +99,23 @@ fn maximum_likelihood_beta(params: &Vec<f64>, percs_a: &DMatrix<f64>, percs_b: &
     for i in 0..n {
         a_log_likelihood += f64::log10(a_dist.cdf(percs_a[i]) - a_dist.cdf(percs_a0[i]));
         b_log_likelihood += f64::log10(b_dist.cdf(percs_b[i]) - b_dist.cdf(percs_b0[i]));
+        // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+        // println!("percs_a={:?}", percs_a);
+        // println!("percs_a0={:?}", percs_a0);
+        // println!("percs_b={:?}", percs_b);
+        // println!("percs_b0={:?}", percs_b0);
+        // println!("a_dist.cdf(percs_a[i])={:?}", a_dist.cdf(percs_a[i]));
+        // println!("a_dist.cdf(percs_a0[i])={:?}", a_dist.cdf(percs_a0[i]));
+        // println!("diff={:?}", a_dist.cdf(percs_a[i]) - a_dist.cdf(percs_a0[i]));
+        // println!("log10(diff)={:?}", f64::log10(a_dist.cdf(percs_a[i]) - a_dist.cdf(percs_a0[i])));
+        // println!("##############################################");
+        // println!("b_dist.cdf(percs_b[i])={:?}", b_dist.cdf(percs_b[i]));
+        // println!("b_dist.cdf(percs_b0[i])={:?}", b_dist.cdf(percs_b0[i]));
+        // println!("diff={:?}", b_dist.cdf(percs_b[i]) - b_dist.cdf(percs_b0[i]));
+        // println!("log10(diff)={:?}", f64::log10(b_dist.cdf(percs_b[i]) - b_dist.cdf(percs_b0[i])));
     }
     let out = -a_log_likelihood - b_log_likelihood;
-    println!("a1={}; a2={}; b1={}; b2={}; a_log_likelihood={}; b_log_likelihood={}; out={}", a_shape1, a_shape2, b_shape1, b_shape2, a_log_likelihood, b_log_likelihood, out);
+    // println!("a1={}; a2={}; b1={}; b2={}; a_log_likelihood={}; b_log_likelihood={}; out={}", a_shape1, a_shape2, b_shape1, b_shape2, a_log_likelihood, b_log_likelihood, out);
     out
 }
 
@@ -185,7 +199,11 @@ pub fn gwalpha(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, filte
     let mut line: Vec<String> = vec![];
     // Iterate across alleles
     for j in 0..p {
-        let freqs_a: DMatrix<f64> = DMatrix::from_columns(&[x_matrix.column(j)]);
+        let mut freqs_a: DMatrix<f64> = DMatrix::from_columns(&[x_matrix.column(j)]).add_scalar(1e-4); // Add a small value so we don't get negative log-likelihoods
+        let freqs_a_sum = freqs_a.sum();
+        for i in 0..freqs_a.len() {
+            freqs_a[i] = freqs_a[i]/freqs_a_sum;
+        }
         // println!("bins={:?}", bins);
         // println!("freqs_a={:?}", freqs_a);
         let p_a = (freqs_a.clone().transpose() * bins.clone())[(0,0)]; // mean allele frequency across pools
@@ -201,15 +219,25 @@ pub fn gwalpha(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, filte
             bins_a[i] = (freqs_a[i]) * bins[i] / (p_a);
             bins_b[i] = (1.0 - freqs_a[i]) * bins[i] / (1.0 - p_a);
         }
+        // // Remap between 0 and 1
+        // let sum_a = bins_a.sum();
+        // let sum_b = bins_b.sum();
+        // for i in 0..n {
+        //     bins_a[i] = bins_a[i]/sum_a;
+        //     bins_b[i] = bins_b[i]/sum_b;
+        // }
+        // println!("bins={:?}", bins);
+        // println!("freqs_a={:?}", freqs_a);
+        // println!("bins_a={:?}", bins_a);
+        // println!("bins_b={:?}", bins_b);
         // Percentiles (cummulative bins summing up to 1.0) of the current allele and its additive inverse representing the rest of the alleles
-        let mut percs_a = DMatrix::from_element(bins_a.nrows(), 1, 0.0);
-        let mut percs_b = DMatrix::from_element(bins_b.nrows(), 1, 0.0);
+        let mut percs_a = bins_a.clone();
+        let mut percs_b = bins_b.clone();
         for i in 1..bins_a.nrows() {
-            for k in 0..i {
-                percs_a[i] += bins_a[k];
-                percs_b[i] += bins_b[k];
-            }
+            percs_a[i] = bins_a.view((0,0), (i+1,1)).sum();
+            percs_b[i] = bins_b.view((0,0), (i+1,1)).sum();
         }
+        // Remap 
         // Percentiles of the current allele and its additive inverse for modelling their distrbutions across pools
         let mut percs_a0: DMatrix<f64> = DMatrix::from_element(n, 1, 0.0);
         let mut percs_b0: DMatrix<f64> = DMatrix::from_element(n, 1, 0.0);
@@ -218,20 +246,20 @@ pub fn gwalpha(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, filte
             percs_b0[i+1] = percs_b[i];
         }
         // Test
-        println!("min={:?}", min);
-        println!("max={:?}", max);
-        println!("sig={:?}", sig);
-        println!("p_a={:?}", p_a);
-        println!("bins={:?}", bins);
-        println!("q={:?}", q);
-        println!("bins_a={:?}", bins_a);
-        println!("bins_b={:?}", bins_b);
-        println!("freqs_a={:?}", freqs_a);
-        println!("q_prime={:?}", q_prime);
-        println!("percs_a={:?}", percs_a);
-        println!("percs_b={:?}", percs_b);
-        println!("percs_a0={:?}", percs_a0);
-        println!("percs_b0={:?}", percs_b0);
+        // println!("min={:?}", min);
+        // println!("max={:?}", max);
+        // println!("sig={:?}", sig);
+        // println!("p_a={:?}", p_a);
+        // println!("bins={:?}", bins);
+        // println!("q={:?}", q);
+        // println!("bins_a={:?}", bins_a);
+        // println!("bins_b={:?}", bins_b);
+        // println!("freqs_a={:?}", freqs_a);
+        // println!("q_prime={:?}", q_prime);
+        // println!("percs_a={:?}", percs_a);
+        // println!("percs_b={:?}", percs_b);
+        // println!("percs_a0={:?}", percs_a0);
+        // println!("percs_b0={:?}", percs_b0);
         // Define cost function
         // let cost = LeastSquaresBeta { percs_a: percs_a.clone(),
         //                                                 percs_b: percs_b.clone(),
