@@ -100,28 +100,33 @@ impl Filter for LocusCounts {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         // Filter by minimum allele frequency
-        let allele_frequencies = match self.to_frequencies() {
+        // Before anything else, we clone matrix of allele counts
+        let mut matrix = self.matrix.clone();
+        //// First convert allele counts into frequencies
+        let mut allele_frequencies = match self.to_frequencies() {
             Ok(x) => x,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Cannot convert locus counts to locus frequencies.")),
         };
-        let mean_allele_freqs = allele_frequencies.matrix.row_mean(); // average across the rows which means sum of all elements per column
-        if (1.00 - mean_allele_freqs.max()) < filter_stats.min_allele_frequency {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
-        }
-        // Remove zero columns
-        let mut p: usize = self.matrix.ncols();
-        let mut i: usize = 0;
+        //// Next account for pool sizes to get the proper minmum allele frequency across all pools        
+        let (n, mut p) = allele_frequencies.matrix.shape();
+        let mut q: f64;
         let mut j: usize = 0;
-        let mut matrix: DMatrix<u64> = self.matrix.clone();
         while j < p {
-            if mean_allele_freqs[i] == 0.0 {
-                self.alleles_vector.remove(j);
-                matrix = matrix.remove_column(j);
-                p -= 1
-            } else {
-                j += 1
+            q = 0.0;
+            for i in 0..n {
+                q += allele_frequencies.matrix[(i,j)] * filter_stats.pool_sizes[i]; // We've made sure the pool_sizes sum up to one in phen.rs
             }
-            i += 1;
+            if (q < filter_stats.min_allele_frequency) | (q > (1.00-filter_stats.min_allele_frequency)) {
+                allele_frequencies.matrix = allele_frequencies.matrix.clone().remove_column(j);
+                matrix = matrix.clone().remove_column(j);
+                self.alleles_vector.remove(j);
+                p -= 1;
+            } else {
+                j += 1;
+            }
+        }
+        if p < 2 {
+            return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         self.matrix = matrix;
         Ok(self)
@@ -162,7 +167,7 @@ impl Filter for LocusFrequencies {
                                        alleles_vector: self.alleles_vector.clone(),
                                        matrix: matrix }))
     }
-    
+
     // Filter PileupLine by minimum coverage, minimum quality
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
@@ -188,35 +193,63 @@ impl Filter for LocusFrequencies {
         self.alleles_vector = recomputed_self.alleles_vector;
         self.matrix = recomputed_self.matrix;
         // Filter by minimum allele frequency
-        let mean_allele_freqs = self.matrix.row_mean(); // average across the rows which means sum of all elements per column
-        if (1.00 - mean_allele_freqs.max()) < filter_stats.min_allele_frequency {
-            return Err(Error::new(ErrorKind::Other, "-_- Filtered out."));
-        }
-        // Remove zero columns
-        let mut p: usize = self.matrix.ncols();
-        let mut i: usize = 0;
+        // Before anything else, we clone matrix of allele frequencies
+        let mut matrix = self.matrix.clone();
+        //// First convert allele counts into frequencies
+        let mut allele_frequencies = match self.to_frequencies() {
+            Ok(x) => x,
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Cannot convert locus counts to locus frequencies.")),
+        };
+        //// Next account for pool sizes to get the proper minmum allele frequency across all pools        
+        let (n, mut p) = allele_frequencies.matrix.shape();
+        let mut q: f64;
         let mut j: usize = 0;
-        let mut matrix: DMatrix<f64> = self.matrix.clone();
         while j < p {
-            if mean_allele_freqs[i] == 0.0 {
-                self.alleles_vector.remove(j);
-                matrix = matrix.remove_column(j);
-                p -= 1
-            } else {
-                j += 1
+            q = 0.0;
+            for i in 0..n {
+                q += allele_frequencies.matrix[(i,j)] * filter_stats.pool_sizes[i]; // We've made sure the pool_sizes sum up to one in phen.rs
             }
-            i += 1;
+            if (q < filter_stats.min_allele_frequency) | (q > (1.00-filter_stats.min_allele_frequency)) {
+                allele_frequencies.matrix = allele_frequencies.matrix.clone().remove_column(j);
+                matrix = matrix.clone().remove_column(j);
+                self.alleles_vector.remove(j);
+                p -= 1;
+            } else {
+                j += 1;
+            }
+        }
+        if p < 2 {
+            return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         self.matrix = matrix;
-        // Recompute frequencies after removing zero columns
-        let recomputed_self = match self.to_frequencies() {
-            Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "T_T Cannot convert locus counts to locus frequencies.")),
-        };
-        self.alleles_vector = recomputed_self.alleles_vector;
-        self.matrix = recomputed_self.matrix;
         Ok(self)
     }
+}
+
+impl Sort for LocusFrequencies {
+    fn sort_by_allele_freq(&mut self, decreasing: bool) -> io::Result<&mut Self> {
+        let (n, p) = self.matrix.shape();
+        let mut matrix = self.matrix.clone();
+        let mut alleles_vector = self.alleles_vector.clone();
+        let freqs = self.matrix.row_sum().iter().copied().map(|x| (1e+4*x).round() as usize).collect::<Vec<usize>>(); // Dang row_sum is colSum!!!
+        let mut idx = (0..p).collect::<Vec<usize>>();
+        idx.sort_unstable_by_key(|&i| &freqs[i]);
+        if decreasing {
+            idx = idx.into_iter().map(|x| (p-1) - x).collect::<Vec<usize>>();
+        }
+        let mut col_idx: usize;
+        for j in 0..p {
+            col_idx = idx[j];
+            for i in 0..n {
+                matrix[(i, col_idx)] = self.matrix[(i, j)];
+            }
+            alleles_vector[col_idx] = self.alleles_vector[j].clone();
+        }
+        self.matrix = matrix;
+        self.alleles_vector = alleles_vector;
+        Ok(self)
+    }
+
 }
 
 impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> Option<String>>
@@ -328,7 +361,7 @@ for FileSync {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
         // Write out
-        file_out.write_all(("#chr,pos,alleles,pvalue\n").as_bytes()).unwrap();
+        file_out.write_all(("#chr,pos,alleles,statistic,pvalue\n").as_bytes()).unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();
         for f in thread_ouputs.lock().unwrap().iter() {
@@ -461,7 +494,7 @@ for FileSyncPhen {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
         // Write out
-        file_out.write_all(("#chr,pos,alleles,pheno,statistic,pvalue\n").as_bytes()).unwrap();
+        file_out.write_all(("#chr,pos,alleles,freq,pheno,statistic,pvalue\n").as_bytes()).unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();
         for f in thread_ouputs.lock().unwrap().iter() {

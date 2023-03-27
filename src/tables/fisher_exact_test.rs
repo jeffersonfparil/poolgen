@@ -106,6 +106,7 @@ pub fn fisher(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Opt
     let out = vec![locus_frequencies.chromosome.clone(),
                            locus_frequencies.position.clone().to_string(),
                            locus_frequencies.alleles_vector.clone().join(""),
+                           p_observed.to_string(),
                            (p_observed + p_extremes).to_string()]
                       .join(",") + "\n";
 

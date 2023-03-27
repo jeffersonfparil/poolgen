@@ -116,6 +116,7 @@ pub fn ols_iterate(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, f
         for j in 0..k {
             line.append(&mut first_2_col.clone());
             line.push(locus_frequencies.alleles_vector[i-1].clone());
+            line.push(x_matrix.column(i).mean().to_string());
             line.push("Pheno_".to_string() + &(j.to_string())[..]);
             line.push(beta[(i,j)].to_string());
             line.push(pval[(i,j)].to_string() + "\n");

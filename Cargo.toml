@@ -12,7 +12,7 @@ statrs = "0.16.0"
 argmin = "0.8.1"
 argmin-math = "0.3.0"
 finitediff = "0.1.4"
-argmin_testfunctions = "*"
+# argmin_testfunctions = "*"
 
 # argmin-math = { version = "0.3.0", default-features = false, features = ["primitives"]}
 # argmin_testfunctions = "*"
@@ -27,3 +27,5 @@ argmin_testfunctions = "*"
 # rand = { version = "0.8.5" }
 # rand_xoshiro = { version = "0.6.0" }
 # thiserror = "1.0"
+
+# nelder_mead = { git = "https://github.com/JD557/nelder-mead.rs.git", branch = "master" }

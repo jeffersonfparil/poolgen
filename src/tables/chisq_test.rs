@@ -31,6 +31,7 @@ pub fn chisq(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Opti
     let out = vec![locus_counts.chromosome.clone(),
                            locus_counts.position.to_string(),
                            locus_counts.alleles_vector.join(""),
+                           chi2.to_string(),
                            pval.to_string()]
                       .join(",") + "\n";
 

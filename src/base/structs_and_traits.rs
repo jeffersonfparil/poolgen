@@ -5,7 +5,7 @@ use nalgebra::DMatrix;
 #[derive(Debug, Clone)]
 pub struct FilePileup {
     pub filename: String,
-    pub pool_names: String,
+    pub pool_names: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -17,16 +17,25 @@ pub struct FileSync {
 #[derive(Debug, Clone)]
 pub struct FilePhen {
     pub filename: String,
-    pub phen_delim: String,
-    pub phen_name_col: usize,
-    pub phen_value_col: Vec<usize>,
+    pub delim: String,
+    pub names_column_id: usize,
+    pub sizes_column_id: usize,
+    pub trait_values_column_ids: Vec<usize>,
     pub format: String,
 }
 
 #[derive(Debug, Clone)]
+pub struct Phen {
+    pub pool_names: Vec<String>,
+    pub pool_sizes: Vec<f64>,
+    pub phen_matrix: DMatrix<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct FileSyncPhen {
     pub filename_sync: String,
     pub pool_names: Vec<String>,
+    pub pool_sizes: Vec<f64>,
     pub phen_matrix: DMatrix<f64>,
     pub test: String,
 }
@@ -37,6 +46,7 @@ pub struct FilterStats {
     pub min_quality: f64,
     pub min_coverage: u64,
     pub min_allele_frequency: f64,
+    pub pool_sizes: Vec<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +102,10 @@ pub trait Filter {
     fn to_counts(&self) -> io::Result<Box<LocusCounts>>;
     fn to_frequencies(&self) -> io::Result<Box<LocusFrequencies>>;
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self>;
+}
+
+pub trait Sort {
+    fn sort_by_allele_freq(&mut self, decreasing: bool) -> io::Result<&mut Self>;
 }
 
 pub trait ChunkyReadAnalyseWrite<T, F> {

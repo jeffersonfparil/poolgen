@@ -63,6 +63,7 @@ pub fn correlation(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, f
         for j in 0..k {
             line.append(&mut first_2_col.clone());
             line.push(locus_frequencies.alleles_vector[i].clone());
+            line.push(x.mean().to_string());
             line.push("Pheno_".to_string() + &(j.to_string())[..]);
             let y  = DVector::from(y_matrix.column(j));
             (corr, pval) = pearsons_correlation(&x, &y).unwrap();

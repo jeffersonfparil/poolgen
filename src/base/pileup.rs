@@ -212,7 +212,7 @@ impl Filter for PileupLine {
                                        alleles_vector: locus_counts.alleles_vector,
                                        matrix: matrix }))
     }
-    
+
     // Filter PileupLine by minimum coverage, minimum quality
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // Convert low quality bases into Ns
@@ -244,13 +244,29 @@ impl Filter for PileupLine {
             }
         }
         // Filter by minimum allele frequency,
-        // i.e. let maximum allele frequency be p: if 1-p < min_allele_frequency then remove
-        let allele_frequencies = match self.to_frequencies() {
+        //// First convert the counts per pool into frequencies
+        let mut allele_frequencies = match self.to_frequencies() {
             Ok(x) => x,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Cannot convert pileup line into allele frequencies.")),
         };
-        let mean_allele_freqs = allele_frequencies.matrix.row_mean(); // summation across the rows which means sum of all elements per column
-        if (1.00 - mean_allele_freqs.max()) < filter_stats.min_allele_frequency {
+        //// Next account for pool sizes to get the proper minmum allele frequency across all pools
+        let (n, mut m) = allele_frequencies.matrix.shape();
+        let mut q: f64;
+        let mut j: usize = 1;
+        while j < m {
+            q = 0.0;
+            for i in 0..n {
+                q += allele_frequencies.matrix[(i,j)] * filter_stats.pool_sizes[i]; // We've made sure the pool_sizes sum up to one in phen.rs
+            }
+            if (q < filter_stats.min_allele_frequency) | (q > (1.00-filter_stats.min_allele_frequency)) {
+                allele_frequencies.matrix = allele_frequencies.matrix.remove_column(j);
+                m -= 1;
+            } else {
+                j += 1;
+            }
+        }
+        // Filter the whole locus depending on whether or not we haveretained at least 2 alleles
+        if m < 2 {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         Ok(self)
@@ -265,7 +281,15 @@ pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) 
         Err(_) => return None,
     };
     // Convert to counts
-    let locus_counts = pileup_line.to_counts().unwrap();
+    let mut locus_counts = match pileup_line.to_counts() {
+        Ok(x) => x,
+        Err(_) => return None,
+    };
+    // Filter once again
+    match locus_counts.filter(filter_stats) {
+        Ok(x) => x,
+        Err(_) => return None,
+    };
     let (n, _p) = locus_counts.matrix.shape();
     // Instantiate the output line
     let mut x = vec![pileup_line.chromosome.clone(),
@@ -339,7 +363,6 @@ for FilePileup {
     fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: fn(&mut PileupLine, &FilterStats) -> Option<String>) -> io::Result<String> {
         // Unpack pileup and pool names filenames
         let fname = self.filename.clone();
-        let pool_names = self.pool_names.clone();
         // Output filename
         let mut out = out.to_owned();
         if out == "".to_owned() {
@@ -358,16 +381,7 @@ for FilePileup {
                                                 .open(&out)
                                                 .expect(&error_writing_file);
         // Pool names
-        let mut names: Vec<String> = Vec::new();
-        let file_names = match File::open(pool_names) {
-            Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Pool names file not found which is required for converting pileup into sync/syncx. Please make sure to include a valid file for the --pool-names parameter.")),
-        };
-        let reader_names = BufReader::new(file_names);
-        for line in reader_names.lines() {
-            names.push(line.unwrap().to_owned());
-        }
-        let names = names.join("\t");
+        let names = self.pool_names.join("\t");
         // // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
         let outname_ndigits = chunks[*n_threads as usize].to_string().len();
