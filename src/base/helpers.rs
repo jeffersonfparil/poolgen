@@ -27,13 +27,27 @@ pub fn find_file_splits(fname: &String, n_threads: &u64) -> io::Result<Vec<u64>>
     let end = reader.seek(SeekFrom::Current(0)).unwrap();
     let mut out = (0..end).step_by((end/n_threads) as usize).collect::<Vec<u64>>();
     out.push(end);
-    // println!("{:?}", end);
-    // println!("{:?}", out);
     for i in 0..out.len() {
         out[i] = find_start_of_next_line(fname, out[i]);
     }
     out.dedup();
-    // println!("{:?}", out);
     return Ok(out)
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    #[test]
+    fn test_file_splits() {
+        let expected_output: Vec<u64> = vec![0, 3563430, 7125955];
+        // Inputs
+        let fname: &String = &"./tests/test.pileup".to_owned();
+        let n_threads: &u64 = &2;
+        // Output
+        let output = find_file_splits(fname, n_threads).unwrap();
+        // Assertion
+        assert_eq!(expected_output, output);   
+    }
+}

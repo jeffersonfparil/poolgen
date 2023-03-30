@@ -21,7 +21,7 @@ impl Parse<Phen> for FilePhen {
             let trait_values_column_ids = self.trait_values_column_ids.clone();
             let k = trait_values_column_ids.len();
             let mut phen_vec: Vec<f64> = vec![];
-            let file = File::open(filename_phen).unwrap();
+            let file = File::open(filename_phen.clone()).expect(&("Input phenotype file not found: ".to_owned() + &filename_phen[..]));
             let reader = BufReader::new(file);
             for l in reader.lines() {
                 let mut line = l.unwrap();
@@ -69,7 +69,7 @@ impl Parse<Phen> for FilePhen {
             // GWAlpha format //
             ////////////////////
             let filename_phen = self.filename.clone();
-            let file = File::open(filename_phen).unwrap();
+            let file = File::open(filename_phen.clone()).expect(&("Input phenotype file not found: ".to_owned() + &filename_phen[..]));
             let reader = BufReader::new(file);
             let mut all_lines: Vec<String> = vec![];
             for line in reader.lines() {
@@ -154,9 +154,6 @@ impl Parse<FileSyncPhen> for (FileSync, FilePhen) {
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #[cfg(test)]
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.

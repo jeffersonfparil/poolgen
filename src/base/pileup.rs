@@ -431,3 +431,37 @@ for FilePileup {
         Ok(out)
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    #[test]
+    fn test_pileup_to_sync() {
+        let expected_output1 = PileupLine{chromosome: "Chromosome1".to_owned(),
+                                                      position: 456527,
+                                                      reference_allele: "C".to_owned().parse::<char>().unwrap(),
+                                                      coverages: vec![4, 3, 6, 5, 7],
+                                                      read_codes:     vec![vec![67,67,67,67], vec![67,84,67], vec![67,67,84,67,67,84], vec![84,67,67,67,67], vec![67,67,67,84,67,67,67]],
+                                                      read_qualities: vec![vec![74,74,74,74], vec![74,74,74], vec![74,74,70,74,70,74], vec![74,74,74,74,74], vec![74,74,74,74,60,55,74]]};
+        // let matrix = DMatrix::from_vec(5, 2, vec![0,0,0,0,0,0,1,2,1,1,4,2,4,4,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+        println!("{:?}", expected_output1);
+        // let expected_output2 = LocusCounts{chromosome: "Chromosome1".to_owned(),
+        //                                                 position: 456527,
+        //                                                 alleles_vector: vec!["A", "T", "C", "G", "D", "N"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(),
+        //                                                 matrix: matrix};
+        // println!("EXPECTED={:?}", expected_output2);
+        // // Inputs
+        // let line = "Chromosome1\t456527\tC\t4\t....\tJJJJ\t3\t.T.\tJJJ\t6\t..T..T\tJJFJFJ\t5\tT....\tJJJJJ\t7\t...T...\tJJJJ<7J".to_owned();
+        // let pileup_line: PileupLine = *(line.lparse().unwrap());
+        // let counts = *(pileup_line.to_counts().unwrap());
+        // println!("OBSERVED={:?}", counts);
+
+        // // Output
+        // // let output = find_file_splits(fname, n_threads).unwrap();
+        // // Assertions
+        // assert_eq!(expected_output1, pileup_line);   
+        // assert_eq!(expected_output2, counts);
+    }
+}

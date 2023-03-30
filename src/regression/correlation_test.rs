@@ -46,8 +46,13 @@ pub fn correlation(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, f
         Err(_) => return None
     };
     // Extract the genotype and phenotypes
-    let x_matrix = locus_frequencies.matrix.clone();
+    let mut x_matrix = locus_frequencies.matrix.clone();
     let y_matrix = locus_counts_and_phenotypes.phenotypes.clone();
+    // Keep p-1 alleles for conciseness
+    let (_, p) =  x_matrix.shape();
+    if p >= 2 {
+        x_matrix = x_matrix.clone().remove_columns(p-1, 1);
+    }
     // Check if we have a compatible allele frequency and phenotype matrix or vector
     let (n, p) =  x_matrix.shape();
     let (m, k) = y_matrix.shape();

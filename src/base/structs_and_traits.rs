@@ -49,7 +49,7 @@ pub struct FilterStats {
     pub pool_sizes: Vec<f64>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PileupLine {
     pub chromosome: String,             // chromosome or scaffold name
     pub position: u64,                  // position in number of bases
@@ -60,7 +60,7 @@ pub struct PileupLine {
 }
 
 // Struct of allele counts to convert reads into sync
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LocusCounts {
     pub chromosome: String,
     pub position: u64,
@@ -69,7 +69,7 @@ pub struct LocusCounts {
 }
 
 // Struct of allele frequencies to convert reads into syncx
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LocusFrequencies {
     pub chromosome: String,
     pub position: u64,
@@ -92,6 +92,24 @@ pub struct LocusCountsAndPhenotypes {
     pub phenotypes: DMatrix<f64>, // n pools x k traits
     pub pool_names: Vec<String>,
 }
+
+// Struct for GWAlpha's least squares cost function minimisation
+#[derive(Debug, Clone)]
+pub struct LeastSquaresBeta {
+    pub q_prime: DMatrix<f64>,
+    pub percs_a: DMatrix<f64>,
+    pub percs_b: DMatrix<f64>,
+}
+
+// Struct for GWAlpha's maximum likelihood estimation
+#[derive(Debug, Clone)]
+pub struct MaximumLikelihoodBeta {
+    pub percs_a: DMatrix<f64>,
+    pub percs_a0: DMatrix<f64>,
+    pub percs_b: DMatrix<f64>,
+    pub percs_b0: DMatrix<f64>,
+}
+
 
 // TRAITS
 pub trait Parse<T> {

@@ -123,17 +123,17 @@ fn main() {
         // Redefine combined sync and phenotype struct under GWAlpha analysis
         let file_sync = base::FileSync{ filename: args.fname, test: args.analysis };
         let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
-        if args.gwalpha_method == "LS" {
+        if args.gwalpha_method == "LS".to_owned() {
             output = file_sync_phen.read_analyse_write(&filter_stats,
                                                         &args.output,
                                                         &args.n_threads,
-                                                        gwalpha::gwalpha_ls).unwrap();
+                                                        gwalpha::gwalpha_ls).unwrap()
         } else {
+            // Defaut is ML, i.e. maximum likelihood estimation
             output = file_sync_phen.read_analyse_write(&filter_stats,
                                                         &args.output,
                                                         &args.n_threads,
-                                                        gwalpha::gwalpha_ml).unwrap();
-
+                                                        gwalpha::gwalpha_ml).unwrap()
         }
     } else if args.analysis == String::from("test") {
         let output = 0;
