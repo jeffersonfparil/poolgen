@@ -514,3 +514,71 @@ for FileSyncPhen {
         Ok(out)
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    #[test]
+    fn test_pileup_to_sync() {
+        let counts_matrix: DMatrix<u64> = DMatrix::from_row_slice(5, 6, &[1,0,999,0,4,0,
+                                                                                            0,1,2,0,0,0,
+                                                                                            0,2,4,0,0,0,
+                                                                                            0,1,4,0,0,0,
+                                                                                            0,1,6,0,0,0]);
+        let mut frequencies_matrix: DMatrix<f64> = DMatrix::from_element(counts_matrix.nrows(), counts_matrix.ncols(), 0.0);
+        let row_sums: Vec<f64> = counts_matrix.column_sum().into_iter().cloned().map(|x| x as f64).collect::<Vec<f64>>();
+        for i in 0..counts_matrix.nrows() {
+            for j in 0..counts_matrix.ncols() {
+                frequencies_matrix[(i, j)] = counts_matrix[(i,j)] as f64 / row_sums[i];
+            }
+        }
+        // Notice the difference in the default order of alleles between PileupLine-derived counts and frequences and Sync-derived counts and frequencies, i.e. "D" before "N" in the former.
+        let expected_output1 = LocusCounts{chromosome: "Chromosome1".to_owned(),
+                                                        position: 456527,
+                                                        alleles_vector: vec!["A", "T", "C", "G", "N", "D"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(),
+                                                        matrix: counts_matrix};
+        let expected_output2 = LocusFrequencies{chromosome: "Chromosome1".to_owned(),
+                                                        position: 456527,
+                                                        alleles_vector: vec!["A", "T", "C", "G", "N", "D"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(),
+                                                        matrix: frequencies_matrix};
+        let mut expected_output3 = expected_output1.clone();
+        expected_output3.alleles_vector = vec!["T", "C"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+        expected_output3.matrix = expected_output3.matrix.clone().remove_column(0);
+        expected_output3.matrix = expected_output3.matrix.clone().remove_column(2);
+        expected_output3.matrix = expected_output3.matrix.clone().remove_column(2);
+        expected_output3.matrix = expected_output3.matrix.clone().remove_column(2);
+        let mut expected_output4 = expected_output2.clone();
+        expected_output4.alleles_vector = vec!["T", "C"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+        expected_output4.matrix = expected_output4.matrix.clone().remove_column(0);
+        expected_output4.matrix = expected_output4.matrix.clone().remove_column(2);
+        expected_output4.matrix = expected_output4.matrix.clone().remove_column(2);
+        expected_output4.matrix = expected_output4.matrix.clone().remove_column(2);
+        let expected_output4 = *(expected_output4.to_frequencies().unwrap());
+        let mut expected_output5 = expected_output4.clone();
+        expected_output5.alleles_vector = vec!["C", "T"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+        let mut new_freqs = expected_output5.matrix.column(1).into_iter().map(|x| x.to_owned()).collect::<Vec<f64>>();
+        for i in 0..5 {
+            new_freqs.push(expected_output5.matrix[(i,0)]);
+        }
+        expected_output5.matrix = DMatrix::from_vec(5, 2, new_freqs);
+        // Inputs
+        let line = "Chromosome1\t456527\tC\t1:0:999:0:4:0\t0:1:2:0:0:0\t0:2:4:0:0:0\t0:1:4:0:0:0\t0:1:6:0:0:0".to_owned();
+        // Output
+        let counts: LocusCounts = *(line.lparse().unwrap());
+        let frequencies = *(counts.to_frequencies().unwrap());
+        let filter_stats = FilterStats{remove_ns: true, min_quality: 0.005, min_coverage: 1, min_allele_frequency: 0.005, pool_sizes: vec![0.2,0.2,0.2,0.2,0.2,]};
+        let mut filtered_counts = counts.clone();
+        filtered_counts.filter(&filter_stats).unwrap();
+        let filtered_frequencies = *(frequencies.clone().filter(&filter_stats).unwrap().to_frequencies().unwrap());
+        let mut sorted_filtered_frequencies = filtered_frequencies.clone();
+        sorted_filtered_frequencies.sort_by_allele_freq(true).unwrap();
+        // Assertions
+        assert_eq!(expected_output1, counts);   
+        assert_eq!(expected_output2, frequencies);
+        assert_eq!(expected_output3, filtered_counts);
+        assert_eq!(expected_output4, filtered_frequencies);
+        assert_eq!(expected_output5, sorted_filtered_frequencies);
+    }
+}

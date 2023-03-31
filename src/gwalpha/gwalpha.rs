@@ -193,7 +193,7 @@ fn prepare_geno_and_pheno_stats(locus_counts_and_phenotypes: &mut LocusCountsAnd
         ))
 }
 
-fn prepare_freqs_and_qprime(locus_frequencies: &LocusFrequencies, bins: &DMatrix<f64>, q: &DMatrix<f64>, sig: f64, min: f64, max: f64, n: usize, j: usize) -> (f64, DMatrix<f64>, DMatrix<f64>, DMatrix<f64>, DMatrix<f64>, DMatrix<f64>) {
+fn prepare_freqs_and_qprime(locus_frequencies: &LocusFrequencies, bins: &DMatrix<f64>, q: &DMatrix<f64>, min: f64, max: f64, n: usize, j: usize) -> (f64, DMatrix<f64>, DMatrix<f64>, DMatrix<f64>, DMatrix<f64>, DMatrix<f64>) {
     // let freqs_a: DMatrix<f64> = DMatrix::from_columns(&[locus_frequencies.matrix.column(j)]).add_scalar(1e-6); // Add a small value so we don't get negative log-likelihoods --> NO NEED HERE BECAUSE WE ARE BOUNDING OUR PARAMETER VALUES WITH LOGISTIC REGRESSION AND BOUNDING THE LOG-DIFFERENCE SO WE DON'T GET INFINITIES
     let freqs_a: DMatrix<f64> = DMatrix::from_columns(&[locus_frequencies.matrix.column(j)]);
     // let freqs_a_sum = freqs_a.sum();
@@ -253,7 +253,7 @@ pub fn gwalpha_ls(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, fi
     // Iterate across alleles
     for j in 0..p {
         // Prepare allele frequecies, quantiles and percentiles
-        (p_a, q_prime, percs_a, _, percs_b, _) = prepare_freqs_and_qprime(&locus_frequencies, &bins, &q, sig, min, max, n, j);
+        (p_a, q_prime, percs_a, _, percs_b, _) = prepare_freqs_and_qprime(&locus_frequencies, &bins, &q, min, max, n, j);
         // Optimise
         solver = prepare_solver(1.0);
         let solution = match gwalpha_minimise_ls(solver, q_prime, percs_a, percs_b) {
@@ -291,7 +291,7 @@ pub fn gwalpha_ml(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, fi
     // Iterate across alleles
     for j in 0..p {
         // Prepare allele frequecies, quantiles and percentiles
-        (p_a, _, percs_a, percs_a0, percs_b, percs_b0) = prepare_freqs_and_qprime(&locus_frequencies, &bins, &q, sig, min, max, n, j);
+        (p_a, _, percs_a, percs_a0, percs_b, percs_b0) = prepare_freqs_and_qprime(&locus_frequencies, &bins, &q, min, max, n, j);
         // Optimise
         solver = prepare_solver(1.0);
         let solution = match gwalpha_minimise_ml(solver, percs_a, percs_a0, percs_b, percs_b0) {
