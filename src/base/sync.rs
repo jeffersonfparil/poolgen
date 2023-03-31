@@ -521,7 +521,8 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     #[test]
-    fn test_pileup_to_sync() {
+    fn test_sync_methods() {
+        // Expected output
         let counts_matrix: DMatrix<u64> = DMatrix::from_row_slice(5, 6, &[1,0,999,0,4,0,
                                                                                             0,1,2,0,0,0,
                                                                                             0,2,4,0,0,0,
@@ -565,10 +566,10 @@ mod tests {
         expected_output5.matrix = DMatrix::from_vec(5, 2, new_freqs);
         // Inputs
         let line = "Chromosome1\t456527\tC\t1:0:999:0:4:0\t0:1:2:0:0:0\t0:2:4:0:0:0\t0:1:4:0:0:0\t0:1:6:0:0:0".to_owned();
-        // Output
+        // Outputs
         let counts: LocusCounts = *(line.lparse().unwrap());
         let frequencies = *(counts.to_frequencies().unwrap());
-        let filter_stats = FilterStats{remove_ns: true, min_quality: 0.005, min_coverage: 1, min_allele_frequency: 0.005, pool_sizes: vec![0.2,0.2,0.2,0.2,0.2,]};
+        let filter_stats = FilterStats{remove_ns: true, min_quality: 0.005, min_coverage: 1, min_allele_frequency: 0.005, pool_sizes: vec![0.2,0.2,0.2,0.2,0.2]};
         let mut filtered_counts = counts.clone();
         filtered_counts.filter(&filter_stats).unwrap();
         let filtered_frequencies = *(frequencies.clone().filter(&filter_stats).unwrap().to_frequencies().unwrap());

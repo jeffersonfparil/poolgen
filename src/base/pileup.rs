@@ -438,7 +438,8 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     #[test]
-    fn test_pileup_to_sync() {
+    fn test_pileup_methods() {
+        // Expected outputs
         let expected_output1 = PileupLine{chromosome: "Chromosome1".to_owned(),
                                                       position: 456527,
                                                       reference_allele: "C".to_owned().parse::<char>().unwrap(),
@@ -473,7 +474,7 @@ mod tests {
                                                      read_qualities: vec![vec![74,74,74,74], vec![74,74,74], vec![74,70,74,70,74,70,74], vec![74,74,74,74,74], vec![74,74,74,74,60,   74]]};
         // Inputs
         let line = "Chromosome1\t456527\tC\t4\t....+1c\tJJJJ\t3\t.T.-3atg\tJJJ\t7\t.*.T..T\tJFJFJFJ\t5\tT....\tJJJJJ\t7\t...T...\tJJJJ<7J".to_owned();
-        // Output
+        // Outputs
         let pileup_line: PileupLine = *(line.lparse().unwrap());
         let counts = *(pileup_line.to_counts().unwrap());
         let frequencies = *(pileup_line.to_frequencies().unwrap());

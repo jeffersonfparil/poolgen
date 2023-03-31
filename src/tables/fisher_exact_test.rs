@@ -112,3 +112,18 @@ pub fn fisher(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Opt
 
     Some(out)
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+    #[test]
+    fn test_fisher() {
+        // Expected
+        // Inputs
+        // Outputs
+        // Assertions
+        assert_eq!(0, 0);   
+    }
+}
