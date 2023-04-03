@@ -27,8 +27,9 @@ fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f64, 
     };
     // println!("numeratorr={:?}; demonitatorr={:?}; r={:?}", numerator, denominator, r);
     let sigma_r = ((1.0 - r.powf(2.0)) / (n as f64 - 2.0)).sqrt();
+    let sigma_r = ((1.0 - r.powf(2.0)) / (n as f64 - 2.0)).sqrt();
     let t = r / sigma_r;
-    let d = StudentsT::new(0.0, 1.0, n as f64 - 1.0).unwrap();
+    let d = StudentsT::new(0.0, 1.0, n as f64 - 2.0).unwrap();
     let pval = 2.00 * ( 1.00 - d.cdf(t.abs()));
     Ok((r, pval))
 }
@@ -78,4 +79,28 @@ pub fn correlation(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, f
     }
     let out = line.join(",").replace("\n,", "\n");
     Some(out)
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nalgebra::DMatrix;
+    #[test]
+    fn test_correlation() {
+        // Expected
+        let expected_output1: f64 =  0.3849001794597504;
+        let expected_output2: f64 =  0.5223146158470688;
+        // Inputs
+        let x: DVector<f64> = DVector::from_column_slice(&[1.0, 2.0, 3.0, 4.0, 5.0]);
+        let y: DVector<f64> = DVector::from_column_slice(&[2.0, 1.0, 1.0, 5.0, 2.0]);
+        let filter_stats = FilterStats{remove_ns: true, min_quality: 0.005, min_coverage: 1, min_allele_frequency: 0.005, pool_sizes: vec![0.2,0.2,0.2,0.2,0.2]};
+        let locus_counts = LocusCounts{chromosome: "Chromosome1".to_owned(), position: 12345, alleles_vector: vec!["T".to_owned(), "C".to_owned()], matrix: DMatrix::from_row_slice(5, 2, &[0,3, 1,5, 2,6, 4,8, 5,2])};
+        let phenotypes: DMatrix<f64> = DMatrix::from_row_slice(5, 2, &[0.0,0.1,  0.2,0.5, 0.5,0.8, 0.7,0.9, 0.9,1.0]);
+        // Outputs
+        let (corr, pval) = pearsons_correlation(&x, &y).unwrap();
+        // Assertions
+        assert_eq!(expected_output1, corr);
+        assert_eq!(expected_output2, pval);
+    }
 }

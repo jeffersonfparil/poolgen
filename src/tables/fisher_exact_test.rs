@@ -8,7 +8,7 @@ fn factorial_log10(x: f64) -> io::Result<f64> {
         return Err(Error::new(ErrorKind::Other, "\u{1F494} Input is far too big \u{1F6AB}"))
     }
     let mut out: f64 = 0.0;
-    for i in 1..x as usize {
+    for i in 2..(x+1.0) as usize {
         out = out + f64::log10(i as f64);
     }
     Ok(out)
@@ -16,7 +16,7 @@ fn factorial_log10(x: f64) -> io::Result<f64> {
 
 fn hypergeom_ratio(counts: &DMatrix<f64>, log_prod_fac_marginal_sums: &f64) -> io::Result<f64> {
     // Log-Product of counts
-    let mut prod_fac_sums = 1 as f64;
+    let mut prod_fac_sums = 0.0;
     for i in counts.iter() {
         prod_fac_sums = prod_fac_sums + factorial_log10(*i).unwrap();
     }
@@ -31,30 +31,22 @@ pub fn fisher(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Opt
         Ok(x) => x,
         Err(_) => return None
     };
-    let locus_frequencies = match locus_counts.to_frequencies() {
-        Ok(x) => x,
-        Err(_) => return None
-    };
-    let (n, p) = locus_frequencies.matrix.shape();
-    let frequencies: DMatrix<f64> = locus_frequencies.matrix.clone();
-    let mut counts: DMatrix<f64> = DMatrix::from_element(n, p, 0.0);
-    // Find the minimum frequency to get the maximum natural number restricted by f64, i.e. n=34 if n! > f64::MAX
-    let mut s = (1.00 / frequencies.max()).ceil() as usize;
-    s = match s < 34  {
-        true => s,
-        false => 34,
-    };
-    // Populate the counts matrix
-    for i in 0..n {
-        for j in 0..p {
-            counts[(i, j)] = (s as f64 * frequencies[(i, j)]).ceil() as f64;
+    // Restrict so that the sum is less than or equal to 34, i.e. at n>34 : n! > f64::MAX
+    let (n, p) = locus_counts.matrix.shape();
+    let mut counts: DMatrix<f64> = DMatrix::from_iterator(n, p, locus_counts.matrix.clone().into_iter().map(|x| *x as f64));
+    let total = counts.sum();
+    if total > 34.0 {
+        let coef: f64 = 34.0 / total;
+        for i in 0..n {
+            for j in 0..p {
+                counts[(i, j)] = (counts[(i, j)] * coef).floor();
+            }
         }
     }
-    // println!("COUNTS: {:?}", C);
     // Log-Product of the marginal sums (where C.row_sum() correspond to the the column marginal sums and vice versa)
     let row_sums = counts.column_sum().clone_owned();
     let col_sums = counts.row_sum().clone_owned();
-    let mut log_prod_fac_marginal_sums = 1 as f64;
+    let mut log_prod_fac_marginal_sums = 0.0;
     for r in row_sums.iter() {
         log_prod_fac_marginal_sums = log_prod_fac_marginal_sums + factorial_log10(*r).unwrap();
     }
@@ -103,9 +95,9 @@ pub fn fisher(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Opt
             p_extremes += hypergeom_ratio(&counts, &log_prod_fac_marginal_sums).unwrap();
         }
     }
-    let out = vec![locus_frequencies.chromosome.clone(),
-                           locus_frequencies.position.clone().to_string(),
-                           locus_frequencies.alleles_vector.clone().join(""),
+    let out = vec![locus_counts.chromosome.clone(),
+                           locus_counts.position.clone().to_string(),
+                           locus_counts.alleles_vector.clone().join(""),
                            p_observed.to_string(),
                            (p_observed + p_extremes).to_string()]
                       .join(",") + "\n";
@@ -116,14 +108,27 @@ pub fn fisher(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Opt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+    use nalgebra::DMatrix;
     #[test]
     fn test_fisher() {
         // Expected
+        let expected_output1: f64 =  2.0791812460476247;
+        let expected_output2: f64 = 0.24705882352941286;
+        let expected_output3 = "Chromosome1,12345,TC,0.24705882352941286,0.6073529411764731\n".to_owned();
         // Inputs
+        let x: f64 = 5.0;
+        let counts_f64: DMatrix<f64> = DMatrix::from_row_slice(3, 2, &[0.0,3.0, 1.0,5.0, 2.0,6.0]);
+        let counts_u64: DMatrix<u64> = DMatrix::from_row_slice(3, 2, &[0,3, 1,5, 2,6]);
+        let filter_stats = FilterStats{remove_ns: true, min_quality: 0.005, min_coverage: 1, min_allele_frequency: 0.005, pool_sizes: vec![0.2,0.2,0.2,0.2,0.2]};
+        let mut locus_counts = LocusCounts{chromosome: "Chromosome1".to_owned(), position: 12345, alleles_vector: vec!["T".to_owned(), "C".to_owned()], matrix: counts_u64};
         // Outputs
+        let log10factorial = factorial_log10(x).unwrap();
+        let hypergeom_pval = hypergeom_ratio(&counts_f64, &19.959563872703743).unwrap();
+        let fisher_pval = fisher(&mut locus_counts, &filter_stats).unwrap();
         // Assertions
-        assert_eq!(0, 0);   
+        assert_eq!(expected_output1, log10factorial);
+        assert_eq!(expected_output2, hypergeom_pval);
+        assert_eq!(expected_output3, fisher_pval);
     }
 }

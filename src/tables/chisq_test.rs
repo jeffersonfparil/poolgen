@@ -29,14 +29,8 @@ pub fn chisq(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Opti
     }
     // Calculate the one-tailed significance, i.e. how far away are we from the expected mean of the chi-squared distribution?
     let d = ChiSquared::new(t - 1.0).unwrap();
-    let pval: f64;
-    if chi2 < t-1.0 {
-        // if chi2 is below the mean then we use the lower tail
-        pval = d.cdf(chi2);
-    } else {
-        // if chi2 is greater than or equal to the mean then we use the upper tail
-        pval = 1.00 - d.cdf(chi2);
-    }
+    // i.e. using the upper tail cdf of the chi2 distribution
+    let pval = 1.00 - d.cdf(chi2);
     // Output line
     let out = vec![locus_frequencies.chromosome.clone(),
                            locus_frequencies.position.to_string(),
@@ -56,7 +50,7 @@ mod tests {
     #[test]
     fn test_chisq() {
         // Expected
-        let expected_line = "Chromosome1,12345,AT,4,0.22022259152428433\n".to_owned(); // where df=7, then the pvalue is calculated as the lower tail because if chi2 < df
+        let expected_line = "Chromosome1,12345,AT,4,0.7797774084757156\n".to_owned(); // where df=7, then the pvalue is calculated as the lower tail because if chi2 < df
         // Inputs
         let mut locus_counts = LocusCounts{chromosome: "Chromosome1".to_owned(),
                                                     position: 12345,
