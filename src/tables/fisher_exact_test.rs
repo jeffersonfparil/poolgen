@@ -125,10 +125,10 @@ mod tests {
         // Outputs
         let log10factorial = factorial_log10(x).unwrap();
         let hypergeom_pval = hypergeom_ratio(&counts_f64, &19.959563872703743).unwrap();
-        let fisher_pval = fisher(&mut locus_counts, &filter_stats).unwrap();
+        let fisher_line = fisher(&mut locus_counts, &filter_stats).unwrap();
         // Assertions
         assert_eq!(expected_output1, log10factorial);
         assert_eq!(expected_output2, hypergeom_pval);
-        assert_eq!(expected_output3, fisher_pval);
+        assert_eq!(expected_output3, fisher_line);
     }
 }
