@@ -34,6 +34,14 @@ pub fn find_file_splits(fname: &String, n_threads: &u64) -> io::Result<Vec<u64>>
     return Ok(out)
 }
 
+pub fn parse_f64_roundup_and_own(x: f64, n_digits: usize) -> String {
+    let s = x.to_string();
+    if s.len() < n_digits {
+        return s
+    }
+    s[0..n_digits].parse::<f64>().unwrap().to_string()
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {
@@ -41,13 +49,17 @@ mod tests {
     use super::*;
     #[test]
     fn test_file_splits() {
-        let expected_output: Vec<u64> = vec![0, 3563430, 7125955];
+        let expected_output1: Vec<u64> = vec![0, 3563430, 7125955];
+        let expected_output2: String = "0.42".to_owned();
         // Inputs
         let fname: &String = &"./tests/test.pileup".to_owned();
         let n_threads: &u64 = &2;
+        let number: f64 = 0.420000012435;
         // Output
-        let output = find_file_splits(fname, n_threads).unwrap();
+        let splits = find_file_splits(fname, n_threads).unwrap();
+        let string_f64 = parse_f64_roundup_and_own(number, 4);
         // Assertion
-        assert_eq!(expected_output, output);   
+        assert_eq!(expected_output1, splits);
+        assert_eq!(expected_output2, string_f64);
     }
 }

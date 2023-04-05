@@ -1,5 +1,5 @@
 use std::io;
-use nalgebra::DMatrix;
+use nalgebra::{DMatrix,DVector};
 
 // STRUCTS
 #[derive(Debug, Clone)]
@@ -110,6 +110,34 @@ pub struct MaximumLikelihoodBeta {
     pub percs_b0: DMatrix<f64>,
 }
 
+// Struct for regression objects
+#[derive(Debug, Clone)]
+pub struct UnivariateOrdinaryLeastSquares {
+    pub x: DMatrix<f64>,
+    pub y: DVector<f64>,
+    pub b: DVector<f64>,
+    pub xt: DMatrix<f64>,
+    pub inv_xtx: DMatrix<f64>,
+    pub inv_xxt: DMatrix<f64>,
+    pub e: DVector<f64>,
+    pub se: f64,
+    pub v_b: DVector<f64>,
+    pub t: DVector<f64>,
+    pub pval: DVector<f64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MultivariateOrdinaryLeastSquares {
+    pub x: DMatrix<f64>,
+    pub y: DMatrix<f64>,
+    pub b: DMatrix<f64>,
+    pub e: DMatrix<f64>,
+    pub v_e: DVector<f64>,
+    pub v_b: DMatrix<f64>,
+    pub t: DMatrix<f64>,
+    pub pval: DMatrix<f64>,
+}
+
 
 // TRAITS
 pub trait Parse<T> {
@@ -131,4 +159,12 @@ pub trait ChunkyReadAnalyseWrite<T, F> {
         where F: Fn(&mut T, &FilterStats) -> Option<String>;
     fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: F) -> io::Result<String>
         where F: Fn(&mut T, &FilterStats) -> Option<String>;
+}
+
+pub trait Regression {
+    fn new() -> Self;
+    fn remove_collinearities_in_x(&mut self) -> &mut Self;
+    fn estimate_effects(&mut self) -> io::Result<&mut Self>;
+    fn estimate_variances(&mut self) -> io::Result<&mut Self>;
+    fn estimate_significance(&mut self) -> io::Result<&mut Self>;
 }

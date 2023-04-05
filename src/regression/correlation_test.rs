@@ -4,7 +4,7 @@ use crate::base::*;
 
 use statrs::distribution::{StudentsT, ContinuousCDF};
 
-fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f64, f64)> {
+pub fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f64, f64)> {
     let n = x.len();
     if n != y.len() {
         return Err(Error::new(ErrorKind::Other, "Input vectors are not the same size."));
