@@ -30,19 +30,20 @@ impl Regression for UnivariateOrdinaryLeastSquares {
         let mut j: usize;
         let mut cor: f64;
         while i < self.x.ncols() {
-            i += 1;
-            j = i;
+            j = i+1;
             while j < self.x.ncols() {
-                (cor, _) = match pearsons_correlation(&self.x.column(i-1).into_owned(), &self.x.column(j).into_owned()){
+                (cor, _) = match pearsons_correlation(&self.x.column(i).into_owned(), &self.x.column(j).into_owned()){
                     Ok(x) => x,
                     Err(_) => (0.0, f64::NAN)
                 };
                 if cor.abs() >= 0.99 {
                     self.x = self.x.clone().remove_column(j);
+                    i -= 1;
                     j -= 1;
                 }
                 j += 1;
             }
+            i += 1;
         }
         self
     }
@@ -105,10 +106,6 @@ impl Regression for UnivariateOrdinaryLeastSquares {
     }
 
     fn estimate_significance(&mut self) -> io::Result<&mut Self> {
-        println!("");
-        println!("==============================================");
-        println!("BEFORE X: {:?}", self.x);
-        println!("BEFORE y: {:?}", self.y);
         if self.b[0].is_nan() {
             match self.estimate_effects(){
                 Ok(x) => x,
@@ -139,8 +136,6 @@ impl Regression for UnivariateOrdinaryLeastSquares {
                 self.pval[i] = 2.00 * (1.00 - d.cdf(self.t[i].abs()));
             }
         }
-        println!("AFTER X: {:?}", self.x);
-        println!("AFTER y: {:?}", self.y);
         Ok(self)
     }
             

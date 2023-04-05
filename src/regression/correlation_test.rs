@@ -22,7 +22,12 @@ pub fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f
         true => 0.0,
         false => r_tmp,
     };
-    let sigma_r = ((1.0 - r.powf(2.0)) / (n as f64 - 2.0)).sqrt();
+    let sigma_r_denominator = (1.0 - r.powf(2.0)) / (n as f64 - 2.0);
+    if sigma_r_denominator <= 0.0 {
+        // Essentially no variance in r2, hence very significant
+        return Ok((r, f64::EPSILON))
+    }
+    let sigma_r = sigma_r_denominator.sqrt();
     let t = r / sigma_r;
     let d = StudentsT::new(0.0, 1.0, n as f64 - 2.0).unwrap();
     let pval = 2.00 * ( 1.00 - d.cdf(t.abs()));
