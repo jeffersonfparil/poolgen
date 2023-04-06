@@ -5,22 +5,11 @@ use crate::base::*;
 
 use statrs::distribution::{Beta, ContinuousCDF};
 
-const PARAMETER_UPPER_LIMIT: f64 = 10.00;
 const PARAMETER_LOWER_LIMIT: f64 = f64::EPSILON;
-
-fn bound_parameters_with_logit(params: &Vec<f64>) -> Vec<f64> {
-    // Map parameters with a logistic regression to bound them between 0 and PARAMETER_UPPER_LIMIT
-    params.into_iter()
-        .map(|x| PARAMETER_LOWER_LIMIT + 
-                          ( (PARAMETER_UPPER_LIMIT-PARAMETER_LOWER_LIMIT) / 
-                            (1.00 + (-x).exp()) 
-                          ) 
-            )
-        .collect::<Vec<f64>>()
-}
+const PARAMETER_UPPER_LIMIT: f64 = 10.00;
 
 fn least_squares_beta(params: &Vec<f64>, percs_a: &DMatrix<f64>, percs_b: &DMatrix<f64>, q_prime: &DMatrix<f64>) -> f64 {
-    let shapes = bound_parameters_with_logit(params);
+    let shapes = bound_parameters_with_logit(params, PARAMETER_LOWER_LIMIT, PARAMETER_UPPER_LIMIT);
     // println!("shapes={:?}", shapes);
     let a_dist = Beta::new(shapes[0], shapes[1]).expect(&shapes.clone().into_iter().map(|x| x.to_string()).collect::<Vec<String>>().join("-")[..]);
     let b_dist = Beta::new(shapes[2], shapes[3]).unwrap();
@@ -40,7 +29,7 @@ fn least_squares_beta(params: &Vec<f64>, percs_a: &DMatrix<f64>, percs_b: &DMatr
 }
 
 fn maximum_likelihood_beta(params: &Vec<f64>, percs_a: &DMatrix<f64>, percs_b: &DMatrix<f64>, percs_a0: &DMatrix<f64>, percs_b0: &DMatrix<f64>) -> f64 {
-    let shapes = bound_parameters_with_logit(params);
+    let shapes = bound_parameters_with_logit(params, PARAMETER_LOWER_LIMIT, PARAMETER_UPPER_LIMIT);
     let a_dist = Beta::new(shapes[0], shapes[1]).unwrap();
     let b_dist = Beta::new(shapes[2], shapes[3]).unwrap();
     let n = percs_a.len();
@@ -113,7 +102,7 @@ fn gwalpha_minimise_ls(solver: NelderMead<Vec<f64>, f64>, q_prime: DMatrix<f64>,
             };
     // println!("CONVERGENCE: {:?}", res.state());
     let params = res.state().param.clone().unwrap();
-    let solution = bound_parameters_with_logit(&params);
+    let solution = bound_parameters_with_logit(&params, PARAMETER_LOWER_LIMIT, PARAMETER_UPPER_LIMIT);
     Some(solution)
 }
 
@@ -134,7 +123,7 @@ fn gwalpha_minimise_ml(solver: NelderMead<Vec<f64>, f64>, percs_a: DMatrix<f64>,
             };
     // println!("CONVERGENCE: {:?}", res.state());
     let params = res.state().param.clone().unwrap();
-    let solution = bound_parameters_with_logit(&params);
+    let solution = bound_parameters_with_logit(&params, PARAMETER_LOWER_LIMIT, PARAMETER_UPPER_LIMIT);
     Some(solution)
 }
 
@@ -305,9 +294,9 @@ pub fn gwalpha_ml(locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes, fi
         // Fill in output line
         line.append(&mut first_2_col.clone());
         line.push(locus_frequencies.alleles_vector[j].clone());
-        line.push(locus_frequencies.matrix.column(j).mean().to_string());
+        line.push(parse_f64_roundup_and_own(locus_frequencies.matrix.column(j).mean(), 8));
         line.push("Pheno_0".to_string());
-        line.push(alpha.to_string() + &",Unknown\n");
+        line.push(parse_f64_roundup_and_own(alpha, 8) + &",Unknown\n");
 
     }
     let out = line.join(",").replace("\n,", "\n");

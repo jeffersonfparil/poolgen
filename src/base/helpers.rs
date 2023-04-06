@@ -42,6 +42,17 @@ pub fn parse_f64_roundup_and_own(x: f64, n_digits: usize) -> String {
     s[0..n_digits].parse::<f64>().unwrap().to_string()
 }
 
+pub fn bound_parameters_with_logit(params: &Vec<f64>, lower_limit: f64, upper_limit: f64) -> Vec<f64> {
+    // Map parameters with a logistic regression to bound them between 0 and PARAMETER_UPPER_LIMIT
+    params.into_iter()
+        .map(|x| lower_limit + 
+                          ( (upper_limit-lower_limit) / 
+                            (1.00 + (-x).exp()) 
+                          ) 
+            )
+        .collect::<Vec<f64>>()
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {

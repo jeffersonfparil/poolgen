@@ -127,17 +127,18 @@ pub struct UnivariateOrdinaryLeastSquares {
 }
 
 #[derive(Debug, Clone)]
-pub struct MultivariateOrdinaryLeastSquares {
+pub struct UnivariateMaximumLikelihoodEstimation {
     pub x: DMatrix<f64>,
-    pub y: DMatrix<f64>,
-    pub b: DMatrix<f64>,
-    pub e: DMatrix<f64>,
-    pub v_e: DVector<f64>,
-    pub v_b: DMatrix<f64>,
-    pub t: DMatrix<f64>,
-    pub pval: DMatrix<f64>,
+    pub y: DVector<f64>,
+    pub b: DVector<f64>,
+    pub se: f64,
 }
 
+// Struct for ridge regression
+#[derive(Debug, Clone)]
+pub struct MaximumLikelihoodRidge {
+    pub lambda: f64,
+}
 
 // TRAITS
 pub trait Parse<T> {

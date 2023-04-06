@@ -5,8 +5,7 @@ use clap::Parser;
 mod base;
 use base::{Parse, ChunkyReadAnalyseWrite};
 mod tables;
-mod regression;
-mod gwalpha;
+mod gwas;
 
 // Instatiate arguments struct
 #[derive(Parser, Debug)]
@@ -111,14 +110,14 @@ fn main() {
         output = file_sync_phen.read_analyse_write(&filter_stats,
                                                             &args.output,
                                                             &args.n_threads,
-                                                            regression::correlation).unwrap();
+                                                            gwas::correlation).unwrap();
     } else if args.analysis == String::from("ols_iter") {
         let file_sync = base::FileSync{ filename: args.fname, test: args.analysis };
         let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
         output = file_sync_phen.read_analyse_write(&filter_stats,
                                                             &args.output,
                                                             &args.n_threads,
-                                                            regression::ols_iterate).unwrap();
+                                                            gwas::ols_iterate).unwrap();
     } else if args.analysis == String::from("gwalpha") {
         // Redefine combined sync and phenotype struct under GWAlpha analysis
         let file_sync = base::FileSync{ filename: args.fname, test: args.analysis };
@@ -127,13 +126,13 @@ fn main() {
             output = file_sync_phen.read_analyse_write(&filter_stats,
                                                         &args.output,
                                                         &args.n_threads,
-                                                        gwalpha::gwalpha_ls).unwrap()
+                                                        gwas::gwalpha_ls).unwrap()
         } else {
             // Defaut is ML, i.e. maximum likelihood estimation
             output = file_sync_phen.read_analyse_write(&filter_stats,
                                                         &args.output,
                                                         &args.n_threads,
-                                                        gwalpha::gwalpha_ml).unwrap()
+                                                        gwas::gwalpha_ml).unwrap()
         }
     } else if args.analysis == String::from("test") {
         let output = 0;

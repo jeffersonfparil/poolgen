@@ -1,7 +1,7 @@
 use std::io::{self, Error, ErrorKind};
 use nalgebra::{self, DMatrix, DVector};
 use crate::base::*;
-use crate::regression::*;
+use crate::gwas::*;
 
 use statrs::distribution::{StudentsT, ContinuousCDF};
 
