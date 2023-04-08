@@ -15,7 +15,7 @@ mod tables;
     long_about = "Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust."
 )]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "sync2syncx", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter")
+    /// Analysis to perform (i.e. "pileup2sync", "sync2syncx", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "mle_iter", "gwalpha")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -90,12 +90,7 @@ fn main() {
         trait_values_column_ids: phen_col.clone(),
         format: phen_format,
     };
-
-    // let file_sync = base::FileSync{ filename: args.fname.clone(), test: args.analysis.clone() }; // Note: file may be pileup instead of sync, but this does not matter, becuase if the input file is pileup then we only need to convert the pileup into sync and we only need the pool sizes from that
-    // let file_sync_phen = *(file_sync.clone(), file_phen).lparse().unwrap(); // Note: file may be pileup instead of sync, but this does not matter, becuase if the input file is pileup then we only need to convert the pileup into sync and we only need the pool sizes from that
-
     let phen = file_phen.lparse().unwrap();
-
     let filter_stats = base::FilterStats {
         remove_ns: args.remove_ns,
         min_quality: args.min_quality,
@@ -104,6 +99,7 @@ fn main() {
         pool_sizes: phen.pool_sizes.clone(),
     };
     if args.analysis == String::from("pileup2sync") {
+        // PILEUP INPUT
         let file_pileup = base::FilePileup {
             filename: args.fname,
             pool_names: phen.pool_names,
@@ -116,80 +112,76 @@ fn main() {
                 base::pileup_to_sync,
             )
             .unwrap();
-    } else if args.analysis == String::from("fisher_exact_test") {
+    } else {
+        // SYNC INPUT
         let file_sync = base::FileSync {
             filename: args.fname,
-            test: args.analysis,
+            test: args.analysis.clone(),
         };
-        output = file_sync
-            .read_analyse_write(&filter_stats, &args.output, &args.n_threads, tables::fisher)
-            .unwrap();
-    } else if args.analysis == String::from("chisq_test") {
-        let file_sync = base::FileSync {
-            filename: args.fname,
-            test: args.analysis,
-        };
-        output = file_sync
-            .read_analyse_write(&filter_stats, &args.output, &args.n_threads, tables::chisq)
-            .unwrap();
-    } else if args.analysis == String::from("pearson_corr") {
-        let file_sync = base::FileSync {
-            filename: args.fname,
-            test: args.analysis,
-        };
-        let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
-        output = file_sync_phen
-            .read_analyse_write(
-                &filter_stats,
-                &args.output,
-                &args.n_threads,
-                gwas::correlation,
-            )
-            .unwrap();
-    } else if args.analysis == String::from("ols_iter") {
-        let file_sync = base::FileSync {
-            filename: args.fname,
-            test: args.analysis,
-        };
-        let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
-        output = file_sync_phen
-            .read_analyse_write(
-                &filter_stats,
-                &args.output,
-                &args.n_threads,
-                gwas::ols_iterate,
-            )
-            .unwrap();
-    } else if args.analysis == String::from("gwalpha") {
-        // Redefine combined sync and phenotype struct under GWAlpha analysis
-        let file_sync = base::FileSync {
-            filename: args.fname,
-            test: args.analysis,
-        };
-        let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
-        if args.gwalpha_method == "LS".to_owned() {
+        if args.analysis == String::from("fisher_exact_test") {
+            output = file_sync
+                .read_analyse_write(&filter_stats, &args.output, &args.n_threads, tables::fisher)
+                .unwrap();
+        } else if args.analysis == String::from("chisq_test") {
+            output = file_sync
+                .read_analyse_write(&filter_stats, &args.output, &args.n_threads, tables::chisq)
+                .unwrap();
+        } else if args.analysis == String::from("pearson_corr") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = file_sync_phen
                 .read_analyse_write(
                     &filter_stats,
                     &args.output,
                     &args.n_threads,
-                    gwas::gwalpha_ls,
+                    gwas::correlation,
                 )
-                .unwrap()
-        } else {
-            // Defaut is ML, i.e. maximum likelihood estimation
+                .unwrap();
+        } else if args.analysis == String::from("ols_iter") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = file_sync_phen
                 .read_analyse_write(
                     &filter_stats,
                     &args.output,
                     &args.n_threads,
-                    gwas::gwalpha_ml,
+                    gwas::ols_iterate,
                 )
-                .unwrap()
+                .unwrap();
+        } else if args.analysis == String::from("mle_iter") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            output = file_sync_phen
+                .read_analyse_write(
+                    &filter_stats,
+                    &args.output,
+                    &args.n_threads,
+                    gwas::mle_iterate,
+                )
+                .unwrap();
+        } else if args.analysis == String::from("gwalpha") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            if args.gwalpha_method == "LS".to_owned() {
+                output = file_sync_phen
+                    .read_analyse_write(
+                        &filter_stats,
+                        &args.output,
+                        &args.n_threads,
+                        gwas::gwalpha_ls,
+                    )
+                    .unwrap()
+            } else {
+                // Defaut is ML, i.e. maximum likelihood estimation
+                output = file_sync_phen
+                    .read_analyse_write(
+                        &filter_stats,
+                        &args.output,
+                        &args.n_threads,
+                        gwas::gwalpha_ml,
+                    )
+                    .unwrap()
+            }
+        } else if args.analysis == String::from("test") {
+            let output = 0;
+            println!("TEST={:?}", output);
         }
-    } else if args.analysis == String::from("test") {
-        let output = 0;
-        println!("TEST={:?}", output);
     }
     println!("{}", output);
 }

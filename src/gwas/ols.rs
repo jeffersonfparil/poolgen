@@ -295,10 +295,11 @@ mod tests {
         assert_eq!(p1, p2);
         assert_eq!(k1, 2);
         assert_eq!(k1, k2);
+        // estimated betas for the first phenotype
         assert_eq!(
             (expected_output1[(0, 0)] * 100.0).round(),
             (beta[(0, 0)] * 100.0).round()
-        ); // estimated betas for the first phenotype
+        );
         assert_eq!(
             (expected_output1[(1, 0)] * 100.0).round(),
             (beta[(1, 0)] * 100.0).round()
@@ -307,10 +308,11 @@ mod tests {
             (expected_output1[(2, 0)] * 100.0).round(),
             (beta[(2, 0)] * 100.0).round()
         );
+        // estimated beta variances for the first phenotype
         assert_eq!(
             (expected_output2[(0, 0)] * 100.0).round(),
             (var_beta[(0, 0)] * 100.0).round()
-        ); // estimated beta variances for the first phenotype
+        );
         assert_eq!(
             (expected_output2[(1, 0)] * 100.0).round(),
             (var_beta[(1, 0)] * 100.0).round()
@@ -319,10 +321,11 @@ mod tests {
             (expected_output2[(2, 0)] * 100.0).round(),
             (var_beta[(2, 0)] * 100.0).round()
         );
+        // estimated pvalues for the first phenotype
         assert_eq!(
             (expected_output3[(0, 0)] * 100.0).round(),
             (pval[(0, 0)] * 100.0).round()
-        ); // estimated pvalues for the first phenotype
+        );
         assert_eq!(
             (expected_output3[(1, 0)] * 100.0).round(),
             (pval[(1, 0)] * 100.0).round()
@@ -331,10 +334,11 @@ mod tests {
             (expected_output3[(2, 0)] * 100.0).round(),
             (pval[(2, 0)] * 100.0).round()
         );
+        // estimated betas for the second phenotype
         assert_eq!(
             (expected_output4[(0, 0)] * 100.0).round(),
             (beta[(0, 1)] * 100.0).round()
-        ); // estimated betas for the second phenotype
+        );
         assert_eq!(
             (expected_output4[(1, 0)] * 100.0).round(),
             (beta[(1, 1)] * 100.0).round()
@@ -343,10 +347,11 @@ mod tests {
             (expected_output4[(2, 0)] * 100.0).round(),
             (beta[(2, 1)] * 100.0).round()
         );
+        // estimated beta variances for the second phenotype
         assert_eq!(
             (expected_output5[(0, 0)] * 100.0).round(),
             (var_beta[(0, 1)] * 100.0).round()
-        ); // estimated beta variances for the second phenotype
+        );
         assert_eq!(
             (expected_output5[(1, 0)] * 100.0).round(),
             (var_beta[(1, 1)] * 100.0).round()
@@ -355,10 +360,11 @@ mod tests {
             (expected_output5[(2, 0)] * 100.0).round(),
             (var_beta[(2, 1)] * 100.0).round()
         );
+        // estimated pvalues for the second phenotype
         assert_eq!(
             (expected_output6[(0, 0)] * 100.0).round(),
             (pval[(0, 1)] * 100.0).round()
-        ); // estimated pvalues for the second phenotype
+        );
         assert_eq!(
             (expected_output6[(1, 0)] * 100.0).round(),
             (pval[(1, 1)] * 100.0).round()
