@@ -1,11 +1,6 @@
-pub use self::{
-    correlation_test::*,
-    ols::*,
-    gwalpha::*,
-    mle::*,
-};
+pub use self::{correlation_test::*, gwalpha::*, mle::*, ols::*};
 
 mod correlation_test;
-mod ols;
 mod gwalpha;
 mod mle;
+mod ols;

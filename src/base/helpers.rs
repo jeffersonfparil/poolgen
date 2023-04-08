@@ -1,6 +1,6 @@
 use std;
 use std::fs::File;
-use std::io::{self, prelude::*, SeekFrom, BufReader};
+use std::io::{self, prelude::*, BufReader, SeekFrom};
 use std::io::{Error, ErrorKind};
 
 // File splitting for thread allocation for parallele computation
@@ -14,7 +14,7 @@ fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
         let _ = reader.read_line(&mut line).unwrap();
         out = reader.seek(SeekFrom::Current(0)).unwrap();
     }
-    return out
+    return out;
 }
 
 pub fn find_file_splits(fname: &String, n_threads: &u64) -> io::Result<Vec<u64>> {
@@ -25,31 +25,34 @@ pub fn find_file_splits(fname: &String, n_threads: &u64) -> io::Result<Vec<u64>>
     let _ = file.seek(SeekFrom::End(0));
     let mut reader = BufReader::new(file);
     let end = reader.seek(SeekFrom::Current(0)).unwrap();
-    let mut out = (0..end).step_by((end/n_threads) as usize).collect::<Vec<u64>>();
+    let mut out = (0..end)
+        .step_by((end / n_threads) as usize)
+        .collect::<Vec<u64>>();
     out.push(end);
     for i in 0..out.len() {
         out[i] = find_start_of_next_line(fname, out[i]);
     }
     out.dedup();
-    return Ok(out)
+    return Ok(out);
 }
 
 pub fn parse_f64_roundup_and_own(x: f64, n_digits: usize) -> String {
     let s = x.to_string();
     if s.len() < n_digits {
-        return s
+        return s;
     }
     s[0..n_digits].parse::<f64>().unwrap().to_string()
 }
 
-pub fn bound_parameters_with_logit(params: &Vec<f64>, lower_limit: f64, upper_limit: f64) -> Vec<f64> {
+pub fn bound_parameters_with_logit(
+    params: &Vec<f64>,
+    lower_limit: f64,
+    upper_limit: f64,
+) -> Vec<f64> {
     // Map parameters with a logistic regression to bound them between 0 and PARAMETER_UPPER_LIMIT
-    params.into_iter()
-        .map(|x| lower_limit + 
-                          ( (upper_limit-lower_limit) / 
-                            (1.00 + (-x).exp()) 
-                          ) 
-            )
+    params
+        .into_iter()
+        .map(|x| lower_limit + ((upper_limit - lower_limit) / (1.00 + (-x).exp())))
         .collect::<Vec<f64>>()
 }
 

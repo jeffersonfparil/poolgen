@@ -1,10 +1,10 @@
-use std::io::{self, prelude::*, Error, ErrorKind, BufReader, BufWriter, SeekFrom};
-use std::fs::{File, OpenOptions};
-use std::str;
+use crate::base::*;
 use nalgebra::DMatrix;
+use std::fs::{File, OpenOptions};
+use std::io::{self, prelude::*, BufReader, BufWriter, Error, ErrorKind, SeekFrom};
+use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::base::*;
 
 impl Parse<LocusCounts> for String {
     // Parse a line of pileup into PileupLine struct
@@ -19,24 +19,31 @@ impl Parse<LocusCounts> for String {
         }
         // Ignore commented-out lines (i.e. '#' => 35)
         if line.as_bytes()[0] == 35 as u8 {
-            return Err(Error::new(ErrorKind::Other, "Commented out line"))
+            return Err(Error::new(ErrorKind::Other, "Commented out line"));
         }
         // Parse the sync line
-        let vec_line = line.split("\t")
-                                        .collect::<Vec<&str>>()
-                                        .into_iter()
-                                        .map(|x| x.to_owned())
-                                        .collect::<Vec<String>>();
+        let vec_line = line
+            .split("\t")
+            .collect::<Vec<&str>>()
+            .into_iter()
+            .map(|x| x.to_owned())
+            .collect::<Vec<String>>();
         let n: usize = vec_line.len() - 3;
         let p: usize = 6;
         let chromosome = vec_line[0].to_owned();
         let position = match vec_line[1].parse::<u64>() {
             Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Please check format of the file: position is not and integer.")),
+            Err(_) => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Please check format of the file: position is not and integer.",
+                ))
+            }
         };
-        let alleles_vector = vec!["A", "T", "C", "G", "N", "D"].into_iter()
-                                                                       .map(|x| x.to_owned())
-                                                                       .collect::<Vec<String>>();
+        let alleles_vector = vec!["A", "T", "C", "G", "N", "D"]
+            .into_iter()
+            .map(|x| x.to_owned())
+            .collect::<Vec<String>>();
         // Read the allele counts into the counts matrix
         let mut matrix: DMatrix<u64> = DMatrix::from_element(n, p, 0);
         let mut counts: Vec<u64>;
@@ -48,11 +55,13 @@ impl Parse<LocusCounts> for String {
                 matrix[(i, j)] = counts[j];
             }
         }
-        return Ok(Box::new(LocusCounts { chromosome: chromosome,
-                                         position: position,
-                                         alleles_vector: alleles_vector,
-                                         matrix: matrix }))
-    }   
+        return Ok(Box::new(LocusCounts {
+            chromosome: chromosome,
+            position: position,
+            alleles_vector: alleles_vector,
+            matrix: matrix,
+        }));
+    }
 }
 
 impl Filter for LocusCounts {
@@ -61,7 +70,7 @@ impl Filter for LocusCounts {
         let out = self.clone();
         Ok(Box::new(out))
     }
-    
+
     // PileupLine to AlleleFrequencies
     fn to_frequencies(&self) -> io::Result<Box<LocusFrequencies>> {
         let (n, p) = self.matrix.shape();
@@ -72,19 +81,25 @@ impl Filter for LocusCounts {
                 matrix[(i, j)] = self.matrix[(i, j)] as f64 / row_sums[i] as f64;
             }
         }
-        Ok(Box::new(LocusFrequencies { chromosome: self.chromosome.clone(),
-                                       position: self.position.clone(),
-                                       alleles_vector: self.alleles_vector.clone(),
-                                       matrix: matrix }))
+        Ok(Box::new(LocusFrequencies {
+            chromosome: self.chromosome.clone(),
+            position: self.position.clone(),
+            alleles_vector: self.alleles_vector.clone(),
+            matrix: matrix,
+        }))
     }
-    
+
     // Filter PileupLine by minimum coverage, minimum quality
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
         // Remove Ns
         if filter_stats.remove_ns {
             let matrix: DMatrix<u64>;
-            let i = match self.alleles_vector.iter().position(|x| (x == &"N".to_owned()) | (x == &"n".to_owned())) {
+            let i = match self
+                .alleles_vector
+                .iter()
+                .position(|x| (x == &"N".to_owned()) | (x == &"n".to_owned()))
+            {
                 Some(x) => x as i32,
                 None => -1,
             };
@@ -105,18 +120,26 @@ impl Filter for LocusCounts {
         //// First convert allele counts into frequencies
         let mut allele_frequencies = match self.to_frequencies() {
             Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Cannot convert locus counts to locus frequencies.")),
+            Err(_) => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Cannot convert locus counts to locus frequencies.",
+                ))
+            }
         };
-        //// Next account for pool sizes to get the proper minmum allele frequency across all pools        
+        //// Next account for pool sizes to get the proper minmum allele frequency across all pools
         let (n, mut p) = allele_frequencies.matrix.shape();
         let mut q: f64;
         let mut j: usize = 0;
         while j < p {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i,j)] * filter_stats.pool_sizes[i]; // We've made sure the pool_sizes sum up to one in phen.rs
+                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i];
+                // We've made sure the pool_sizes sum up to one in phen.rs
             }
-            if (q < filter_stats.min_allele_frequency) | (q > (1.00-filter_stats.min_allele_frequency)) {
+            if (q < filter_stats.min_allele_frequency)
+                | (q > (1.00 - filter_stats.min_allele_frequency))
+            {
                 allele_frequencies.matrix = allele_frequencies.matrix.clone().remove_column(j);
                 matrix = matrix.clone().remove_column(j);
                 self.alleles_vector.remove(j);
@@ -145,12 +168,14 @@ impl Filter for LocusFrequencies {
                 matrix[(i, j)] = (max_n * self.matrix[(i, j)]).round() as u64;
             }
         }
-        Ok(Box::new(LocusCounts { chromosome: self.chromosome.clone(),
-                                  position: self.position.clone(),
-                                  alleles_vector: self.alleles_vector.clone(),
-                                  matrix: matrix }))
+        Ok(Box::new(LocusCounts {
+            chromosome: self.chromosome.clone(),
+            position: self.position.clone(),
+            alleles_vector: self.alleles_vector.clone(),
+            matrix: matrix,
+        }))
     }
-    
+
     // PileupLine to AlleleFrequencies
     fn to_frequencies(&self) -> io::Result<Box<LocusFrequencies>> {
         // Recompute the frequencies using frequencies when the number of colulmns or one or more alleles have been filtered out/removed
@@ -162,10 +187,12 @@ impl Filter for LocusFrequencies {
                 matrix[(i, j)] = self.matrix[(i, j)] / row_sums[i];
             }
         }
-        Ok(Box::new(LocusFrequencies { chromosome: self.chromosome.clone(),
-                                       position: self.position.clone(),
-                                       alleles_vector: self.alleles_vector.clone(),
-                                       matrix: matrix }))
+        Ok(Box::new(LocusFrequencies {
+            chromosome: self.chromosome.clone(),
+            position: self.position.clone(),
+            alleles_vector: self.alleles_vector.clone(),
+            matrix: matrix,
+        }))
     }
 
     // Filter PileupLine by minimum coverage, minimum quality
@@ -175,7 +202,11 @@ impl Filter for LocusFrequencies {
         // Remove Ns
         if filter_stats.remove_ns {
             let matrix: DMatrix<f64>;
-            let i = match self.alleles_vector.iter().position(|x| (x == &"N".to_owned()) | (x == &"n".to_owned())) {
+            let i = match self
+                .alleles_vector
+                .iter()
+                .position(|x| (x == &"N".to_owned()) | (x == &"n".to_owned()))
+            {
                 Some(x) => x as i32,
                 None => -1,
             };
@@ -188,7 +219,12 @@ impl Filter for LocusFrequencies {
         // Recompute frequencies after removing Ns
         let recomputed_self = match self.to_frequencies() {
             Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "T_T Cannot convert locus counts to locus frequencies.")),
+            Err(_) => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "T_T Cannot convert locus counts to locus frequencies.",
+                ))
+            }
         };
         self.alleles_vector = recomputed_self.alleles_vector;
         self.matrix = recomputed_self.matrix;
@@ -198,18 +234,26 @@ impl Filter for LocusFrequencies {
         //// First convert allele counts into frequencies
         let mut allele_frequencies = match self.to_frequencies() {
             Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Cannot convert locus counts to locus frequencies.")),
+            Err(_) => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Cannot convert locus counts to locus frequencies.",
+                ))
+            }
         };
-        //// Next account for pool sizes to get the proper minmum allele frequency across all pools        
+        //// Next account for pool sizes to get the proper minmum allele frequency across all pools
         let (n, mut p) = allele_frequencies.matrix.shape();
         let mut q: f64;
         let mut j: usize = 0;
         while j < p {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i,j)] * filter_stats.pool_sizes[i]; // We've made sure the pool_sizes sum up to one in phen.rs
+                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i];
+                // We've made sure the pool_sizes sum up to one in phen.rs
             }
-            if (q < filter_stats.min_allele_frequency) | (q > (1.00-filter_stats.min_allele_frequency)) {
+            if (q < filter_stats.min_allele_frequency)
+                | (q > (1.00 - filter_stats.min_allele_frequency))
+            {
                 allele_frequencies.matrix = allele_frequencies.matrix.clone().remove_column(j);
                 matrix = matrix.clone().remove_column(j);
                 self.alleles_vector.remove(j);
@@ -231,11 +275,17 @@ impl Sort for LocusFrequencies {
         let (n, p) = self.matrix.shape();
         let mut matrix = self.matrix.clone();
         let mut alleles_vector = self.alleles_vector.clone();
-        let freqs = self.matrix.row_sum().iter().copied().map(|x| (1e+4*x).round() as usize).collect::<Vec<usize>>(); // Dang row_sum is colSum!!!
+        let freqs = self
+            .matrix
+            .row_sum()
+            .iter()
+            .copied()
+            .map(|x| (1e+4 * x).round() as usize)
+            .collect::<Vec<usize>>(); // Dang row_sum is colSum!!!
         let mut idx = (0..p).collect::<Vec<usize>>();
         idx.sort_unstable_by_key(|&i| &freqs[i]);
         if decreasing {
-            idx = idx.into_iter().map(|x| (p-1) - x).collect::<Vec<usize>>();
+            idx = idx.into_iter().map(|x| (p - 1) - x).collect::<Vec<usize>>();
         }
         let mut col_idx: usize;
         for j in 0..p {
@@ -249,12 +299,19 @@ impl Sort for LocusFrequencies {
         self.alleles_vector = alleles_vector;
         Ok(self)
     }
-
 }
 
 impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> Option<String>>
-for FileSync {
-    fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: fn(&mut LocusCounts, &FilterStats) -> Option<String>) -> io::Result<String> {
+    for FileSync
+{
+    fn per_chunk(
+        &self,
+        start: &u64,
+        end: &u64,
+        outname_ndigits: &usize,
+        filter_stats: &FilterStats,
+        function: fn(&mut LocusCounts, &FilterStats) -> Option<String>,
+    ) -> io::Result<String> {
         let fname = self.filename.clone();
         // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
         let mut start_string = start.to_string();
@@ -266,7 +323,7 @@ for FileSync {
         for _ in 0..(outname_ndigits - end_string.len()) {
             end_string = "0".to_owned() + &end_string;
         }
-        // Output temp file for the chunk    
+        // Output temp file for the chunk
         let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".tmp";
         let out = fname_out.clone();
         let error_writing_file = "T_T Unable to create file: ".to_owned() + &fname_out;
@@ -299,8 +356,17 @@ for FileSync {
                 Ok(x) => x,
                 Err(x) => match x.kind() {
                     ErrorKind::Other => continue,
-                    _ => return Err(Error::new(ErrorKind::Other, "T_T Input sync file error, i.e. '".to_owned() + &fname + "' at line with the first 20 characters as: " + &line[0..20] + "."))
-                }
+                    _ => {
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "T_T Input sync file error, i.e. '".to_owned()
+                                + &fname
+                                + "' at line with the first 20 characters as: "
+                                + &line[0..20]
+                                + ".",
+                        ))
+                    }
+                },
             };
             // Write the line
             let _ = match function(&mut locus_counts, filter_stats) {
@@ -310,28 +376,49 @@ for FileSync {
         }
         Ok(out)
     }
-    
-    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: fn(&mut LocusCounts, &FilterStats) -> Option<String>) -> io::Result<String> {
+
+    fn read_analyse_write(
+        &self,
+        filter_stats: &FilterStats,
+        out: &String,
+        n_threads: &u64,
+        function: fn(&mut LocusCounts, &FilterStats) -> Option<String>,
+    ) -> io::Result<String> {
         // Unpack pileup and pool names filenames
         let fname = self.filename.clone();
         let test = self.test.clone();
         // Output filename
         let mut out = out.to_owned();
         if out == "".to_owned() {
-            let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
-            let bname = fname.split(".").collect::<Vec<&str>>().into_iter().map(|a| a.to_owned())
-                                        .collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>()[1..].to_owned()
-                                        .into_iter().rev().collect::<Vec<String>>().join(".");
+            let time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64();
+            let bname = fname
+                .split(".")
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .map(|a| a.to_owned())
+                .collect::<Vec<String>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()[1..]
+                .to_owned()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()
+                .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + "-" + &test + ".csv";
         }
         // Instatiate output file
         let error_writing_file = "Unable to create file: ".to_owned() + &out;
         // let mut file_out = File::create(&out).expect(&error_writing_file);
-        let mut file_out = OpenOptions::new().create_new(true)
-                                                .write(true)
-                                                .append(false)
-                                                .open(&out)
-                                                .expect(&error_writing_file);
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
         // // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
         let outname_ndigits = chunks[*n_threads as usize].to_string().len();
@@ -341,18 +428,23 @@ for FileSync {
         let mut thread_objects = Vec::new();
         // Vector holding all returns from pileup2sync_chunk()
         let thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
-        // Making four separate threads calling the `search_for_word` function
+                                                                                       // Making four separate threads calling the `search_for_word` function
         for i in 0..(*n_threads as usize) {
             // Clone pileup2sync_chunk parameters
             let self_clone = self.clone();
             let start = chunks[i].clone();
-            let end = chunks[i+1].clone();
+            let end = chunks[i + 1].clone();
             let outname_ndigits = outname_ndigits.clone();
             let filter_stats = filter_stats.clone();
             let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
-                let fname_out_per_thread = self_clone.per_chunk(&start, &end, &outname_ndigits, &filter_stats, function).unwrap();
-                thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
+                let fname_out_per_thread = self_clone
+                    .per_chunk(&start, &end, &outname_ndigits, &filter_stats, function)
+                    .unwrap();
+                thread_ouputs_clone
+                    .lock()
+                    .unwrap()
+                    .push(fname_out_per_thread);
             });
             thread_objects.push(thread);
         }
@@ -361,7 +453,9 @@ for FileSync {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
         // Write out
-        file_out.write_all(("#chr,pos,alleles,statistic,pvalue\n").as_bytes()).unwrap();
+        file_out
+            .write_all(("#chr,pos,alleles,statistic,pvalue\n").as_bytes())
+            .unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();
         for f in thread_ouputs.lock().unwrap().iter() {
@@ -382,9 +476,20 @@ for FileSync {
     }
 }
 
-impl ChunkyReadAnalyseWrite<LocusCountsAndPhenotypes, fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>>
-for FileSyncPhen {
-    fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>) -> io::Result<String> {
+impl
+    ChunkyReadAnalyseWrite<
+        LocusCountsAndPhenotypes,
+        fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>,
+    > for FileSyncPhen
+{
+    fn per_chunk(
+        &self,
+        start: &u64,
+        end: &u64,
+        outname_ndigits: &usize,
+        filter_stats: &FilterStats,
+        function: fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>,
+    ) -> io::Result<String> {
         let fname = self.filename_sync.clone();
         // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
         let mut start_string = start.to_string();
@@ -396,7 +501,7 @@ for FileSyncPhen {
         for _ in 0..(outname_ndigits - end_string.len()) {
             end_string = "0".to_owned() + &end_string;
         }
-        // Output temp file for the chunk    
+        // Output temp file for the chunk
         let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".tmp";
         let out = fname_out.clone();
         let error_writing_file = "T_T Unable to create file: ".to_owned() + &fname_out;
@@ -429,12 +534,23 @@ for FileSyncPhen {
                 Ok(x) => x,
                 Err(x) => match x.kind() {
                     ErrorKind::Other => continue,
-                    _ => return Err(Error::new(ErrorKind::Other, "T_T Input sync file error, i.e. '".to_owned() + &fname + "' at line with the first 20 characters as: " + &line[0..20] + "."))
-                }
+                    _ => {
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "T_T Input sync file error, i.e. '".to_owned()
+                                + &fname
+                                + "' at line with the first 20 characters as: "
+                                + &line[0..20]
+                                + ".",
+                        ))
+                    }
+                },
             };
-            let mut locus_counts_and_phenotypes = LocusCountsAndPhenotypes{ locus_counts: *locus_counts.clone(),
-                                                                                                      pool_names: self.pool_names.clone(),
-                                                                                                      phenotypes: self.phen_matrix.clone() };
+            let mut locus_counts_and_phenotypes = LocusCountsAndPhenotypes {
+                locus_counts: *locus_counts.clone(),
+                pool_names: self.pool_names.clone(),
+                phenotypes: self.phen_matrix.clone(),
+            };
             // Write the line
             let _ = match function(&mut locus_counts_and_phenotypes, filter_stats) {
                 Some(x) => file_out.write_all(x.as_bytes()).expect(&error_writing_line),
@@ -443,28 +559,49 @@ for FileSyncPhen {
         }
         Ok(out)
     }
-    
-    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>) -> io::Result<String> {
+
+    fn read_analyse_write(
+        &self,
+        filter_stats: &FilterStats,
+        out: &String,
+        n_threads: &u64,
+        function: fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>,
+    ) -> io::Result<String> {
         // Unpack pileup and pool names filenames
         let fname = self.filename_sync.clone();
         let test = self.test.clone();
         // Output filename
         let mut out = out.to_owned();
         if out == "".to_owned() {
-            let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
-            let bname = fname.split(".").collect::<Vec<&str>>().into_iter().map(|a| a.to_owned())
-                                        .collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>()[1..].to_owned()
-                                        .into_iter().rev().collect::<Vec<String>>().join(".");
+            let time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64();
+            let bname = fname
+                .split(".")
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .map(|a| a.to_owned())
+                .collect::<Vec<String>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()[1..]
+                .to_owned()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()
+                .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + "-" + &test + ".csv";
         }
         // Instatiate output file
         let error_writing_file = "Unable to create file: ".to_owned() + &out;
         // let mut file_out = File::create(&out).expect(&error_writing_file);
-        let mut file_out = OpenOptions::new().create_new(true)
-                                                .write(true)
-                                                .append(false)
-                                                .open(&out)
-                                                .expect(&error_writing_file);
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
         // // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
         let outname_ndigits = chunks[*n_threads as usize].to_string().len();
@@ -474,18 +611,23 @@ for FileSyncPhen {
         let mut thread_objects = Vec::new();
         // Vector holding all returns from pileup2sync_chunk()
         let thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
-        // Making four separate threads calling the `search_for_word` function
+                                                                                       // Making four separate threads calling the `search_for_word` function
         for i in 0..(*n_threads as usize) {
             // Clone pileup2sync_chunk parameters
             let self_clone = self.clone();
             let start = chunks[i].clone();
-            let end = chunks[i+1].clone();
+            let end = chunks[i + 1].clone();
             let outname_ndigits = outname_ndigits.clone();
             let filter_stats = filter_stats.clone();
             let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
-                let fname_out_per_thread = self_clone.per_chunk(&start, &end, &outname_ndigits, &filter_stats, function).unwrap();
-                thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
+                let fname_out_per_thread = self_clone
+                    .per_chunk(&start, &end, &outname_ndigits, &filter_stats, function)
+                    .unwrap();
+                thread_ouputs_clone
+                    .lock()
+                    .unwrap()
+                    .push(fname_out_per_thread);
             });
             thread_objects.push(thread);
         }
@@ -494,7 +636,9 @@ for FileSyncPhen {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
         // Write out
-        file_out.write_all(("#chr,pos,alleles,freq,pheno,statistic,pvalue\n").as_bytes()).unwrap();
+        file_out
+            .write_all(("#chr,pos,alleles,freq,pheno,statistic,pvalue\n").as_bytes())
+            .unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();
         for f in thread_ouputs.lock().unwrap().iter() {
@@ -523,45 +667,78 @@ mod tests {
     #[test]
     fn test_sync_methods() {
         // Expected output
-        let counts_matrix: DMatrix<u64> = DMatrix::from_row_slice(5, 6, &[1,0,999,0,4,0,
-                                                                                            0,1,2,0,0,0,
-                                                                                            0,2,4,0,0,0,
-                                                                                            0,1,4,0,0,0,
-                                                                                            0,1,6,0,0,0]);
-        let mut frequencies_matrix: DMatrix<f64> = DMatrix::from_element(counts_matrix.nrows(), counts_matrix.ncols(), 0.0);
-        let row_sums: Vec<f64> = counts_matrix.column_sum().into_iter().cloned().map(|x| x as f64).collect::<Vec<f64>>();
+        let counts_matrix: DMatrix<u64> = DMatrix::from_row_slice(
+            5,
+            6,
+            &[
+                1, 0, 999, 0, 4, 0, 0, 1, 2, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 1, 4, 0, 0, 0, 0, 1, 6,
+                0, 0, 0,
+            ],
+        );
+        let mut frequencies_matrix: DMatrix<f64> =
+            DMatrix::from_element(counts_matrix.nrows(), counts_matrix.ncols(), 0.0);
+        let row_sums: Vec<f64> = counts_matrix
+            .column_sum()
+            .into_iter()
+            .cloned()
+            .map(|x| x as f64)
+            .collect::<Vec<f64>>();
         for i in 0..counts_matrix.nrows() {
             for j in 0..counts_matrix.ncols() {
-                frequencies_matrix[(i, j)] = counts_matrix[(i,j)] as f64 / row_sums[i];
+                frequencies_matrix[(i, j)] = counts_matrix[(i, j)] as f64 / row_sums[i];
             }
         }
         // Notice the difference in the default order of alleles between PileupLine-derived counts and frequences and Sync-derived counts and frequencies, i.e. "D" before "N" in the former.
-        let expected_output1 = LocusCounts{chromosome: "Chromosome1".to_owned(),
-                                                        position: 456527,
-                                                        alleles_vector: vec!["A", "T", "C", "G", "N", "D"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(),
-                                                        matrix: counts_matrix};
-        let expected_output2 = LocusFrequencies{chromosome: "Chromosome1".to_owned(),
-                                                        position: 456527,
-                                                        alleles_vector: vec!["A", "T", "C", "G", "N", "D"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(),
-                                                        matrix: frequencies_matrix};
+        let expected_output1 = LocusCounts {
+            chromosome: "Chromosome1".to_owned(),
+            position: 456527,
+            alleles_vector: vec!["A", "T", "C", "G", "N", "D"]
+                .into_iter()
+                .map(|x| x.to_owned())
+                .collect::<Vec<String>>(),
+            matrix: counts_matrix,
+        };
+        let expected_output2 = LocusFrequencies {
+            chromosome: "Chromosome1".to_owned(),
+            position: 456527,
+            alleles_vector: vec!["A", "T", "C", "G", "N", "D"]
+                .into_iter()
+                .map(|x| x.to_owned())
+                .collect::<Vec<String>>(),
+            matrix: frequencies_matrix,
+        };
         let mut expected_output3 = expected_output1.clone();
-        expected_output3.alleles_vector = vec!["T", "C"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+        expected_output3.alleles_vector = vec!["T", "C"]
+            .into_iter()
+            .map(|x| x.to_owned())
+            .collect::<Vec<String>>();
         expected_output3.matrix = expected_output3.matrix.clone().remove_column(0);
         expected_output3.matrix = expected_output3.matrix.clone().remove_column(2);
         expected_output3.matrix = expected_output3.matrix.clone().remove_column(2);
         expected_output3.matrix = expected_output3.matrix.clone().remove_column(2);
         let mut expected_output4 = expected_output2.clone();
-        expected_output4.alleles_vector = vec!["T", "C"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+        expected_output4.alleles_vector = vec!["T", "C"]
+            .into_iter()
+            .map(|x| x.to_owned())
+            .collect::<Vec<String>>();
         expected_output4.matrix = expected_output4.matrix.clone().remove_column(0);
         expected_output4.matrix = expected_output4.matrix.clone().remove_column(2);
         expected_output4.matrix = expected_output4.matrix.clone().remove_column(2);
         expected_output4.matrix = expected_output4.matrix.clone().remove_column(2);
         let expected_output4 = *(expected_output4.to_frequencies().unwrap());
         let mut expected_output5 = expected_output4.clone();
-        expected_output5.alleles_vector = vec!["C", "T"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
-        let mut new_freqs = expected_output5.matrix.column(1).into_iter().map(|x| x.to_owned()).collect::<Vec<f64>>();
+        expected_output5.alleles_vector = vec!["C", "T"]
+            .into_iter()
+            .map(|x| x.to_owned())
+            .collect::<Vec<String>>();
+        let mut new_freqs = expected_output5
+            .matrix
+            .column(1)
+            .into_iter()
+            .map(|x| x.to_owned())
+            .collect::<Vec<f64>>();
         for i in 0..5 {
-            new_freqs.push(expected_output5.matrix[(i,0)]);
+            new_freqs.push(expected_output5.matrix[(i, 0)]);
         }
         expected_output5.matrix = DMatrix::from_vec(5, 2, new_freqs);
         // Inputs
@@ -569,14 +746,27 @@ mod tests {
         // Outputs
         let counts: LocusCounts = *(line.lparse().unwrap());
         let frequencies = *(counts.to_frequencies().unwrap());
-        let filter_stats = FilterStats{remove_ns: true, min_quality: 0.005, min_coverage: 1, min_allele_frequency: 0.005, pool_sizes: vec![0.2,0.2,0.2,0.2,0.2]};
+        let filter_stats = FilterStats {
+            remove_ns: true,
+            min_quality: 0.005,
+            min_coverage: 1,
+            min_allele_frequency: 0.005,
+            pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
+        };
         let mut filtered_counts = counts.clone();
         filtered_counts.filter(&filter_stats).unwrap();
-        let filtered_frequencies = *(frequencies.clone().filter(&filter_stats).unwrap().to_frequencies().unwrap());
+        let filtered_frequencies = *(frequencies
+            .clone()
+            .filter(&filter_stats)
+            .unwrap()
+            .to_frequencies()
+            .unwrap());
         let mut sorted_filtered_frequencies = filtered_frequencies.clone();
-        sorted_filtered_frequencies.sort_by_allele_freq(true).unwrap();
+        sorted_filtered_frequencies
+            .sort_by_allele_freq(true)
+            .unwrap();
         // Assertions
-        assert_eq!(expected_output1, counts);   
+        assert_eq!(expected_output1, counts);
         assert_eq!(expected_output2, frequencies);
         assert_eq!(expected_output3, filtered_counts);
         assert_eq!(expected_output4, filtered_frequencies);

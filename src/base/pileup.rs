@@ -1,10 +1,10 @@
-use std::io::{self, prelude::*, Error, ErrorKind, BufReader, BufWriter, SeekFrom};
-use std::fs::{File, OpenOptions};
-use std::str;
+use crate::base::*;
 use nalgebra::DMatrix;
+use std::fs::{File, OpenOptions};
+use std::io::{self, prelude::*, BufReader, BufWriter, Error, ErrorKind, SeekFrom};
+use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::base::*;
 
 impl Parse<PileupLine> for String {
     // Parse a line of pileup into PileupLine struct
@@ -35,10 +35,14 @@ impl Parse<PileupLine> for String {
         let mut read_codes: Vec<Vec<u8>> = Vec::new();
         for i in (4..raw_locus_data.len()).step_by(3) {
             // Parse if the current pool was read at least once for the current locus (i.e. line)
-            if coverages[((i-1)/3)-1] > 0 {
+            if coverages[((i - 1) / 3) - 1] > 0 {
                 let raw_read_codes = raw_locus_data[i].as_bytes().to_owned();
                 let mut alleles: Vec<u8> = Vec::new();
-                let mut indel_marker: IndelMarker = IndelMarker{indel: false, count: 0, left: 4294967295}; // Instantiate the indel marker with no indel (i.e. indel==false and count==0) and the maximum number of indels left (i.e. left==4294967295 which is the maximum value for usize type of left)
+                let mut indel_marker: IndelMarker = IndelMarker {
+                    indel: false,
+                    count: 0,
+                    left: 4294967295,
+                }; // Instantiate the indel marker with no indel (i.e. indel==false and count==0) and the maximum number of indels left (i.e. left==4294967295 which is the maximum value for usize type of left)
                 'per_pool: for j in 0..raw_read_codes.len() {
                     let code = raw_read_codes[j];
                     // Are we dealing with indels?
@@ -87,7 +91,7 @@ impl Parse<PileupLine> for String {
                     }
                     // Is the current code a read start/end marker?
                     // Remove read start and end codes (unicodes: '^' == 94 and '$' == 36)
-                    if (code == 94) | (code == 36){
+                    if (code == 94) | (code == 36) {
                         if code == 94 {
                             // If we have a start marker then we use the IndelMarker struct to get rig of the next character which encodes for the mapping quality of the read
                             indel_marker.indel = true;
@@ -96,7 +100,7 @@ impl Parse<PileupLine> for String {
                         }
                         continue 'per_pool;
                     }
-                    // Reference allele (unicodes: ',' == 44 and '.' == 46) and 
+                    // Reference allele (unicodes: ',' == 44 and '.' == 46) and
                     // non-reference alleles (unicodes: 'A'/'a' == 65/97,
                     //                                  'T'/'t' == 84/116,
                     //                                  'C'/'c' == 67/99,
@@ -107,16 +111,16 @@ impl Parse<PileupLine> for String {
                         reference_allele.to_string().as_bytes()[0]
                     } else {
                         match code {
-                            65  => 65,  // A
-                            97  => 65,  // a -> A
-                            84  => 84,  // T
-                            116 => 84,  // t -> T
-                            67  => 67,  // C
-                            99  => 67,  // c -> C
-                            71  => 71,  // G
-                            103 => 71,  // g -> G
-                            42  => 68,  // * -> D
-                            _   => 78,  // N
+                            65 => 65,  // A
+                            97 => 65,  // a -> A
+                            84 => 84,  // T
+                            116 => 84, // t -> T
+                            67 => 67,  // C
+                            99 => 67,  // c -> C
+                            71 => 71,  // G
+                            103 => 71, // g -> G
+                            42 => 68,  // * -> D
+                            _ => 78,   // N
                         }
                     };
                     alleles.push(a);
@@ -129,12 +133,12 @@ impl Parse<PileupLine> for String {
         // List of the qualities of the read alleles in each pool
         let mut read_qualities: Vec<Vec<u8>> = Vec::new();
         for i in (5..raw_locus_data.len()).step_by(3) {
-            if coverages[((i-1)/3)-1] > 0 {
-                    let qualities = raw_locus_data[i].as_bytes().to_owned();
-                    read_qualities.push(qualities);
-                } else {
-                    read_qualities.push(Vec::new());
-                }
+            if coverages[((i - 1) / 3) - 1] > 0 {
+                let qualities = raw_locus_data[i].as_bytes().to_owned();
+                read_qualities.push(qualities);
+            } else {
+                read_qualities.push(Vec::new());
+            }
         }
         // Output PileupLine struct
         let out = Box::new(PileupLine {
@@ -157,8 +161,8 @@ impl Parse<PileupLine> for String {
                 return Err(Error::new(ErrorKind::Other, "Please check the format of the input pileup file as the coverages, number of read alleles and read qualities do not match at pool: ".to_owned() + &(i+1).to_string() + "."));
             }
         }
-        return Ok(out)
-    }   
+        return Ok(out);
+    }
 }
 
 impl Filter for PileupLine {
@@ -167,8 +171,18 @@ impl Filter for PileupLine {
         let n: usize = self.coverages.len();
         let p: usize = 6;
         let mut matrix: DMatrix<u64> = DMatrix::from_element(n, p, 0 as u64);
-        let mut counts: Vec<Vec<u64>> = vec![Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
-        let alleles_vector = vec!["A", "T", "C", "G", "D", "N"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+        let mut counts: Vec<Vec<u64>> = vec![
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ];
+        let alleles_vector = vec!["A", "T", "C", "G", "D", "N"]
+            .into_iter()
+            .map(|x| x.to_owned())
+            .collect::<Vec<String>>();
         for pool in &self.read_codes {
             let mut counts_per_pool: Vec<u64> = vec![0, 0, 0, 0, 0, 0];
             for allele in pool {
@@ -178,7 +192,7 @@ impl Filter for PileupLine {
                     67 => counts_per_pool[2] += 1, // C
                     71 => counts_per_pool[3] += 1, // G
                     68 => counts_per_pool[4] += 1, // D
-                    _  => counts_per_pool[5] += 1, // N
+                    _ => counts_per_pool[5] += 1,  // N
                 };
             }
             for j in 0..p {
@@ -190,12 +204,14 @@ impl Filter for PileupLine {
                 matrix[(i, j)] = counts[j][i];
             }
         }
-        Ok(Box::new(LocusCounts{ chromosome: self.chromosome.clone(),
-                                 position: self.position.clone(),
-                                 alleles_vector: alleles_vector,
-                                 matrix: matrix }))
+        Ok(Box::new(LocusCounts {
+            chromosome: self.chromosome.clone(),
+            position: self.position.clone(),
+            alleles_vector: alleles_vector,
+            matrix: matrix,
+        }))
     }
-    
+
     // PileupLine to AlleleFrequencies
     fn to_frequencies(&self) -> io::Result<Box<LocusFrequencies>> {
         let locus_counts = self.to_counts().unwrap();
@@ -207,10 +223,12 @@ impl Filter for PileupLine {
                 matrix[(i, j)] = locus_counts.matrix[(i, j)] as f64 / row_sums[i] as f64;
             }
         }
-        Ok(Box::new(LocusFrequencies { chromosome: locus_counts.chromosome,
-                                       position: locus_counts.position,
-                                       alleles_vector: locus_counts.alleles_vector,
-                                       matrix: matrix }))
+        Ok(Box::new(LocusFrequencies {
+            chromosome: locus_counts.chromosome,
+            position: locus_counts.position,
+            alleles_vector: locus_counts.alleles_vector,
+            matrix: matrix,
+        }))
     }
 
     // Filter PileupLine by minimum coverage, minimum quality
@@ -223,7 +241,7 @@ impl Filter for PileupLine {
                 if self.read_qualities[i][j] < 33 {
                     return Err(Error::new(ErrorKind::Other, "Phred score out of bounds."));
                 } else {
-                    let q = f64::powf(10.0, -(self.read_qualities[i][j] as f64 - 33.0) / 10.0); 
+                    let q = f64::powf(10.0, -(self.read_qualities[i][j] as f64 - 33.0) / 10.0);
                     if q > filter_stats.min_quality {
                         self.read_codes[i][j] = 78; // convert to N
                     }
@@ -247,7 +265,12 @@ impl Filter for PileupLine {
         //// First convert the counts per pool into frequencies
         let mut allele_frequencies = match self.to_frequencies() {
             Ok(x) => x,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Cannot convert pileup line into allele frequencies.")),
+            Err(_) => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Cannot convert pileup line into allele frequencies.",
+                ))
+            }
         };
         //// Next account for pool sizes to get the proper minmum allele frequency across all pools
         let (n, mut m) = allele_frequencies.matrix.shape();
@@ -256,9 +279,12 @@ impl Filter for PileupLine {
         while j < m {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i,j)] * filter_stats.pool_sizes[i]; // We've made sure the pool_sizes sum up to one in phen.rs
+                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i];
+                // We've made sure the pool_sizes sum up to one in phen.rs
             }
-            if (q < filter_stats.min_allele_frequency) | (q > (1.00-filter_stats.min_allele_frequency)) {
+            if (q < filter_stats.min_allele_frequency)
+                | (q > (1.00 - filter_stats.min_allele_frequency))
+            {
                 allele_frequencies.matrix = allele_frequencies.matrix.remove_column(j);
                 m -= 1;
             } else {
@@ -292,34 +318,49 @@ pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) 
     };
     let (n, _p) = locus_counts.matrix.shape();
     // Instantiate the output line
-    let mut x = vec![pileup_line.chromosome.clone(),
-                                    pileup_line.position.to_string(),
-                                    pileup_line.reference_allele.to_string()];
+    let mut x = vec![
+        pileup_line.chromosome.clone(),
+        pileup_line.position.to_string(),
+        pileup_line.reference_allele.to_string(),
+    ];
     for i in 0..n {
-        x.push(locus_counts.matrix.row(i)
-                                    .into_iter()
-                                    .map(|w| w.to_string()).collect::<Vec<String>>()
-                                    .join(":"));
+        x.push(
+            locus_counts
+                .matrix
+                .row(i)
+                .into_iter()
+                .map(|w| w.to_string())
+                .collect::<Vec<String>>()
+                .join(":"),
+        );
     }
     let out = x.join("\t") + "\n";
     Some(out)
 }
 
 impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Option<String>>
-for FilePileup {
-    fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: fn(&mut PileupLine, &FilterStats) -> Option<String>) -> io::Result<String> {
+    for FilePileup
+{
+    fn per_chunk(
+        &self,
+        start: &u64,
+        end: &u64,
+        outname_ndigits: &usize,
+        filter_stats: &FilterStats,
+        function: fn(&mut PileupLine, &FilterStats) -> Option<String>,
+    ) -> io::Result<String> {
         let fname = self.filename.clone();
         // Add leading zeros in front of the start file position so that we can sort the output files per chuck or thread properly
         let mut start_string = start.to_string();
-        for  _i in 0..(outname_ndigits - start_string.len()) {
+        for _i in 0..(outname_ndigits - start_string.len()) {
             start_string = "0".to_owned() + &start_string;
         }
         // Add leading zeros in front of the end file position so that we can sort the output files per chuck or thread properly
         let mut end_string = end.to_string();
-        for  _i in 0..(outname_ndigits - end_string.len()) {
+        for _i in 0..(outname_ndigits - end_string.len()) {
             end_string = "0".to_owned() + &end_string;
         }
-        // Output temp file for the chunk    
+        // Output temp file for the chunk
         let fname_out = fname.to_owned() + "-" + &start_string + "-" + &end_string + ".sync.tmp";
         let out = fname_out.clone();
         let error_writing_file = "Unable to create file: ".to_owned() + &fname_out;
@@ -348,8 +389,13 @@ for FilePileup {
                 }
             }
             // Parse the pileup line
-            let mut pileup_line: Box<PileupLine> = line.lparse()
-                                                .expect(&("Input file error, i.e. '".to_owned() + &fname + "' at line with the first 20 characters as: " + &line[0..20] + "."));
+            let mut pileup_line: Box<PileupLine> = line.lparse().expect(
+                &("Input file error, i.e. '".to_owned()
+                    + &fname
+                    + "' at line with the first 20 characters as: "
+                    + &line[0..20]
+                    + "."),
+            );
 
             // Write the line
             let _ = match function(&mut pileup_line, filter_stats) {
@@ -359,27 +405,48 @@ for FilePileup {
         }
         Ok(out)
     }
-    
-    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: fn(&mut PileupLine, &FilterStats) -> Option<String>) -> io::Result<String> {
+
+    fn read_analyse_write(
+        &self,
+        filter_stats: &FilterStats,
+        out: &String,
+        n_threads: &u64,
+        function: fn(&mut PileupLine, &FilterStats) -> Option<String>,
+    ) -> io::Result<String> {
         // Unpack pileup and pool names filenames
         let fname = self.filename.clone();
         // Output filename
         let mut out = out.to_owned();
         if out == "".to_owned() {
-            let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
-            let bname = fname.split(".").collect::<Vec<&str>>().into_iter().map(|a| a.to_owned())
-                                        .collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>()[1..].to_owned()
-                                        .into_iter().rev().collect::<Vec<String>>().join(".");
+            let time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64();
+            let bname = fname
+                .split(".")
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .map(|a| a.to_owned())
+                .collect::<Vec<String>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()[1..]
+                .to_owned()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()
+                .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + ".sync";
         }
         // Instatiate output file
         let error_writing_file = "Unable to create file: ".to_owned() + &out;
         // let mut file_out = File::create(&out).expect(&error_writing_file);
-        let mut file_out = OpenOptions::new().create_new(true)
-                                                .write(true)
-                                                .append(false)
-                                                .open(&out)
-                                                .expect(&error_writing_file);
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
         // Pool names
         let names = self.pool_names.join("\t");
         // // Find the positions whereto split the file into n_threads pieces
@@ -391,18 +458,23 @@ for FilePileup {
         let mut thread_objects = Vec::new();
         // Vector holding all returns from pileup2sync_chunk()
         let thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
-        // Making four separate threads calling the `search_for_word` function
+                                                                                       // Making four separate threads calling the `search_for_word` function
         for i in 0..(*n_threads as usize) {
             // Clone pileup2sync_chunk parameters
             let self_clone = self.clone();
             let start = chunks[i].clone();
-            let end = chunks[i+1].clone();
+            let end = chunks[i + 1].clone();
             let outname_ndigits = outname_ndigits.clone();
             let filter_stats = filter_stats.clone();
             let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
-                let fname_out_per_thread = self_clone.per_chunk(&start, &end, &outname_ndigits, &filter_stats, function).unwrap();
-                thread_ouputs_clone.lock().unwrap().push(fname_out_per_thread);
+                let fname_out_per_thread = self_clone
+                    .per_chunk(&start, &end, &outname_ndigits, &filter_stats, function)
+                    .unwrap();
+                thread_ouputs_clone
+                    .lock()
+                    .unwrap()
+                    .push(fname_out_per_thread);
             });
             thread_objects.push(thread);
         }
@@ -410,7 +482,9 @@ for FilePileup {
         for thread in thread_objects {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
-        file_out.write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes()).unwrap();
+        file_out
+            .write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes())
+            .unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();
         for f in thread_ouputs.lock().unwrap().iter() {
@@ -440,49 +514,102 @@ mod tests {
     #[test]
     fn test_pileup_methods() {
         // Expected outputs
-        let expected_output1 = PileupLine{chromosome: "Chromosome1".to_owned(),
-                                                      position: 456527,
-                                                      reference_allele: "C".to_owned().parse::<char>().unwrap(),
-                                                      coverages: vec![4, 3, 7, 5, 7],
-                                                      read_codes:     vec![vec![67,67,67,67], vec![67,84,67], vec![67,68,67,84,67,67,84], vec![84,67,67,67,67], vec![67,67,67,84,67,67,67]],
-                                                      read_qualities: vec![vec![74,74,74,74], vec![74,74,74], vec![74,70,74,70,74,70,74], vec![74,74,74,74,74], vec![74,74,74,74,60,55,74]]};
-        let counts_matrix: DMatrix<u64> = DMatrix::from_row_slice(5, 6, &[0,0,4,0,0,0,
-                                                                                            0,1,2,0,0,0,
-                                                                                            0,2,4,0,1,0,
-                                                                                            0,1,4,0,0,0,
-                                                                                            0,1,6,0,0,0]);
-        let mut frequencies_matrix: DMatrix<f64> = DMatrix::from_element(counts_matrix.nrows(), counts_matrix.ncols(), 0.0);
-        let row_sums: Vec<f64> = counts_matrix.column_sum().into_iter().cloned().map(|x| x as f64).collect::<Vec<f64>>();
+        let expected_output1 = PileupLine {
+            chromosome: "Chromosome1".to_owned(),
+            position: 456527,
+            reference_allele: "C".to_owned().parse::<char>().unwrap(),
+            coverages: vec![4, 3, 7, 5, 7],
+            read_codes: vec![
+                vec![67, 67, 67, 67],
+                vec![67, 84, 67],
+                vec![67, 68, 67, 84, 67, 67, 84],
+                vec![84, 67, 67, 67, 67],
+                vec![67, 67, 67, 84, 67, 67, 67],
+            ],
+            read_qualities: vec![
+                vec![74, 74, 74, 74],
+                vec![74, 74, 74],
+                vec![74, 70, 74, 70, 74, 70, 74],
+                vec![74, 74, 74, 74, 74],
+                vec![74, 74, 74, 74, 60, 55, 74],
+            ],
+        };
+        let counts_matrix: DMatrix<u64> = DMatrix::from_row_slice(
+            5,
+            6,
+            &[
+                0, 0, 4, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 2, 4, 0, 1, 0, 0, 1, 4, 0, 0, 0, 0, 1, 6, 0,
+                0, 0,
+            ],
+        );
+        let mut frequencies_matrix: DMatrix<f64> =
+            DMatrix::from_element(counts_matrix.nrows(), counts_matrix.ncols(), 0.0);
+        let row_sums: Vec<f64> = counts_matrix
+            .column_sum()
+            .into_iter()
+            .cloned()
+            .map(|x| x as f64)
+            .collect::<Vec<f64>>();
         for i in 0..counts_matrix.nrows() {
             for j in 0..counts_matrix.ncols() {
-                frequencies_matrix[(i, j)] = counts_matrix[(i,j)] as f64 / row_sums[i];
+                frequencies_matrix[(i, j)] = counts_matrix[(i, j)] as f64 / row_sums[i];
             }
         }
-        let expected_output2 = LocusCounts{chromosome: "Chromosome1".to_owned(),
-                                                        position: 456527,
-                                                        alleles_vector: vec!["A", "T", "C", "G", "D", "N"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(),
-                                                        matrix: counts_matrix};
-        let expected_output3 = LocusFrequencies{chromosome: "Chromosome1".to_owned(),
-                                                        position: 456527,
-                                                        alleles_vector: vec!["A", "T", "C", "G", "D", "N"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(),
-                                                        matrix: frequencies_matrix};
-        let expected_output4 = PileupLine{chromosome: "Chromosome1".to_owned(),
-                                                     position: 456527,
-                                                     reference_allele: "C".to_owned().parse::<char>().unwrap(),
-                                                     coverages: vec![4, 3, 7, 5, 6],
-                                                     read_codes:     vec![vec![67,67,67,67], vec![67,84,67], vec![67,68,67,84,67,67,84], vec![84,67,67,67,67], vec![67,67,67,84,67,   67]],
-                                                     read_qualities: vec![vec![74,74,74,74], vec![74,74,74], vec![74,70,74,70,74,70,74], vec![74,74,74,74,74], vec![74,74,74,74,60,   74]]};
+        let expected_output2 = LocusCounts {
+            chromosome: "Chromosome1".to_owned(),
+            position: 456527,
+            alleles_vector: vec!["A", "T", "C", "G", "D", "N"]
+                .into_iter()
+                .map(|x| x.to_owned())
+                .collect::<Vec<String>>(),
+            matrix: counts_matrix,
+        };
+        let expected_output3 = LocusFrequencies {
+            chromosome: "Chromosome1".to_owned(),
+            position: 456527,
+            alleles_vector: vec!["A", "T", "C", "G", "D", "N"]
+                .into_iter()
+                .map(|x| x.to_owned())
+                .collect::<Vec<String>>(),
+            matrix: frequencies_matrix,
+        };
+        let expected_output4 = PileupLine {
+            chromosome: "Chromosome1".to_owned(),
+            position: 456527,
+            reference_allele: "C".to_owned().parse::<char>().unwrap(),
+            coverages: vec![4, 3, 7, 5, 6],
+            read_codes: vec![
+                vec![67, 67, 67, 67],
+                vec![67, 84, 67],
+                vec![67, 68, 67, 84, 67, 67, 84],
+                vec![84, 67, 67, 67, 67],
+                vec![67, 67, 67, 84, 67, 67],
+            ],
+            read_qualities: vec![
+                vec![74, 74, 74, 74],
+                vec![74, 74, 74],
+                vec![74, 70, 74, 70, 74, 70, 74],
+                vec![74, 74, 74, 74, 74],
+                vec![74, 74, 74, 74, 60, 74],
+            ],
+        };
         // Inputs
         let line = "Chromosome1\t456527\tC\t4\t....+1c\tJJJJ\t3\t.T.-3atg\tJJJ\t7\t.*.T..T\tJFJFJFJ\t5\tT....\tJJJJJ\t7\t...T...\tJJJJ<7J".to_owned();
         // Outputs
         let pileup_line: PileupLine = *(line.lparse().unwrap());
         let counts = *(pileup_line.to_counts().unwrap());
         let frequencies = *(pileup_line.to_frequencies().unwrap());
-        let filter_stats = FilterStats{remove_ns: true, min_quality: 0.005, min_coverage: 1, min_allele_frequency: 0.0, pool_sizes: vec![0.2,0.2,0.2,0.2,0.2,]};
+        let filter_stats = FilterStats {
+            remove_ns: true,
+            min_quality: 0.005,
+            min_coverage: 1,
+            min_allele_frequency: 0.0,
+            pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
+        };
         let mut filtered_pileup = pileup_line.clone();
         filtered_pileup.filter(&filter_stats).unwrap();
         // Assertions
-        assert_eq!(expected_output1, pileup_line);   
+        assert_eq!(expected_output1, pileup_line);
         assert_eq!(expected_output2, counts);
         assert_eq!(expected_output3, frequencies);
         assert_eq!(expected_output4, filtered_pileup);

@@ -1,13 +1,7 @@
-pub use self::{
-    structs_and_traits::*,
-    helpers::*,
-    pileup::*,
-    sync::*,
-    phen::*,
-};
+pub use self::{helpers::*, phen::*, pileup::*, structs_and_traits::*, sync::*};
 
-mod structs_and_traits;
 mod helpers;
-mod pileup;
-mod sync;
 mod phen;
+mod pileup;
+mod structs_and_traits;
+mod sync;

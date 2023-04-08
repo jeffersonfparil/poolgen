@@ -1,5 +1,5 @@
+use nalgebra::{DMatrix, DVector};
 use std::io;
-use nalgebra::{DMatrix,DVector};
 
 // STRUCTS
 #[derive(Debug, Clone)]
@@ -51,12 +51,12 @@ pub struct FilterStats {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PileupLine {
-    pub chromosome: String,             // chromosome or scaffold name
-    pub position: u64,                  // position in number of bases
-    pub reference_allele: char,         // reference allele
-    pub coverages: Vec<u64>,            // number of times the locus was covered
-    pub read_codes: Vec<Vec<u8>>,       // utf8 read codes corresponding to 'A', 'T', 'C', or 'G' (252 other alleles can be accommodated)
-    pub read_qualities: Vec<Vec<u8>>,   // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
+    pub chromosome: String,           // chromosome or scaffold name
+    pub position: u64,                // position in number of bases
+    pub reference_allele: char,       // reference allele
+    pub coverages: Vec<u64>,          // number of times the locus was covered
+    pub read_codes: Vec<Vec<u8>>, // utf8 read codes corresponding to 'A', 'T', 'C', or 'G' (252 other alleles can be accommodated)
+    pub read_qualities: Vec<Vec<u8>>, // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
 }
 
 // Struct of allele counts to convert reads into sync
@@ -80,9 +80,9 @@ pub struct LocusFrequencies {
 // Struct for tracking the insertions and deletions prepended with +/i which we want to skip as they refer to the next base position and not the current locus
 #[derive(Debug, Clone)]
 pub struct IndelMarker {
-    pub indel: bool,    // insertion or deletion, i.e. +/- codes
-    pub count: usize,   // size of the indel, i.e. how many bases
-    pub left: usize,    // how many indel bases are left to be removed (initialised with the maximum possible value of 4294967295)
+    pub indel: bool,  // insertion or deletion, i.e. +/- codes
+    pub count: usize, // size of the indel, i.e. how many bases
+    pub left: usize, // how many indel bases are left to be removed (initialised with the maximum possible value of 4294967295)
 }
 
 // Struct of allele counts and phenotypes per pool
@@ -132,6 +132,9 @@ pub struct UnivariateMaximumLikelihoodEstimation {
     pub y: DVector<f64>,
     pub b: DVector<f64>,
     pub se: f64,
+    pub v_b: DVector<f64>,
+    pub t: DVector<f64>,
+    pub pval: DVector<f64>,
 }
 
 // Struct for ridge regression
@@ -156,10 +159,25 @@ pub trait Sort {
 }
 
 pub trait ChunkyReadAnalyseWrite<T, F> {
-    fn per_chunk(&self, start: &u64, end: &u64, outname_ndigits: &usize, filter_stats: &FilterStats, function: F) -> io::Result<String>
-        where F: Fn(&mut T, &FilterStats) -> Option<String>;
-    fn read_analyse_write(&self, filter_stats: &FilterStats, out: &String, n_threads: &u64, function: F) -> io::Result<String>
-        where F: Fn(&mut T, &FilterStats) -> Option<String>;
+    fn per_chunk(
+        &self,
+        start: &u64,
+        end: &u64,
+        outname_ndigits: &usize,
+        filter_stats: &FilterStats,
+        function: F,
+    ) -> io::Result<String>
+    where
+        F: Fn(&mut T, &FilterStats) -> Option<String>;
+    fn read_analyse_write(
+        &self,
+        filter_stats: &FilterStats,
+        out: &String,
+        n_threads: &u64,
+        function: F,
+    ) -> io::Result<String>
+    where
+        F: Fn(&mut T, &FilterStats) -> Option<String>;
 }
 
 pub trait Regression {
