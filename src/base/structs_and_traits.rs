@@ -139,8 +139,15 @@ pub struct UnivariateMaximumLikelihoodEstimation {
 
 // Struct for ridge regression
 #[derive(Debug, Clone)]
-pub struct MaximumLikelihoodRidge {
+pub struct UnivariateRidgeRegression {
+    pub x: DMatrix<f64>,
+    pub y: DVector<f64>,
+    pub b: DVector<f64>,
+    pub sigma2: f64,
+    pub tau2: f64,
     pub lambda: f64,
+    pub t: DVector<f64>,
+    pub pval: DVector<f64>,
 }
 
 // TRAITS

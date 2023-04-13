@@ -105,33 +105,6 @@ impl CostFunction for MaximumLikelihoodBeta {
     }
 }
 
-fn prepare_solver(h: f64) -> NelderMead<Vec<f64>, f64> {
-    // let h = 1.0;
-    let init_param: Vec<Vec<f64>> = vec![
-        vec![1.00, 1.00, 1.00, 1.00]
-            .into_iter()
-            .map(|x| x * h)
-            .collect::<Vec<f64>>(),
-        vec![1.05, 1.00, 1.00, 1.00]
-            .into_iter()
-            .map(|x| x * h)
-            .collect::<Vec<f64>>(),
-        vec![1.00, 1.05, 1.00, 1.00]
-            .into_iter()
-            .map(|x| x * h)
-            .collect::<Vec<f64>>(),
-        vec![1.00, 1.00, 1.05, 1.00]
-            .into_iter()
-            .map(|x| x * h)
-            .collect::<Vec<f64>>(),
-        vec![1.00, 1.00, 1.00, 1.05]
-            .into_iter()
-            .map(|x| x * h)
-            .collect::<Vec<f64>>(),
-    ];
-    NelderMead::new(init_param)
-}
-
 fn gwalpha_minimise_ls(
     solver: NelderMead<Vec<f64>, f64>,
     q_prime: DMatrix<f64>,
@@ -266,12 +239,7 @@ fn prepare_freqs_and_qprime(
     DMatrix<f64>,
     DMatrix<f64>,
 ) {
-    // let freqs_a: DMatrix<f64> = DMatrix::from_columns(&[locus_frequencies.matrix.column(j)]).add_scalar(1e-6); // Add a small value so we don't get negative log-likelihoods --> NO NEED HERE BECAUSE WE ARE BOUNDING OUR PARAMETER VALUES WITH LOGISTIC REGRESSION AND BOUNDING THE LOG-DIFFERENCE SO WE DON'T GET INFINITIES
     let freqs_a: DMatrix<f64> = DMatrix::from_columns(&[locus_frequencies.matrix.column(j)]);
-    // let freqs_a_sum = freqs_a.sum();
-    // for i in 0..freqs_a.len() {
-    //     freqs_a[i] = freqs_a[i]/freqs_a_sum;
-    // }
     let p_a = (freqs_a.clone().transpose() * bins.clone())[(0, 0)]; // mean allele frequency across pools
                                                                     // println!("p_a={:?}", p_a);
                                                                     // Quantiles per pool (for least squares estimation)
@@ -334,7 +302,7 @@ pub fn gwalpha_ls(
         (p_a, q_prime, percs_a, _, percs_b, _) =
             prepare_freqs_and_qprime(&locus_frequencies, &bins, &q, min, max, n, j);
         // Optimise
-        solver = prepare_solver(1.0);
+        solver = prepare_solver_neldermead(4.0, 1.0);
         let solution = match gwalpha_minimise_ls(solver, q_prime, percs_a, percs_b) {
             Some(x) => x,
             None => return None,
@@ -345,9 +313,9 @@ pub fn gwalpha_ls(
         // Fill in output line
         line.append(&mut first_2_col.clone());
         line.push(locus_frequencies.alleles_vector[j].clone());
-        line.push(locus_frequencies.matrix.column(j).mean().to_string());
+        line.push(parse_f64_roundup_and_own(locus_frequencies.matrix.column(j).mean(), 8));
         line.push("Pheno_0".to_string());
-        line.push(alpha.to_string() + &",Unknown\n");
+        line.push(parse_f64_roundup_and_own(alpha, 8) + &",Unknown\n");
     }
     let out = line.join(",").replace("\n,", "\n");
     Some(out)
@@ -379,7 +347,7 @@ pub fn gwalpha_ml(
         (p_a, _, percs_a, percs_a0, percs_b, percs_b0) =
             prepare_freqs_and_qprime(&locus_frequencies, &bins, &q, min, max, n, j);
         // Optimise
-        solver = prepare_solver(1.0);
+        solver = prepare_solver_neldermead(4.0, 1.0);
         let solution = match gwalpha_minimise_ml(solver, percs_a, percs_a0, percs_b, percs_b0) {
             Some(x) => x,
             None => return None,
@@ -400,4 +368,49 @@ pub fn gwalpha_ml(
     }
     let out = line.join(",").replace("\n,", "\n");
     Some(out)
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_gwalpha() {
+        // Expected
+        let expected_output1: String = "Chromosome1,12345,A,0.36,Pheno_0,5.33988111,Unknown\nChromosome1,12345,T,0.24,Pheno_0,11.52862761,Unknown\n".to_owned();
+        let expected_output2: String = "Chromosome1,12345,A,0.36,Pheno_0,-2.90643798,Unknown\nChromosome1,12345,T,0.24,Pheno_0,-8.91110865,Unknown\n".to_owned();
+        // Inputs
+        let counts: DMatrix<u64> =
+            DMatrix::from_row_slice(5, 3, &[4, 1, 5, 2, 1, 7, 3, 2, 5, 4, 3, 3, 5, 5, 0]);
+        let gwalpha_fmt: DMatrix<f64> = DMatrix::from_column_slice(5, 3, &[0.2, 0.2, 0.2, 0.2, 0.2,
+                                                                                              0.0, 0.1, 0.4, 0.7, 0.9,
+                                                                                              0.02, 0.0, 0.9, f64::NEG_INFINITY, f64::NEG_INFINITY]);
+        let filter_stats = FilterStats {
+            remove_ns: true,
+            min_quality: 0.005,
+            min_coverage: 1,
+            min_allele_frequency: 0.005,
+            pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
+        };
+        let locus_counts = LocusCounts {
+            chromosome: "Chromosome1".to_owned(),
+            position: 12345,
+            alleles_vector: vec!["A".to_owned(), "T".to_owned(), "D".to_owned()],
+            matrix: counts,
+        };
+        let mut locus_counts_and_phenotypes = LocusCountsAndPhenotypes {
+            locus_counts: locus_counts,
+            phenotypes: gwalpha_fmt.clone(),
+            pool_names: vec!["pool1", "pool2", "pool3", "pool4", "pool5"]
+                .into_iter()
+                .map(|x| x.to_owned())
+                .collect::<Vec<String>>(),
+        };
+        // Outputs
+        let ls_line = gwalpha_ls(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
+        let ml_line = gwalpha_ml(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
+        // Assertions
+        assert_eq!(expected_output1, ls_line);
+        assert_eq!(expected_output2, ml_line);
+    }
 }

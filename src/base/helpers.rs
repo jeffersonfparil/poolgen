@@ -2,6 +2,7 @@ use std;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, SeekFrom};
 use std::io::{Error, ErrorKind};
+use argmin::solver::neldermead::NelderMead;
 
 // File splitting for thread allocation for parallele computation
 fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
@@ -41,7 +42,8 @@ pub fn parse_f64_roundup_and_own(x: f64, n_digits: usize) -> String {
     if s.len() < n_digits {
         return s;
     }
-    s[0..n_digits].parse::<f64>().unwrap().to_string()
+    let factor = ("1e".to_owned() + &n_digits.to_string()).parse::<f64>().unwrap();
+    ((x * factor).round() / factor).to_string()
 }
 
 pub fn bound_parameters_with_logit(
@@ -54,6 +56,21 @@ pub fn bound_parameters_with_logit(
         .into_iter()
         .map(|x| lower_limit + ((upper_limit - lower_limit) / (1.00 + (-x).exp())))
         .collect::<Vec<f64>>()
+}
+
+pub fn prepare_solver_neldermead(p: f64, h: f64) -> NelderMead<Vec<f64>, f64> {
+    let mut init_param: Vec<Vec<f64>> = Vec::new();
+    for i in 0..(p as usize + 1) {
+        init_param.push(vec![]);
+        for j in 0..p as usize {
+            if i == j {
+                init_param[i].push(1.5 * h)
+            } else {
+                init_param[i].push(1.0 * h)
+            }
+        }
+    }
+    NelderMead::new(init_param)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////

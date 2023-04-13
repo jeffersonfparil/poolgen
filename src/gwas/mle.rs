@@ -1,7 +1,6 @@
 use crate::base::*;
 use crate::gwas::*;
 use argmin::core::{self, CostFunction, Executor};
-use argmin::solver::neldermead::NelderMead;
 use nalgebra::{self, DMatrix, DVector};
 use statrs::distribution::{ContinuousCDF, StudentsT};
 use std::f64::consts::PI;
@@ -29,21 +28,6 @@ impl CostFunction for UnivariateMaximumLikelihoodEstimation {
             &p, &self.x, &self.y,
         ))
     }
-}
-
-fn prepare_solver(p: f64, h: f64) -> NelderMead<Vec<f64>, f64> {
-    let mut init_param: Vec<Vec<f64>> = Vec::new();
-    for i in 0..(p as usize + 1) {
-        init_param.push(vec![]);
-        for j in 0..p as usize {
-            if i == j {
-                init_param[i].push(1.5 * h)
-            } else {
-                init_param[i].push(1.0 * h)
-            }
-        }
-    }
-    NelderMead::new(init_param)
 }
 
 impl Regression for UnivariateMaximumLikelihoodEstimation {
@@ -99,7 +83,7 @@ impl Regression for UnivariateMaximumLikelihoodEstimation {
         let mut cost = UnivariateMaximumLikelihoodEstimation::new();
         cost.x = self.x.clone();
         cost.y = self.y.clone();
-        let solver = prepare_solver(p as f64 + 1.0, 1.0);
+        let solver = prepare_solver_neldermead(p as f64 + 1.0, 1.0);
         let res = match Executor::new(cost, solver)
             .configure(|state| state.max_iters(1_000))
             // .add_observer(SlogLogger::term(), ObserverMode::NewBest)
@@ -303,7 +287,7 @@ mod tests {
         let expected_output4: DMatrix<f64> = DMatrix::from_column_slice(3, 1, &[0.08, 0.99, -0.41]);
         let expected_output5: DMatrix<f64> = DMatrix::from_column_slice(3, 1, &[0.25, 3.44, 1.60]);
         let expected_output6: DMatrix<f64> = DMatrix::from_column_slice(3, 1, &[0.77, 0.80, 0.82]);
-        let expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.5856869828945244\nChromosome1,12345,A,0.36,Pheno_1,0.991869,0.8004426037481653\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.24850364304004513\nChromosome1,12345,T,0.24,Pheno_1,-0.4065,0.8230663350210905\n".to_owned();
+        let expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.52845529,0.5856869828945244\nChromosome1,12345,A,0.36,Pheno_1,0.99186993,0.8004426037481653\nChromosome1,12345,T,0.24,Pheno_0,6.42276423,0.24850364304004513\nChromosome1,12345,T,0.24,Pheno_1,-0.40650406,0.8230663350210905\n".to_owned();
         // Inputs
         let x: DMatrix<f64> = DMatrix::from_row_slice(
             5,
