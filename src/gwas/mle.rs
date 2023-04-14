@@ -266,7 +266,7 @@ pub fn mle_iterate(
             line.push(locus_frequencies.alleles_vector[i - 1].clone());
             line.push(parse_f64_roundup_and_own(x_matrix.column(i).mean(), 8));
             line.push("Pheno_".to_string() + &(j.to_string())[..]);
-            line.push(parse_f64_roundup_and_own(beta[(i, j)], 8));
+            line.push(parse_f64_roundup_and_own(beta[(i, j)], 6));
             line.push(pval[(i, j)].to_string() + "\n");
         }
     }
@@ -287,7 +287,7 @@ mod tests {
         let expected_output4: DMatrix<f64> = DMatrix::from_column_slice(3, 1, &[0.08, 0.99, -0.41]);
         let expected_output5: DMatrix<f64> = DMatrix::from_column_slice(3, 1, &[0.25, 3.44, 1.60]);
         let expected_output6: DMatrix<f64> = DMatrix::from_column_slice(3, 1, &[0.77, 0.80, 0.82]);
-        let expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.52845529,0.5856869828945244\nChromosome1,12345,A,0.36,Pheno_1,0.99186993,0.8004426037481653\nChromosome1,12345,T,0.24,Pheno_0,6.42276423,0.24850364304004513\nChromosome1,12345,T,0.24,Pheno_1,-0.40650406,0.8230663350210905\n".to_owned();
+        let expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.5856869828945244\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.8004426037481653\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.24850364304004513\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.8230663350210905\n".to_owned();
         // Inputs
         let x: DMatrix<f64> = DMatrix::from_row_slice(
             5,

@@ -60,7 +60,7 @@ struct Args {
     n_threads: u64,
     ////////////////////////////////////////////////////
     ////// Additional parameters
-    ////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////
     /// GWAlpha inference method to use: "LS" for least squares or "ML" for maximum likelihood estimation
     #[clap(long, default_value = "ML")]
     gwalpha_method: String,

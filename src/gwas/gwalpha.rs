@@ -315,7 +315,7 @@ pub fn gwalpha_ls(
         line.push(locus_frequencies.alleles_vector[j].clone());
         line.push(parse_f64_roundup_and_own(locus_frequencies.matrix.column(j).mean(), 8));
         line.push("Pheno_0".to_string());
-        line.push(parse_f64_roundup_and_own(alpha, 8) + &",Unknown\n");
+        line.push(parse_f64_roundup_and_own(alpha, 6) + &",Unknown\n");
     }
     let out = line.join(",").replace("\n,", "\n");
     Some(out)
@@ -364,7 +364,7 @@ pub fn gwalpha_ml(
             8,
         ));
         line.push("Pheno_0".to_string());
-        line.push(parse_f64_roundup_and_own(alpha, 8) + &",Unknown\n");
+        line.push(parse_f64_roundup_and_own(alpha, 6) + &",Unknown\n");
     }
     let out = line.join(",").replace("\n,", "\n");
     Some(out)
@@ -377,8 +377,8 @@ mod tests {
     #[test]
     fn test_gwalpha() {
         // Expected
-        let expected_output1: String = "Chromosome1,12345,A,0.36,Pheno_0,5.33988111,Unknown\nChromosome1,12345,T,0.24,Pheno_0,11.52862761,Unknown\n".to_owned();
-        let expected_output2: String = "Chromosome1,12345,A,0.36,Pheno_0,-2.90643798,Unknown\nChromosome1,12345,T,0.24,Pheno_0,-8.91110865,Unknown\n".to_owned();
+        let expected_output1: String = "Chromosome1,12345,A,0.36,Pheno_0,5.339881,Unknown\nChromosome1,12345,T,0.24,Pheno_0,11.528628,Unknown\n".to_owned();
+        let expected_output2: String = "Chromosome1,12345,A,0.36,Pheno_0,-2.906438,Unknown\nChromosome1,12345,T,0.24,Pheno_0,-8.911109,Unknown\n".to_owned();
         // Inputs
         let counts: DMatrix<u64> =
             DMatrix::from_row_slice(5, 3, &[4, 1, 5, 2, 1, 7, 3, 2, 5, 4, 3, 3, 5, 5, 0]);

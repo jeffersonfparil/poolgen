@@ -36,7 +36,7 @@ pub fn chisq(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Opti
         locus_frequencies.chromosome.clone(),
         locus_frequencies.position.to_string(),
         locus_frequencies.alleles_vector.join(""),
-        chi2.to_string(),
+        parse_f64_roundup_and_own(chi2, 6),
         pval.to_string(),
     ]
     .join(",")

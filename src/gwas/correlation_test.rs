@@ -83,7 +83,7 @@ pub fn correlation(
             line.push("Pheno_".to_string() + &(j.to_string())[..]);
             let y = DVector::from(y_matrix.column(j));
             (corr, pval) = pearsons_correlation(&x, &y).unwrap();
-            line.push(corr.to_string());
+            line.push(parse_f64_roundup_and_own(corr, 6));
             line.push(pval.to_string() + "\n");
         }
     }
@@ -102,7 +102,7 @@ mod tests {
         let expected_output1: f64 = 0.3849001794597505;
         let expected_output2: f64 = 0.5223146158470686;
         let expected_output3: String =
-            "Chromosome1,12345,A,0.3,Pheno_0,0.3849001794597505,0.5223146158470686\n".to_owned();
+            "Chromosome1,12345,A,0.3,Pheno_0,0.3849,0.5223146158470686\n".to_owned();
         // Inputs
         let x: DVector<f64> = DVector::from_column_slice(&[0.1, 0.2, 0.3, 0.4, 0.5]);
         let y: DVector<f64> = DVector::from_column_slice(&[2.0, 1.0, 1.0, 5.0, 2.0]);
