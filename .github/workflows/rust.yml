@@ -26,8 +26,6 @@ jobs:
           - macOS-latest
         rust:
           - stable
-          - beta
-          - nightly
     runs-on: ${{ matrix.os }}
     needs: [compile]
     steps:
