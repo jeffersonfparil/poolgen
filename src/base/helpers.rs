@@ -1,8 +1,8 @@
+use argmin::solver::neldermead::NelderMead;
 use std;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, SeekFrom};
 use std::io::{Error, ErrorKind};
-use argmin::solver::neldermead::NelderMead;
 
 // File splitting for thread allocation for parallele computation
 fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
@@ -42,7 +42,9 @@ pub fn parse_f64_roundup_and_own(x: f64, n_digits: usize) -> String {
     if s.len() < n_digits {
         return s;
     }
-    let factor = ("1e".to_owned() + &n_digits.to_string()).parse::<f64>().unwrap();
+    let factor = ("1e".to_owned() + &n_digits.to_string())
+        .parse::<f64>()
+        .unwrap();
     ((x * factor).round() / factor).to_string()
 }
 

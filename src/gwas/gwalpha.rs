@@ -313,7 +313,10 @@ pub fn gwalpha_ls(
         // Fill in output line
         line.append(&mut first_2_col.clone());
         line.push(locus_frequencies.alleles_vector[j].clone());
-        line.push(parse_f64_roundup_and_own(locus_frequencies.matrix.column(j).mean(), 8));
+        line.push(parse_f64_roundup_and_own(
+            locus_frequencies.matrix.column(j).mean(),
+            6,
+        ));
         line.push("Pheno_0".to_string());
         line.push(parse_f64_roundup_and_own(alpha, 6) + &",Unknown\n");
     }
@@ -361,7 +364,7 @@ pub fn gwalpha_ml(
         line.push(locus_frequencies.alleles_vector[j].clone());
         line.push(parse_f64_roundup_and_own(
             locus_frequencies.matrix.column(j).mean(),
-            8,
+            6,
         ));
         line.push("Pheno_0".to_string());
         line.push(parse_f64_roundup_and_own(alpha, 6) + &",Unknown\n");
@@ -377,14 +380,32 @@ mod tests {
     #[test]
     fn test_gwalpha() {
         // Expected
-        let expected_output1: String = "Chromosome1,12345,A,0.36,Pheno_0,5.339881,Unknown\nChromosome1,12345,T,0.24,Pheno_0,11.528628,Unknown\n".to_owned();
-        let expected_output2: String = "Chromosome1,12345,A,0.36,Pheno_0,-2.906438,Unknown\nChromosome1,12345,T,0.24,Pheno_0,-8.911109,Unknown\n".to_owned();
+        let expected_output1: String = "Chromosome1,12345,A,0.353287,Pheno_0,5.816067,Unknown\nChromosome1,12345,T,0.267133,Pheno_0,9.176892,Unknown\n".to_owned();
+        let expected_output2: String = "Chromosome1,12345,A,0.353287,Pheno_0,-3.293261,Unknown\nChromosome1,12345,T,0.267133,Pheno_0,-7.098985,Unknown\n".to_owned();
         // Inputs
         let counts: DMatrix<u64> =
-            DMatrix::from_row_slice(5, 3, &[4, 1, 5, 2, 1, 7, 3, 2, 5, 4, 3, 3, 5, 5, 0]);
-        let gwalpha_fmt: DMatrix<f64> = DMatrix::from_column_slice(5, 3, &[0.2, 0.2, 0.2, 0.2, 0.2,
-                                                                                              0.0, 0.1, 0.4, 0.7, 0.9,
-                                                                                              0.02, 0.0, 0.9, f64::NEG_INFINITY, f64::NEG_INFINITY]);
+            DMatrix::from_row_slice(5, 3, &[5, 2, 6, 2, 2, 7, 3, 2, 5, 4, 3, 3, 5, 5, 0]);
+        let gwalpha_fmt: DMatrix<f64> = DMatrix::from_column_slice(
+            5,
+            3,
+            &[
+                0.2,
+                0.2,
+                0.2,
+                0.2,
+                0.2,
+                0.0,
+                0.1,
+                0.4,
+                0.7,
+                0.9,
+                0.02,
+                0.0,
+                0.9,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ],
+        );
         let filter_stats = FilterStats {
             remove_ns: true,
             min_quality: 0.005,
