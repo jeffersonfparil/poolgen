@@ -9,5 +9,6 @@ edition = "2021"
 clap = { version="3.2.23", features=["derive"]}
 nalgebra = "0.32.1"
 statrs = "0.16.0"
-argmin = "0.8.1"
+argmin = {version="0.8.1", features=["rayon"]}
 argmin-math = "0.3.0"
+rand = "0.8.5"

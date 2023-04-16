@@ -145,7 +145,6 @@ pub struct UnivariateRidgeRegression {
     pub b: DVector<f64>,
     pub sigma2: f64,
     pub tau2: f64,
-    pub lambda: f64,
     pub t: DVector<f64>,
     pub pval: DVector<f64>,
 }
