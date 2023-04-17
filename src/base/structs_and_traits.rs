@@ -142,6 +142,8 @@ pub struct UnivariateMaximumLikelihoodEstimation {
 pub struct UnivariateRidgeRegression {
     pub x: DMatrix<f64>,
     pub y: DVector<f64>,
+    pub xt: DMatrix<f64>,
+    pub v: DMatrix<f64>,
     pub b: DVector<f64>,
     pub sigma2: f64,
     pub tau2: f64,

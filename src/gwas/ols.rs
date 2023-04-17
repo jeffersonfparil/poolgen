@@ -57,7 +57,7 @@ impl Regression for UnivariateOrdinaryLeastSquares {
         if n != n_ {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
-        self.remove_collinearities_in_x();
+        // self.remove_collinearities_in_x();
         self.xt = self.x.transpose();
         if n < p {
             self.inv_xxt = match (&self.x * &self.xt).try_inverse() {
@@ -159,6 +159,10 @@ fn ols(
         let mut ols_regression = UnivariateOrdinaryLeastSquares::new();
         ols_regression.x = x_matrix.clone();
         ols_regression.y = DVector::from_columns(&[y_matrix.column(j)]);
+        if p <= 6 {
+            // Remove collinearities if we're performing iterative regression
+            ols_regression.remove_collinearities_in_x();
+        }
         match ols_regression.estimate_significance() {
             Ok(x) => x,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Regression failed.")),

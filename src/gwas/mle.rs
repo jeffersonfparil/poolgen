@@ -78,7 +78,7 @@ impl Regression for UnivariateMaximumLikelihoodEstimation {
         if n != n_ {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
-        self.remove_collinearities_in_x();
+        // self.remove_collinearities_in_x();
         let (_, p) = self.x.shape();
         let mut cost = UnivariateMaximumLikelihoodEstimation::new();
         cost.x = self.x.clone();
@@ -196,7 +196,11 @@ fn mle(
         let mut mle_regression = UnivariateMaximumLikelihoodEstimation::new();
         mle_regression.x = x_matrix.clone();
         mle_regression.y = DVector::from_columns(&[y_matrix.column(j)]);
-        match mle_regression.estimate_significance() {
+        if p <= 6 {
+            // Remove collinearities if we're performing iterative regression
+            mle_regression.remove_collinearities_in_x();
+        }
+match mle_regression.estimate_significance() {
             Ok(x) => x,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Regression failed.")),
         };

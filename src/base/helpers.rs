@@ -66,9 +66,10 @@ pub fn prepare_solver_neldermead(p: f64, h: f64) -> NelderMead<Vec<f64>, f64> {
         init_param.push(vec![]);
         for j in 0..p as usize {
             if i == j {
-                init_param[i].push(1.5 * h)
+                // init_param[i].push(1.5 * h)
+                init_param[i].push(h + 0.5)
             } else {
-                init_param[i].push(1.0 * h)
+                init_param[i].push(h)
             }
         }
     }
