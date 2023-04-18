@@ -200,7 +200,7 @@ fn mle(
             // Remove collinearities if we're performing iterative regression
             mle_regression.remove_collinearities_in_x();
         }
-match mle_regression.estimate_significance() {
+        match mle_regression.estimate_significance() {
             Ok(x) => x,
             Err(_) => return Err(Error::new(ErrorKind::Other, "Regression failed.")),
         };

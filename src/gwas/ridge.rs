@@ -8,10 +8,10 @@ use std::io::{self, Error, ErrorKind};
 
 fn ridge_objective_function_lambda_and_beta(
     params: &Vec<f64>,
-    x:  &DMatrix<f64>,
-    y:  &DVector<f64>,
+    x: &DMatrix<f64>,
+    y: &DVector<f64>,
     xt: &DMatrix<f64>,
-    v:  &DMatrix<f64>,
+    v: &DMatrix<f64>,
 ) -> f64 {
     let (n, p) = x.shape();
     assert_eq!(n, y.len());
@@ -35,7 +35,7 @@ impl CostFunction for UnivariateRidgeRegression {
     type Output = f64;
     fn cost(&self, p: &Self::Param) -> Result<Self::Output, core::Error> {
         Ok(ridge_objective_function_lambda_and_beta(
-            &p, &self.x, &self.y, &self.xt, &self.v
+            &p, &self.x, &self.y, &self.xt, &self.v,
         ))
     }
 }
@@ -92,7 +92,7 @@ impl Regression for UnivariateRidgeRegression {
         }
         // self.remove_collinearities_in_x();
         let (_, p) = self.x.shape();
-        let mut cost = self.clone();
+        let cost = self.clone();
         // let mut cost = UnivariateRidgeRegression::new();
         // cost.x = self.x.clone();
         // cost.y = self.y.clone();
@@ -279,7 +279,7 @@ pub fn ridge_iterate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{prelude::*, seq::index::sample};
+    use rand::prelude::*;
     use statrs;
     #[test]
     fn test_ridge() {
@@ -323,34 +323,24 @@ mod tests {
             big_b_true[(*i, 0)] = 1.00;
         }
         let gauss_dist = statrs::distribution::Normal::new(0.0, 0.01).unwrap();
-        let error = DMatrix::from_vec(n, 1, gauss_dist.sample_iter(&mut rng).take(n).collect::<Vec<f64>>());
+        let error = DMatrix::from_vec(
+            n,
+            1,
+            gauss_dist
+                .sample_iter(&mut rng)
+                .take(n)
+                .collect::<Vec<f64>>(),
+        );
         let big_y_vector = (&big_x_matrix * &big_b_true) + &error;
-        // let big_x_matrix: Array2<f64> = Array::from_shape_fn((100, 1_000), |_| rng.gen_range(0.0..1.0));
-        // let big_y_vector: Array2<f64> = Array::from_shape_fn((100, 1), |_| rng.gen_range(-1.0..1.0));
-        // println!("test={:?}", big_x_matrix.reversed_axes().shape());
-        // println!("test={:?}", big_y_vector.shape());
-        // let b = big_x_matrix.transpose() * &big_y_vector;
-        // // let b = multithread_matrix_multiplication(&big_x_matrix.transpose(), &big_y_vector, &30);
-        // println!("test={:?}", b);
-        // println!("test={:?}", b.len());
-        // assert_eq!(b[(0,0)], b[(1,0)]);
         // Outputs
         let ridge_line = ridge_iterate(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
-        // let (beta, _var_beta, _pval) = ridge(&big_x_matrix, &big_y_vector).unwrap();
-        let beta = &big_x_matrix.transpose() * (&big_x_matrix * &big_x_matrix.transpose()).try_inverse().unwrap() * big_y_vector;
-        println!("big_beta={:?}", beta);
-        // let mut sum = 0.0;
-        // for i in idx.iter() {
-        //     let x = beta[(*i, 0)]*100.0/beta.max();
-        //     println!("b_hat={:?}", x);
-        //     sum += x as f64;
-        // }
-        // println!("mean_eff_perc_contrib={:?}", sum / k as f64);
-        let (corr, pval) = pearsons_correlation(&(DVector::from_iterator(p, big_b_true.column(0).iter().map(|x| *x))), 
-                                                &(DVector::from_iterator(p, beta.column(0).iter().map(|x| *x)))).unwrap();
-        println!("corr={:?}", corr);
+        let (beta, _var_beta, _pval) = ridge(&big_x_matrix, &big_y_vector).unwrap();
+        let y_hat = &big_x_matrix * &beta;
+        let e = (&big_y_vector - &y_hat).sum();
+        println!("corr={:?}", e);
         // Assertions
         assert_eq!(expected_output1, ridge_line);
-        // assert_eq!(expected_output1, "".to_owned());
+        assert_eq!((e*1e9).round(), 0.0);
+        // assert_eq!(expectd_output1, "".to_owned());
     }
 }

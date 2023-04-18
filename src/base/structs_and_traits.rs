@@ -69,7 +69,7 @@ pub struct LocusCounts {
 }
 
 // Struct of allele frequencies to convert reads into syncx
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct LocusFrequencies {
     pub chromosome: String,
     pub position: u64,
@@ -186,6 +186,16 @@ pub trait ChunkyReadAnalyseWrite<T, F> {
     ) -> io::Result<String>
     where
         F: Fn(&mut T, &FilterStats) -> Option<String>;
+}
+
+pub trait LoadAll {
+    fn per_chunk_load(&self,
+        start: &u64,
+        end: &u64,
+        filter_stats: &FilterStats) -> io::Result<Vec<LocusFrequencies>>;
+    fn load(&mut self,
+            filter_stats: &FilterStats,
+            n_threads: &u64) -> io::Result<Vec<LocusFrequencies>>;
 }
 
 pub trait Regression {
