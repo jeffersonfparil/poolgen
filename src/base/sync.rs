@@ -476,7 +476,8 @@ impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> O
     }
 }
 
-impl ChunkyReadAnalyseWrite<
+impl
+    ChunkyReadAnalyseWrite<
         LocusCountsAndPhenotypes,
         fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>,
     > for FileSyncPhen
@@ -659,10 +660,12 @@ impl ChunkyReadAnalyseWrite<
 }
 
 impl LoadAll for FileSync {
-    fn per_chunk_load(&self,
-            start: &u64,
-            end: &u64,
-            filter_stats: &FilterStats) -> io::Result<Vec<LocusFrequencies>> {
+    fn per_chunk_load(
+        &self,
+        start: &u64,
+        end: &u64,
+        filter_stats: &FilterStats,
+    ) -> io::Result<Vec<LocusFrequencies>> {
         // Input syn file
         let fname = self.filename.clone();
 
@@ -716,7 +719,11 @@ impl LoadAll for FileSync {
         Ok(out)
     }
 
-    fn load(&mut self, filter_stats: &FilterStats, n_threads: &u64) -> io::Result<Vec<LocusFrequencies>> {
+    fn load(
+        &mut self,
+        filter_stats: &FilterStats,
+        n_threads: &u64,
+    ) -> io::Result<Vec<LocusFrequencies>> {
         let fname = self.filename.clone();
         // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
@@ -726,7 +733,7 @@ impl LoadAll for FileSync {
         let mut thread_objects = Vec::new();
         // Vector holding all returns from pileup2sync_chunk()
         let thread_ouputs: Arc<Mutex<Vec<LocusFrequencies>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
-                                                                                       // Making four separate threads calling the `search_for_word` function
+                                                                                                 // Making four separate threads calling the `search_for_word` function
         for i in 0..(*n_threads as usize) {
             // Clone pileup2sync_chunk parameters
             let self_clone = self.clone();
@@ -738,10 +745,7 @@ impl LoadAll for FileSync {
                 let mut freqs = self_clone
                     .per_chunk_load(&start, &end, &filter_stats)
                     .unwrap();
-                thread_ouputs_clone
-                    .lock()
-                    .unwrap()
-                    .append(&mut freqs);
+                thread_ouputs_clone.lock().unwrap().append(&mut freqs);
             });
             thread_objects.push(thread);
         }
@@ -754,7 +758,11 @@ impl LoadAll for FileSync {
         for x in thread_ouputs.lock().unwrap().iter() {
             out.push(x.clone());
         }
-        out.sort_by(|a, b| b.chromosome.cmp(&a.chromosome).then(b.position.cmp(&a.position)));
+        out.sort_by(|a, b| {
+            b.chromosome
+                .cmp(&a.chromosome)
+                .then(b.position.cmp(&a.position))
+        });
         Ok(out)
     }
 }
@@ -841,13 +849,36 @@ mod tests {
             new_freqs.push(expected_output5.matrix[(i, 0)]);
         }
         expected_output5.matrix = DMatrix::from_vec(5, 2, new_freqs);
-        let expected_output6 = LocusFrequencies { chromosome: "contig_9998_1".to_owned(),
-                                                                    position: 63884,
-                                                                    alleles_vector: ["A", "C"].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>(),
-                                                                    matrix: DMatrix::from_column_slice(5, 2, &[0.8125, 0.8, 0.7333333333333333, 0.75, 0.9333333333333333, 0.1875, 0.2, 0.26666666666666666, 0.25, 0.06666666666666667]) };
+        let expected_output6 = LocusFrequencies {
+            chromosome: "contig_9998_1".to_owned(),
+            position: 63884,
+            alleles_vector: ["A", "C"]
+                .into_iter()
+                .map(|x| x.to_owned())
+                .collect::<Vec<String>>(),
+            matrix: DMatrix::from_column_slice(
+                5,
+                2,
+                &[
+                    0.8125,
+                    0.8,
+                    0.7333333333333333,
+                    0.75,
+                    0.9333333333333333,
+                    0.1875,
+                    0.2,
+                    0.26666666666666666,
+                    0.25,
+                    0.06666666666666667,
+                ],
+            ),
+        };
         // Inputs
         let line = "Chromosome1\t456527\tC\t1:0:999:0:4:0\t0:1:2:0:0:0\t0:2:4:0:0:0\t0:1:4:0:0:0\t0:1:6:0:0:0".to_owned();
-        let mut file_sync = FileSync{filename: "./tests/test.sync".to_owned(), test: "load".to_owned()};
+        let mut file_sync = FileSync {
+            filename: "./tests/test.sync".to_owned(),
+            test: "load".to_owned(),
+        };
         // Outputs
         let counts: LocusCounts = *(line.lparse().unwrap());
         let frequencies = *(counts.to_frequencies().unwrap());

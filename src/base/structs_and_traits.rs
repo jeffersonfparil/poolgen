@@ -143,10 +143,25 @@ pub struct UnivariateRidgeRegression {
     pub x: DMatrix<f64>,
     pub y: DVector<f64>,
     pub xt: DMatrix<f64>,
-    pub v: DMatrix<f64>,
+    pub xxt_or_xtx: DMatrix<f64>,
     pub b: DVector<f64>,
     pub sigma2: f64,
     pub tau2: f64,
+    pub v_b: DVector<f64>,
+    pub t: DVector<f64>,
+    pub pval: DVector<f64>,
+}
+
+// Struct for least absolute shrinkage and selection operator (Lasso) regression
+#[derive(Debug, Clone)]
+pub struct UnivariateLassoRegression {
+    pub x: DMatrix<f64>,
+    pub y: DVector<f64>,
+    pub xt: DMatrix<f64>,
+    pub xxt_or_xtx: DMatrix<f64>,
+    pub b: DVector<f64>,
+    pub lambda: f64,
+    pub v_b: DVector<f64>,
     pub t: DVector<f64>,
     pub pval: DVector<f64>,
 }
@@ -189,13 +204,17 @@ pub trait ChunkyReadAnalyseWrite<T, F> {
 }
 
 pub trait LoadAll {
-    fn per_chunk_load(&self,
+    fn per_chunk_load(
+        &self,
         start: &u64,
         end: &u64,
-        filter_stats: &FilterStats) -> io::Result<Vec<LocusFrequencies>>;
-    fn load(&mut self,
-            filter_stats: &FilterStats,
-            n_threads: &u64) -> io::Result<Vec<LocusFrequencies>>;
+        filter_stats: &FilterStats,
+    ) -> io::Result<Vec<LocusFrequencies>>;
+    fn load(
+        &mut self,
+        filter_stats: &FilterStats,
+        n_threads: &u64,
+    ) -> io::Result<Vec<LocusFrequencies>>;
 }
 
 pub trait Regression {

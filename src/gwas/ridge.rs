@@ -11,7 +11,7 @@ fn ridge_objective_function_lambda_and_beta(
     x: &DMatrix<f64>,
     y: &DVector<f64>,
     xt: &DMatrix<f64>,
-    v: &DMatrix<f64>,
+    xxt_or_xtx: &DMatrix<f64>,
 ) -> f64 {
     let (n, p) = x.shape();
     assert_eq!(n, y.len());
@@ -22,10 +22,10 @@ fn ridge_objective_function_lambda_and_beta(
     // let xt = x.transpose();
     let b = if n < p {
         // &xt * ((x * &xt).add_scalar(lambda)).try_inverse().unwrap() * y
-        xt * (v.add_scalar(lambda)).try_inverse().unwrap() * y
+        xt * (xxt_or_xtx.add_scalar(lambda)).try_inverse().unwrap() * y
     } else {
         // ((&xt * x).add_scalar(lambda)).try_inverse().unwrap() * &xt * y
-        (v.add_scalar(lambda)).try_inverse().unwrap() * xt * y
+        (xxt_or_xtx.add_scalar(lambda)).try_inverse().unwrap() * xt * y
     };
     (y - (x * &b)).norm_squared() + (lambda * &b).norm_squared()
 }
@@ -35,7 +35,11 @@ impl CostFunction for UnivariateRidgeRegression {
     type Output = f64;
     fn cost(&self, p: &Self::Param) -> Result<Self::Output, core::Error> {
         Ok(ridge_objective_function_lambda_and_beta(
-            &p, &self.x, &self.y, &self.xt, &self.v,
+            &p,
+            &self.x,
+            &self.y,
+            &self.xt,
+            &self.xxt_or_xtx,
         ))
     }
 }
@@ -46,10 +50,11 @@ impl Regression for UnivariateRidgeRegression {
             x: DMatrix::from_element(1, 1, f64::NAN),
             y: DVector::from_element(1, f64::NAN),
             xt: DMatrix::from_element(1, 1, f64::NAN),
-            v: DMatrix::from_element(1, 1, f64::NAN),
+            xxt_or_xtx: DMatrix::from_element(1, 1, f64::NAN),
             b: DVector::from_element(1, f64::NAN),
             sigma2: f64::NAN,
             tau2: f64::NAN,
+            v_b: DVector::from_element(1, f64::NAN),
             t: DVector::from_element(1, f64::NAN),
             pval: DVector::from_element(1, f64::NAN),
         }
@@ -85,18 +90,16 @@ impl Regression for UnivariateRidgeRegression {
     }
 
     fn estimate_effects(&mut self) -> io::Result<&mut Self> {
-        let (n, _) = self.x.shape();
+        let (n, p) = self.x.shape();
         let (n_, _) = self.y.shape();
         if n != n_ {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
-        // self.remove_collinearities_in_x();
-        let (_, p) = self.x.shape();
         let cost = self.clone();
         // let mut cost = UnivariateRidgeRegression::new();
         // cost.x = self.x.clone();
         // cost.y = self.y.clone();
-        let solver = prepare_solver_neldermead(2.0, 1.0);
+        let solver = prepare_solver_neldermead(2.0, 1.0); // estimte simga2 and tau2
         // let res = match Executor::new(cost, solver)
         let res = match Executor::new(cost, solver)
             .configure(|state| state.max_iters(1_000))
@@ -118,11 +121,19 @@ impl Regression for UnivariateRidgeRegression {
         self.sigma2 = bound_parameters_with_logit(&vec![params[0]], f64::EPSILON, 1e9)[0];
         self.tau2 = bound_parameters_with_logit(&vec![params[1]], f64::EPSILON, 1e9)[0];
         let lambda = self.sigma2 / self.tau2;
-        let xt = self.x.transpose();
+        self.xt = self.x.transpose();
         self.b = if n < p {
-            &xt * ((&self.x * &xt).add_scalar(lambda)).try_inverse().unwrap() * &self.y
+            &self.xt
+                * ((&self.xxt_or_xtx).add_scalar(lambda))
+                    .try_inverse()
+                    .unwrap()
+                * &self.y
         } else {
-            ((&xt * &self.x).add_scalar(lambda)).try_inverse().unwrap() * &xt * &self.y
+            ((&self.xxt_or_xtx).add_scalar(lambda))
+                .try_inverse()
+                .unwrap()
+                * &self.xt
+                * &self.y
         };
         Ok(self)
     }
@@ -134,17 +145,33 @@ impl Regression for UnivariateRidgeRegression {
                 Err(y) => return Err(y),
             };
         }
-        let (n, _) = self.x.shape();
+        let (n, p) = self.x.shape();
         let (n_, _) = self.y.shape();
         if n != n_ {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
+        }
+        let inv_xxt_or_xtx_lambda = self
+            .xxt_or_xtx
+            .clone()
+            .add_scalar(self.sigma2 / self.tau2)
+            .try_inverse()
+            .unwrap();
+        println!("inv_xxt_or_xtx_lambda={:?}", inv_xxt_or_xtx_lambda);
+        let vcv = if n < p {
+            self.sigma2 * &self.xt * &inv_xxt_or_xtx_lambda * &inv_xxt_or_xtx_lambda * &self.x
+        } else {
+            self.sigma2 * &inv_xxt_or_xtx_lambda
+        };
+        self.v_b = DVector::from_element(p, f64::NAN);
+        for i in 0..p {
+            self.v_b[i] = vcv[(i, i)];
         }
         Ok(self)
     }
 
     fn estimate_significance(&mut self) -> io::Result<&mut Self> {
-        if self.b[0].is_nan() {
-            match self.estimate_effects() {
+        if self.t[0].is_nan() {
+            match self.estimate_variances() {
                 Ok(x) => x,
                 Err(y) => return Err(y),
             };
@@ -158,7 +185,7 @@ impl Regression for UnivariateRidgeRegression {
         self.t = DVector::from_element(p, f64::NAN);
         self.pval = DVector::from_element(p, f64::NAN);
         for i in 0..p {
-            self.t[i] = self.b[i] / self.tau2;
+            self.t[i] = self.b[i] / self.v_b[i];
             if self.t[i].is_infinite() {
                 self.pval[i] = 0.0
             } else if self.t[i].is_nan() {
@@ -193,9 +220,9 @@ fn ridge(
         }
         ridge_regression.xt = ridge_regression.x.transpose();
         if n < p {
-            ridge_regression.v = &ridge_regression.x * &ridge_regression.xt;
+            ridge_regression.xxt_or_xtx = &ridge_regression.x * &ridge_regression.xt;
         } else {
-            ridge_regression.v = &ridge_regression.xt * &ridge_regression.x;
+            ridge_regression.xxt_or_xtx = &ridge_regression.xt * &ridge_regression.x;
         }
         match ridge_regression.estimate_significance() {
             Ok(x) => x,
@@ -284,7 +311,7 @@ mod tests {
     #[test]
     fn test_ridge() {
         // Expected
-        let expected_output1: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,1\nChromosome1,12345,A,0.36,Pheno_1,0.99187,1\nChromosome1,12345,T,0.24,Pheno_0,6.422764,1\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,1\n".to_owned();
+        let expected_output1: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.0000047446528681494016\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.0000002715235205563715\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.0000007577768363908888\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.0000003484638257944539\n".to_owned();
         // Inputs
         let y: DMatrix<f64> =
             DMatrix::from_row_slice(5, 2, &[2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5]);
@@ -340,7 +367,7 @@ mod tests {
         println!("corr={:?}", e);
         // Assertions
         assert_eq!(expected_output1, ridge_line);
-        assert_eq!((e*1e9).round(), 0.0);
+        assert_eq!((e * 1e9).round(), 0.0);
         // assert_eq!(expectd_output1, "".to_owned());
     }
 }
