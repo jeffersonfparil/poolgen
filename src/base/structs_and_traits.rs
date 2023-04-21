@@ -93,6 +93,15 @@ pub struct LocusCountsAndPhenotypes {
     pub pool_names: Vec<String>,
 }
 
+// Struct of allele counts and phenotypes per pool
+#[derive(Debug, Clone)]
+pub struct LocusFrequenciesAndPhenotypes {
+    pub locus_frequencies: LocusFrequencies,
+    pub phenotypes: DMatrix<f64>, // n pools x k traits
+    pub pool_names: Vec<String>,
+}
+
+
 // Struct for GWAlpha's least squares cost function minimisation
 #[derive(Debug, Clone)]
 pub struct LeastSquaresBeta {
@@ -137,30 +146,15 @@ pub struct UnivariateMaximumLikelihoodEstimation {
     pub pval: DVector<f64>,
 }
 
-// Struct for ridge regression
+// Struct for elastic-net regression
 #[derive(Debug, Clone)]
-pub struct UnivariateRidgeRegression {
+pub struct UnivariateElasticNet {
     pub x: DMatrix<f64>,
     pub y: DVector<f64>,
-    pub xt: DMatrix<f64>,
-    pub xxt_or_xtx: DMatrix<f64>,
     pub b: DVector<f64>,
-    pub sigma2: f64,
-    pub tau2: f64,
-    pub v_b: DVector<f64>,
-    pub t: DVector<f64>,
-    pub pval: DVector<f64>,
-}
-
-// Struct for least absolute shrinkage and selection operator (Lasso) regression
-#[derive(Debug, Clone)]
-pub struct UnivariateLassoRegression {
-    pub x: DMatrix<f64>,
-    pub y: DVector<f64>,
-    pub xt: DMatrix<f64>,
-    pub xxt_or_xtx: DMatrix<f64>,
-    pub b: DVector<f64>,
+    pub alpha: f64,
     pub lambda: f64,
+    pub se: f64,
     pub v_b: DVector<f64>,
     pub t: DVector<f64>,
     pub pval: DVector<f64>,
@@ -209,12 +203,20 @@ pub trait LoadAll {
         start: &u64,
         end: &u64,
         filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
     ) -> io::Result<Vec<LocusFrequencies>>;
     fn load(
-        &mut self,
+        &self,
         filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
         n_threads: &u64,
     ) -> io::Result<Vec<LocusFrequencies>>;
+    fn write_csv(
+        &self,
+        filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
+        n_threads: &u64,
+    ) -> io::Result<String>;
 }
 
 pub trait Regression {
@@ -223,4 +225,9 @@ pub trait Regression {
     fn estimate_effects(&mut self) -> io::Result<&mut Self>;
     fn estimate_variances(&mut self) -> io::Result<&mut Self>;
     fn estimate_significance(&mut self) -> io::Result<&mut Self>;
+}
+
+pub trait CrossValidate {
+    fn split(&self, k: usize) -> io::Result<Vec<usize>>;
+    fn performance(&self, y_hat: DVector<f64>) -> io::Result<Vec<f64>>;
 }

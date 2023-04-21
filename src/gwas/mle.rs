@@ -235,7 +235,7 @@ pub fn mle_iterate(
         Ok(x) => x,
         Err(_) => return None,
     };
-    // Keep p-1 alleles if p >= 2 so we have enough degrees of freedom to fit the intercept
+    // // Remove minimum allele, i.e. keep p-1 alleles if p >= 2 so we have enough degrees of freedom to fit the intercept
     if locus_frequencies.matrix.ncols() >= 2 {
         locus_frequencies.matrix = locus_frequencies.matrix.clone().remove_columns(0, 1);
         locus_frequencies.alleles_vector.remove(0);

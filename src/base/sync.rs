@@ -659,15 +659,16 @@ impl
     }
 }
 
-impl LoadAll for FileSync {
+impl LoadAll for FileSyncPhen {
     fn per_chunk_load(
         &self,
         start: &u64,
         end: &u64,
         filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
     ) -> io::Result<Vec<LocusFrequencies>> {
         // Input syn file
-        let fname = self.filename.clone();
+        let fname = self.filename_sync.clone();
 
         // Prepare output vector
         let mut out: Vec<LocusFrequencies> = Vec::new();
@@ -709,22 +710,29 @@ impl LoadAll for FileSync {
                     }
                 },
             };
-            let mut locus_freqs = *locus_counts.to_frequencies().unwrap();
-            match locus_freqs.filter(filter_stats) {
+            let mut locus_frequencies = *locus_counts.to_frequencies().unwrap();
+            match locus_frequencies.filter(filter_stats) {
                 Ok(x) => x,
                 Err(_) => continue,
             };
-            out.push(locus_freqs);
+            // Remove minimum allele
+            if keep_n_minus_1 {
+                let mut locus_frequencies = locus_frequencies.sort_by_allele_freq(true).unwrap();
+                locus_frequencies.matrix = locus_frequencies.matrix.clone().remove_columns(0, 1);
+                locus_frequencies.alleles_vector.remove(0);
+            }
+            out.push(locus_frequencies);
         }
         Ok(out)
     }
 
     fn load(
-        &mut self,
+        &self,
         filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
         n_threads: &u64,
     ) -> io::Result<Vec<LocusFrequencies>> {
-        let fname = self.filename.clone();
+        let fname = self.filename_sync.clone();
         // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
         println!("Chunks: {:?}", chunks);
@@ -743,7 +751,7 @@ impl LoadAll for FileSync {
             let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
                 let mut freqs = self_clone
-                    .per_chunk_load(&start, &end, &filter_stats)
+                    .per_chunk_load(&start, &end, &filter_stats, keep_n_minus_1)
                     .unwrap();
                 thread_ouputs_clone.lock().unwrap().append(&mut freqs);
             });
@@ -759,10 +767,76 @@ impl LoadAll for FileSync {
             out.push(x.clone());
         }
         out.sort_by(|a, b| {
-            b.chromosome
-                .cmp(&a.chromosome)
-                .then(b.position.cmp(&a.position))
+            a.chromosome
+                .cmp(&b.chromosome)
+                .then(a.position.cmp(&b.position))
         });
+        Ok(out)
+    }
+
+    fn write_csv(
+        &self,
+        filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
+        n_threads: &u64,
+    ) -> io::Result<String> {
+        // Output filename
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        let bname = self
+            .filename_sync
+            .split(".")
+            .collect::<Vec<&str>>()
+            .into_iter()
+            .map(|a| a.to_owned())
+            .collect::<Vec<String>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()[1..]
+            .to_owned()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()
+            .join(".");
+        let out = bname.to_owned() + "-" + &time.to_string() + "-allele_frequencies.csv";
+        // Instatiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
+        file_out
+            .write_all(
+                ("#chr,pos,allele,".to_owned() + &self.pool_names.join(",") + "\n").as_bytes(),
+            )
+            .unwrap();
+        // Load the full sync file in parallel and sort
+        let freqs = self.load(filter_stats, keep_n_minus_1, n_threads).unwrap();
+        for f in freqs.iter() {
+            for i in 0..f.alleles_vector.len() {
+                let freqs_per_pool = f
+                    .matrix
+                    .column(i)
+                    .iter()
+                    .map(|x| parse_f64_roundup_and_own(*x, 6))
+                    .collect::<Vec<String>>()
+                    .join(",");
+                let line = vec![
+                    f.chromosome.to_owned(),
+                    f.position.to_string(),
+                    f.alleles_vector[i].to_owned(),
+                    freqs_per_pool,
+                ]
+                .join(",")
+                    + "\n";
+                file_out.write_all(line.as_bytes()).unwrap();
+            }
+        }
+
         Ok(out)
     }
 }
@@ -850,35 +924,39 @@ mod tests {
         }
         expected_output5.matrix = DMatrix::from_vec(5, 2, new_freqs);
         let expected_output6 = LocusFrequencies {
-            chromosome: "contig_9998_1".to_owned(),
-            position: 63884,
-            alleles_vector: ["A", "C"]
+            chromosome: "Chromosome1".to_owned(),
+            position: 456527,
+            alleles_vector: ["T"]
                 .into_iter()
                 .map(|x| x.to_owned())
                 .collect::<Vec<String>>(),
             matrix: DMatrix::from_column_slice(
                 5,
-                2,
+                1,
                 &[
-                    0.8125,
-                    0.8,
-                    0.7333333333333333,
-                    0.75,
-                    0.9333333333333333,
-                    0.1875,
+                    0.0,
+                    0.3333333333333333,
+                    0.3333333333333333,
                     0.2,
-                    0.26666666666666666,
-                    0.25,
-                    0.06666666666666667,
+                    0.14285714285714285,
                 ],
             ),
         };
         // Inputs
         let line = "Chromosome1\t456527\tC\t1:0:999:0:4:0\t0:1:2:0:0:0\t0:2:4:0:0:0\t0:1:4:0:0:0\t0:1:6:0:0:0".to_owned();
-        let mut file_sync = FileSync {
+        let file_sync = FileSync {
             filename: "./tests/test.sync".to_owned(),
             test: "load".to_owned(),
         };
+        let file_phen = FilePhen {
+            filename: "./tests/test.csv".to_owned(),
+            delim: ",".to_owned(),
+            names_column_id: 0,
+            sizes_column_id: 1,
+            trait_values_column_ids: vec![2, 3],
+            format: "default".to_owned(),
+        };
+        let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
         // Outputs
         let counts: LocusCounts = *(line.lparse().unwrap());
         let frequencies = *(counts.to_frequencies().unwrap());
@@ -902,9 +980,11 @@ mod tests {
             .sort_by_allele_freq(true)
             .unwrap();
         let n_threads = 2;
-        let loaded_freqs = file_sync.load(&filter_stats, &n_threads).unwrap();
-        println!("loaded_freqs={:?}", loaded_freqs);
-        println!("len(loaded_freqs)={:?}", loaded_freqs.len());
+        let loaded_freqs = file_sync_phen
+            .load(&filter_stats, true, &n_threads)
+            .unwrap();
+        // println!("loaded_freqs={:?}", loaded_freqs);
+        // println!("len(loaded_freqs)={:?}", loaded_freqs.len());
         // Assertions
         assert_eq!(expected_output1, counts);
         assert_eq!(expected_output2, frequencies);
@@ -912,5 +992,12 @@ mod tests {
         assert_eq!(expected_output4, filtered_frequencies);
         assert_eq!(expected_output5, sorted_filtered_frequencies);
         assert_eq!(loaded_freqs[0], expected_output6);
+
+        let sync_to_csv = file_sync_phen
+            .write_csv(&filter_stats, true, &n_threads)
+            .unwrap();
+        let sync_to_csv = file_sync_phen
+            .write_csv(&filter_stats, false, &n_threads)
+            .unwrap();
     }
 }

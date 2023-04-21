@@ -58,6 +58,8 @@ jobs:
           cargo run -- mle_iter -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2 --min-coverage 10 --min-allele-frequency 0.01
           cargo run -- gwalpha  -f ./tests/test.sync -p ./tests/test.py --n-threads 2 --gwalpha-method LS
           cargo run -- gwalpha  -f ./tests/test.sync -p ./tests/test.py --n-threads 2 --gwalpha-method ML
+          cargo run -- sync2csv -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2 --keep-p-minus-1 false
+          cargo run -- sync2csv -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2 --keep-p-minus-1 true
           echo "###############################################################"
           echo "Clean-up:"
           rm ./tests/test-*

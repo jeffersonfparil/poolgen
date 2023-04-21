@@ -2,8 +2,9 @@
 #[allow(warnings)]
 use clap::Parser;
 mod base;
-use base::{ChunkyReadAnalyseWrite, Parse};
+use base::{ChunkyReadAnalyseWrite, LoadAll, Parse};
 mod gwas;
+mod gp;
 mod tables;
 
 // Instatiate arguments struct
@@ -32,9 +33,9 @@ struct Args {
     /// Minimum allele frequency for associating the genotypes with the phenotype/s
     #[clap(long, default_value_t = 0.001)]
     min_allele_frequency: f64,
-    /// Remove ambiguous reads during SNP filetering or keep them coded as Ns
-    #[clap(long, default_value_t = true)]
-    remove_ns: bool,
+    /// Keep ambiguous reads during SNP filtering, i.e. keep them coded as Ns
+    #[clap(long, action)]
+    keep_ns: bool,
     /// Input phenotype file: csv or tsv or any delimited file
     #[clap(short, long)]
     phen_fname: String,
@@ -64,6 +65,9 @@ struct Args {
     /// GWAlpha inference method to use: "LS" for least squares or "ML" for maximum likelihood estimation
     #[clap(long, default_value = "ML")]
     gwalpha_method: String,
+    /// Sync to csv file conversion to include all alleles or just p-1 excluding the minimum allele
+    #[clap(long, action)]
+    keep_p_minus_1: bool,
 }
 
 fn main() {
@@ -92,7 +96,7 @@ fn main() {
     };
     let phen = file_phen.lparse().unwrap();
     let filter_stats = base::FilterStats {
-        remove_ns: args.remove_ns,
+        remove_ns: !args.keep_ns,
         min_quality: args.min_quality,
         min_coverage: args.min_coverage,
         min_allele_frequency: args.min_allele_frequency,
@@ -178,15 +182,10 @@ fn main() {
                     )
                     .unwrap()
             }
-        } else if args.analysis == String::from("ridge_iter") {
+        } else if args.analysis == String::from("sync2csv") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = file_sync_phen
-                .read_analyse_write(
-                    &filter_stats,
-                    &args.output,
-                    &args.n_threads,
-                    gwas::ridge_iterate,
-                )
+                .write_csv(&filter_stats, args.keep_p_minus_1, &args.n_threads)
                 .unwrap();
         } else if args.analysis == String::from("test") {
             let output = 0;
