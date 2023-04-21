@@ -146,6 +146,19 @@ pub struct UnivariateMaximumLikelihoodEstimation {
     pub pval: DVector<f64>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PredictionPerformance {
+    pub n: usize, // number of observations
+    pub p: usize, // number of predictors
+    pub k: usize, // number cross-validation folds
+    pub model: String, // genomic prediction model used
+    pub rmse: DVector<f64>,
+    pub mse: DVector<f64>,
+    pub mae: DVector<f64>,
+    pub mbe: DVector<f64>,
+}
+
+
 // Struct for elastic-net regression
 #[derive(Debug, Clone)]
 pub struct UnivariateElasticNet {
@@ -230,4 +243,5 @@ pub trait Regression {
 pub trait CrossValidate {
     fn split(&self, k: usize) -> io::Result<Vec<usize>>;
     fn performance(&self, y_hat: DVector<f64>) -> io::Result<Vec<f64>>;
+    fn cross_validate(&self, k: usize) -> io::Result<PredictionPerformance>;
 }

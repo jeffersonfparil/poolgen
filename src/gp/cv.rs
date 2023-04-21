@@ -5,12 +5,25 @@ use std::io::{self, Error, ErrorKind};
 
 impl CrossValidate for LocusFrequenciesAndPhenotypes {
     fn split(&self, k: usize) -> io::Result<Vec<usize>> {
+        let (n, p) = self.locus_frequencies.matrix.shape();
         Ok(vec![0])
     }
 
     fn performance(&self, y_hat: DVector<f64>) -> io::Result<Vec<f64>> {
         Ok(vec!(0.0))
     }
+
+    fn cross_validate(&self, k: usize) -> io::Result<PredictionPerformance> {
+        Ok(PredictionPerformance{n: 0,
+                                 p: 0,
+                                 k: 0,
+                                 model: "".to_owned(),
+                                 rmse: DVector::from_column_slice(&[f64::NAN]),
+                                 mse:  DVector::from_column_slice(&[f64::NAN]),
+                                 mae:  DVector::from_column_slice(&[f64::NAN]),
+                                 mbe:  DVector::from_column_slice(&[f64::NAN]),})
+    }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
