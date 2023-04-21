@@ -774,6 +774,30 @@ impl LoadAll for FileSyncPhen {
         Ok(out)
     }
 
+    fn into_matrix(
+        &self,
+        filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
+        n_threads: &u64,
+    ) -> io::Result<(Vec<String>, Vec<u64>, DMatrix<f64>)> {
+        let freqs = self.load(filter_stats, keep_n_minus_1, n_threads).unwrap();
+        let n = self.pool_names.len();
+        let mut chr: Vec<String> = Vec::new();
+        let mut pos: Vec<u64> = Vec::new();
+        let mut vec: Vec<f64> = Vec::new();
+        for f in freqs.iter() {
+            chr.push(f.chromosome.to_owned());
+            pos.push(f.position);
+            for j in 0..f.matrix.ncols() {
+                for i in 0..f.matrix.nrows() {
+                    vec.push(f.matrix[(i, j)]);
+                }
+            }
+        }
+        let mat: DMatrix<f64> = DMatrix::from_column_slice(n, vec.len() / n, &vec);
+        Ok((chr, pos, mat))
+    }
+
     fn write_csv(
         &self,
         filter_stats: &FilterStats,
@@ -942,6 +966,25 @@ mod tests {
                 ],
             ),
         };
+        let expected_output7 = LocusFrequencies {
+            chromosome: "Chromosome1".to_owned(),
+            position: 1041321,
+            alleles_vector: ["G"]
+                .into_iter()
+                .map(|x| x.to_owned())
+                .collect::<Vec<String>>(),
+            matrix: DMatrix::from_column_slice(
+                5,
+                1,
+                &[
+                    0.047619047619047616,
+                    0.0,
+                    0.0625,
+                    0.043478260869565216,
+                    0.037037037037037035,
+                ],
+            ),
+        };
         // Inputs
         let line = "Chromosome1\t456527\tC\t1:0:999:0:4:0\t0:1:2:0:0:0\t0:2:4:0:0:0\t0:1:4:0:0:0\t0:1:6:0:0:0".to_owned();
         let file_sync = FileSync {
@@ -983,6 +1026,9 @@ mod tests {
         let loaded_freqs = file_sync_phen
             .load(&filter_stats, true, &n_threads)
             .unwrap();
+        let (chr, pos, mat_freqs) = file_sync_phen
+            .into_matrix(&filter_stats, true, &n_threads)
+            .unwrap();
         // println!("loaded_freqs={:?}", loaded_freqs);
         // println!("len(loaded_freqs)={:?}", loaded_freqs.len());
         // Assertions
@@ -991,13 +1037,18 @@ mod tests {
         assert_eq!(expected_output3, filtered_counts);
         assert_eq!(expected_output4, filtered_frequencies);
         assert_eq!(expected_output5, sorted_filtered_frequencies);
-        assert_eq!(loaded_freqs[0], expected_output6);
-
-        let sync_to_csv = file_sync_phen
-            .write_csv(&filter_stats, true, &n_threads)
-            .unwrap();
-        let sync_to_csv = file_sync_phen
-            .write_csv(&filter_stats, false, &n_threads)
-            .unwrap();
+        assert_eq!(expected_output6, loaded_freqs[0]);
+        assert_eq!(expected_output6.chromosome, chr[0]);
+        assert_eq!(expected_output6.position, pos[0]);
+        assert_eq!(expected_output6.matrix[(0, 0)], mat_freqs[(0, 0)]);
+        assert_eq!(expected_output6.matrix[(1, 0)], mat_freqs[(1, 0)]);
+        assert_eq!(expected_output6.matrix[(2, 0)], mat_freqs[(2, 0)]);
+        assert_eq!(expected_output6.matrix[(3, 0)], mat_freqs[(3, 0)]);
+        assert_eq!(expected_output6.matrix[(4, 0)], mat_freqs[(4, 0)]);
+        assert_eq!(expected_output7.matrix[(0, 0)], mat_freqs[(0, 1)]);
+        assert_eq!(expected_output7.matrix[(1, 0)], mat_freqs[(1, 1)]);
+        assert_eq!(expected_output7.matrix[(2, 0)], mat_freqs[(2, 1)]);
+        assert_eq!(expected_output7.matrix[(3, 0)], mat_freqs[(3, 1)]);
+        assert_eq!(expected_output7.matrix[(4, 0)], mat_freqs[(4, 1)]);
     }
 }

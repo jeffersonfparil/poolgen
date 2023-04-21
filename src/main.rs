@@ -3,8 +3,8 @@
 use clap::Parser;
 mod base;
 use base::{ChunkyReadAnalyseWrite, LoadAll, Parse};
-mod gwas;
 mod gp;
+mod gwas;
 mod tables;
 
 // Instatiate arguments struct

@@ -93,14 +93,13 @@ pub struct LocusCountsAndPhenotypes {
     pub pool_names: Vec<String>,
 }
 
-// Struct of allele counts and phenotypes per pool
+// Struct of allele frequencies and phenotypes for genomic prediction
 #[derive(Debug, Clone)]
-pub struct LocusFrequenciesAndPhenotypes {
-    pub locus_frequencies: LocusFrequencies,
+pub struct FrequenciesAndPhenotypes {
+    pub frequencies: Vec<LocusFrequencies>,
     pub phenotypes: DMatrix<f64>, // n pools x k traits
     pub pool_names: Vec<String>,
 }
-
 
 // Struct for GWAlpha's least squares cost function minimisation
 #[derive(Debug, Clone)]
@@ -148,16 +147,15 @@ pub struct UnivariateMaximumLikelihoodEstimation {
 
 #[derive(Debug, Clone)]
 pub struct PredictionPerformance {
-    pub n: usize, // number of observations
-    pub p: usize, // number of predictors
-    pub k: usize, // number cross-validation folds
+    pub n: usize,      // number of observations
+    pub p: usize,      // number of predictors
+    pub k: usize,      // number cross-validation folds
     pub model: String, // genomic prediction model used
     pub rmse: DVector<f64>,
     pub mse: DVector<f64>,
     pub mae: DVector<f64>,
     pub mbe: DVector<f64>,
 }
-
 
 // Struct for elastic-net regression
 #[derive(Debug, Clone)]
@@ -224,6 +222,12 @@ pub trait LoadAll {
         keep_n_minus_1: bool,
         n_threads: &u64,
     ) -> io::Result<Vec<LocusFrequencies>>;
+    fn into_matrix(
+        &self,
+        filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
+        n_threads: &u64,
+    ) -> io::Result<(Vec<String>, Vec<u64>, DMatrix<f64>)>;
     fn write_csv(
         &self,
         filter_stats: &FilterStats,
