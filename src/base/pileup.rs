@@ -311,11 +311,6 @@ pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) 
         Ok(x) => x,
         Err(_) => return None,
     };
-    // Filter once again
-    match locus_counts.filter(filter_stats) {
-        Ok(x) => x,
-        Err(_) => return None,
-    };
     let (n, _p) = locus_counts.matrix.shape();
     // Instantiate the output line
     let mut x = vec![

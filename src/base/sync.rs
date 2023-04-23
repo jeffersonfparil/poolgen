@@ -59,7 +59,7 @@ impl Parse<LocusCounts> for String {
             chromosome: chromosome,
             position: position,
             alleles_vector: alleles_vector,
-            matrix: matrix,
+            matrix: matrix, // n pools x 6 alleles
         }));
     }
 }
