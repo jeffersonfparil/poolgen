@@ -96,8 +96,10 @@ pub struct LocusCountsAndPhenotypes {
 // Struct of allele frequencies and phenotypes for genomic prediction
 #[derive(Debug, Clone)]
 pub struct FrequenciesAndPhenotypes {
-    pub frequencies: Vec<LocusFrequencies>,
-    pub phenotypes: DMatrix<f64>, // n pools x k traits
+    pub chromosome: Vec<String>,
+    pub position: Vec<u64>,
+    pub frequencies: DMatrix<f64>, // n pools x p alleles across loci
+    pub phenotypes: DMatrix<f64>,  // n pools x k traits
     pub pool_names: Vec<String>,
 }
 
@@ -150,11 +152,12 @@ pub struct PredictionPerformance {
     pub n: usize,      // number of observations
     pub p: usize,      // number of predictors
     pub k: usize,      // number cross-validation folds
+    pub r: usize,      // number replications where each cross-validation results in random groupings
     pub model: String, // genomic prediction model used
-    pub rmse: DVector<f64>,
-    pub mse: DVector<f64>,
-    pub mae: DVector<f64>,
     pub mbe: DVector<f64>,
+    pub mae: DVector<f64>,
+    pub mse: DVector<f64>,
+    pub rmse: DVector<f64>,
 }
 
 // Struct for elastic-net regression
@@ -222,18 +225,18 @@ pub trait LoadAll {
         keep_n_minus_1: bool,
         n_threads: &u64,
     ) -> io::Result<Vec<LocusFrequencies>>;
-    fn into_matrix(
-        &self,
-        filter_stats: &FilterStats,
-        keep_n_minus_1: bool,
-        n_threads: &u64,
-    ) -> io::Result<(Vec<String>, Vec<u64>, DMatrix<f64>)>;
     fn write_csv(
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
         n_threads: &u64,
     ) -> io::Result<String>;
+    fn into_frequencies_and_phenotypes(
+        &self,
+        filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
+        n_threads: &u64,
+    ) -> io::Result<FrequenciesAndPhenotypes>;
 }
 
 pub trait Regression {
@@ -244,8 +247,10 @@ pub trait Regression {
     fn estimate_significance(&mut self) -> io::Result<&mut Self>;
 }
 
-pub trait CrossValidate {
-    fn split(&self, k: usize) -> io::Result<Vec<usize>>;
-    fn performance(&self, y_hat: DVector<f64>) -> io::Result<Vec<f64>>;
-    fn cross_validate(&self, k: usize) -> io::Result<PredictionPerformance>;
+pub trait CrossValidate<F> {
+    fn k_split(&self, k: usize) -> io::Result<(Vec<usize>, usize, usize)>;
+    fn performance(&self, y_true: &DMatrix<f64>, y_hat: &DMatrix<f64>) -> io::Result<Vec<f64>>;
+    fn cross_validate(&self, k: usize, r: usize, function: F) -> io::Result<PredictionPerformance>
+    where
+        F: Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<DMatrix<f64>>;
 }

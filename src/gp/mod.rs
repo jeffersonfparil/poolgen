@@ -1,3 +1,4 @@
-pub use self::cv::*;
+pub use self::{cv::*, ols::*};
 
 mod cv;
+mod ols;

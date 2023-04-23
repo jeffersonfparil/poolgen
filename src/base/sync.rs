@@ -774,30 +774,6 @@ impl LoadAll for FileSyncPhen {
         Ok(out)
     }
 
-    fn into_matrix(
-        &self,
-        filter_stats: &FilterStats,
-        keep_n_minus_1: bool,
-        n_threads: &u64,
-    ) -> io::Result<(Vec<String>, Vec<u64>, DMatrix<f64>)> {
-        let freqs = self.load(filter_stats, keep_n_minus_1, n_threads).unwrap();
-        let n = self.pool_names.len();
-        let mut chr: Vec<String> = Vec::new();
-        let mut pos: Vec<u64> = Vec::new();
-        let mut vec: Vec<f64> = Vec::new();
-        for f in freqs.iter() {
-            chr.push(f.chromosome.to_owned());
-            pos.push(f.position);
-            for j in 0..f.matrix.ncols() {
-                for i in 0..f.matrix.nrows() {
-                    vec.push(f.matrix[(i, j)]);
-                }
-            }
-        }
-        let mat: DMatrix<f64> = DMatrix::from_column_slice(n, vec.len() / n, &vec);
-        Ok((chr, pos, mat))
-    }
-
     fn write_csv(
         &self,
         filter_stats: &FilterStats,
@@ -862,6 +838,36 @@ impl LoadAll for FileSyncPhen {
         }
 
         Ok(out)
+    }
+
+    fn into_frequencies_and_phenotypes(
+        &self,
+        filter_stats: &FilterStats,
+        keep_n_minus_1: bool,
+        n_threads: &u64,
+    ) -> io::Result<FrequenciesAndPhenotypes> {
+        let freqs = self.load(filter_stats, keep_n_minus_1, n_threads).unwrap();
+        let n = self.pool_names.len();
+        let mut chr: Vec<String> = Vec::new();
+        let mut pos: Vec<u64> = Vec::new();
+        let mut vec: Vec<f64> = Vec::new();
+        for f in freqs.iter() {
+            chr.push(f.chromosome.to_owned());
+            pos.push(f.position);
+            for j in 0..f.matrix.ncols() {
+                for i in 0..f.matrix.nrows() {
+                    vec.push(f.matrix[(i, j)]);
+                }
+            }
+        }
+        let mat: DMatrix<f64> = DMatrix::from_column_slice(n, vec.len() / n, &vec);
+        Ok(FrequenciesAndPhenotypes {
+            chromosome: chr,
+            position: pos,
+            frequencies: mat,
+            phenotypes: self.phen_matrix.clone(),
+            pool_names: self.pool_names.clone(),
+        })
     }
 }
 
@@ -1026,8 +1032,8 @@ mod tests {
         let loaded_freqs = file_sync_phen
             .load(&filter_stats, true, &n_threads)
             .unwrap();
-        let (chr, pos, mat_freqs) = file_sync_phen
-            .into_matrix(&filter_stats, true, &n_threads)
+        let frequencies_and_phenotypes = file_sync_phen
+            .into_frequencies_and_phenotypes(&filter_stats, true, &n_threads)
             .unwrap();
         // println!("loaded_freqs={:?}", loaded_freqs);
         // println!("len(loaded_freqs)={:?}", loaded_freqs.len());
@@ -1038,17 +1044,53 @@ mod tests {
         assert_eq!(expected_output4, filtered_frequencies);
         assert_eq!(expected_output5, sorted_filtered_frequencies);
         assert_eq!(expected_output6, loaded_freqs[0]);
-        assert_eq!(expected_output6.chromosome, chr[0]);
-        assert_eq!(expected_output6.position, pos[0]);
-        assert_eq!(expected_output6.matrix[(0, 0)], mat_freqs[(0, 0)]);
-        assert_eq!(expected_output6.matrix[(1, 0)], mat_freqs[(1, 0)]);
-        assert_eq!(expected_output6.matrix[(2, 0)], mat_freqs[(2, 0)]);
-        assert_eq!(expected_output6.matrix[(3, 0)], mat_freqs[(3, 0)]);
-        assert_eq!(expected_output6.matrix[(4, 0)], mat_freqs[(4, 0)]);
-        assert_eq!(expected_output7.matrix[(0, 0)], mat_freqs[(0, 1)]);
-        assert_eq!(expected_output7.matrix[(1, 0)], mat_freqs[(1, 1)]);
-        assert_eq!(expected_output7.matrix[(2, 0)], mat_freqs[(2, 1)]);
-        assert_eq!(expected_output7.matrix[(3, 0)], mat_freqs[(3, 1)]);
-        assert_eq!(expected_output7.matrix[(4, 0)], mat_freqs[(4, 1)]);
+        assert_eq!(
+            expected_output6.chromosome,
+            frequencies_and_phenotypes.chromosome[0]
+        );
+        assert_eq!(
+            expected_output6.position,
+            frequencies_and_phenotypes.position[0]
+        );
+        assert_eq!(
+            expected_output6.matrix[(0, 0)],
+            frequencies_and_phenotypes.frequencies[(0, 0)]
+        );
+        assert_eq!(
+            expected_output6.matrix[(1, 0)],
+            frequencies_and_phenotypes.frequencies[(1, 0)]
+        );
+        assert_eq!(
+            expected_output6.matrix[(2, 0)],
+            frequencies_and_phenotypes.frequencies[(2, 0)]
+        );
+        assert_eq!(
+            expected_output6.matrix[(3, 0)],
+            frequencies_and_phenotypes.frequencies[(3, 0)]
+        );
+        assert_eq!(
+            expected_output6.matrix[(4, 0)],
+            frequencies_and_phenotypes.frequencies[(4, 0)]
+        );
+        assert_eq!(
+            expected_output7.matrix[(0, 0)],
+            frequencies_and_phenotypes.frequencies[(0, 1)]
+        );
+        assert_eq!(
+            expected_output7.matrix[(1, 0)],
+            frequencies_and_phenotypes.frequencies[(1, 1)]
+        );
+        assert_eq!(
+            expected_output7.matrix[(2, 0)],
+            frequencies_and_phenotypes.frequencies[(2, 1)]
+        );
+        assert_eq!(
+            expected_output7.matrix[(3, 0)],
+            frequencies_and_phenotypes.frequencies[(3, 1)]
+        );
+        assert_eq!(
+            expected_output7.matrix[(4, 0)],
+            frequencies_and_phenotypes.frequencies[(4, 1)]
+        );
     }
 }
