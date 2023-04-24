@@ -149,15 +149,16 @@ pub struct UnivariateMaximumLikelihoodEstimation {
 
 #[derive(Debug, Clone)]
 pub struct PredictionPerformance {
-    pub n: usize,      // number of observations
-    pub p: usize,      // number of predictors
-    pub k: usize,      // number cross-validation folds
-    pub r: usize,      // number replications where each cross-validation results in random groupings
-    pub model: String, // genomic prediction model used
-    pub mbe: DVector<f64>,
-    pub mae: DVector<f64>,
-    pub mse: DVector<f64>,
-    pub rmse: DVector<f64>,
+    pub n: usize,            // number of observations
+    pub p: usize,            // number of predictors
+    pub k: usize,            // number cross-validation folds
+    pub r: usize, // number replications where each cross-validation results in random groupings
+    pub models: Vec<String>, // genomic prediction model used
+    pub cor: Vec<f64>,
+    pub mbe: Vec<f64>,
+    pub mae: Vec<f64>,
+    pub mse: Vec<f64>,
+    pub rmse: Vec<f64>,
 }
 
 // Struct for elastic-net regression
@@ -247,10 +248,27 @@ pub trait Regression {
     fn estimate_significance(&mut self) -> io::Result<&mut Self>;
 }
 
+pub trait EstmateAndPredict<F> {
+    fn estimate_effects(
+        &self,
+        params: &Vec<f64>,
+        function: F,
+    ) -> io::Result<(DMatrix<f64>, String)>
+    where
+        F: Fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<(DMatrix<f64>, String)>;
+    fn predict_phenotypes(&self) -> io::Result<DMatrix<f64>>;
+}
+
 pub trait CrossValidate<F> {
     fn k_split(&self, k: usize) -> io::Result<(Vec<usize>, usize, usize)>;
     fn performance(&self, y_true: &DMatrix<f64>, y_hat: &DMatrix<f64>) -> io::Result<Vec<f64>>;
-    fn cross_validate(&self, k: usize, r: usize, function: F) -> io::Result<PredictionPerformance>
+    fn cross_validate(
+        &self,
+        k: usize,
+        r: usize,
+        params: &Vec<f64>,
+        functions: Vec<F>,
+    ) -> io::Result<PredictionPerformance>
     where
-        F: Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<DMatrix<f64>>;
+        F: Fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<(DMatrix<f64>, String)>;
 }

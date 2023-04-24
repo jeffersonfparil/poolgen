@@ -12,3 +12,4 @@ statrs = "0.16.0"
 argmin = {version="0.8.1", features=["rayon"]}
 argmin-math = "0.3.0"
 rand = "0.8.5"
+function_name = "0.3.0"
