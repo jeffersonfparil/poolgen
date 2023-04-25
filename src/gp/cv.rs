@@ -3,22 +3,19 @@ use crate::gwas::*;
 use nalgebra::{self, DMatrix, DVector};
 use std::io::{self, Error, ErrorKind};
 
-impl
-    EstmateAndPredict<
-        fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<(DMatrix<f64>, String)>,
-    > for (&DMatrix<f64>, &DMatrix<f64>)
+impl EstmateAndPredict<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>>
+    for (&DMatrix<f64>, &DMatrix<f64>)
 {
     fn estimate_effects(
         &self,
-        params: &Vec<f64>,
-        function: fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<(DMatrix<f64>, String)>,
+        function: fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>,
     ) -> io::Result<(DMatrix<f64>, String)>
     where
-        fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<DMatrix<f64>>:
-            Fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<DMatrix<f64>>,
+        fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<DMatrix<f64>>:
+            Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<DMatrix<f64>>,
     {
         // b_hat
-        function(self.0, self.1, params)
+        function(self.0, self.1)
     }
 
     fn predict_phenotypes(&self) -> io::Result<DMatrix<f64>> {
@@ -27,14 +24,13 @@ impl
     }
 }
 
-impl
-    CrossValidate<fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<(DMatrix<f64>, String)>>
+impl CrossValidate<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>>
     for FrequenciesAndPhenotypes
 {
     fn k_split(&self, mut k: usize) -> io::Result<(Vec<usize>, usize, usize)> {
-        let (n, _) = self.frequencies.shape();
-        if k >= n {
-            return Err(Error::new(ErrorKind::Other, "The number of splits, i.e. k needs to be less than the number of pools, n. We are aiming for fold sizes of 10 or greater."));
+        let (n, _) = self.intercept_and_frequencies.shape();
+        if (k >= n) | (n <= 2) {
+            return Err(Error::new(ErrorKind::Other, "The number of splits, i.e. k, needs to be less than the number of pools, n, and n > 2. We are aiming for fold sizes of 10 or greater."));
         }
         let mut s = (n as f64 / k as f64).floor() as usize;
         while s < 10 {
@@ -87,16 +83,12 @@ impl
         &self,
         k: usize,
         r: usize,
-        params: &Vec<f64>,
-        functions: Vec<
-            fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<(DMatrix<f64>, String)>,
-        >,
+        functions: Vec<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>>,
     ) -> io::Result<PredictionPerformance> {
-        let (n, p) = self.frequencies.shape();
-        let m = functions.len();
+        let (n, p) = self.intercept_and_frequencies.shape();
         let (groupings, k, s) = self.k_split(k).unwrap();
-        let mut x_matrix_training = DMatrix::from_element(n - s, p + 1, 1.00); // including intercept in the first column
-        let mut x_matrix_validation = DMatrix::from_element(s, p + 1, 1.00); // including intercept in the first column
+        let mut x_matrix_training = DMatrix::from_element(n - s, p, f64::NAN);
+        let mut x_matrix_validation = DMatrix::from_element(s, p, f64::NAN);
         let mut y_matrix_training = DMatrix::from_element(n - s, 1, f64::NAN);
         let mut y_matrix_validation = DMatrix::from_element(s, 1, f64::NAN);
         let mut models: Vec<String> = vec![];
@@ -112,13 +104,15 @@ impl
                     let mut idx_validation: usize = 0;
                     for i in 0..n {
                         if fold == groupings[i] {
-                            x_matrix_validation[(idx_validation, j + 1)] = self.frequencies[(i, j)];
+                            x_matrix_validation[(idx_validation, j)] =
+                                self.intercept_and_frequencies[(i, j)];
                             if j == 0 {
                                 y_matrix_validation[(idx_validation, j)] = self.phenotypes[(i, j)];
                             }
                             idx_validation += 1;
                         } else {
-                            x_matrix_training[(idx_training, j + 1)] = self.frequencies[(i, j)];
+                            x_matrix_training[(idx_training, j)] =
+                                self.intercept_and_frequencies[(i, j)];
                             if j == 0 {
                                 y_matrix_training[(idx_training, j)] = self.phenotypes[(i, j)];
                             }
@@ -128,7 +122,7 @@ impl
                 }
                 for f in functions.iter() {
                     let (b_hat, model_name) = (&x_matrix_training, &y_matrix_training)
-                        .estimate_effects(params, *f)
+                        .estimate_effects(*f)
                         .unwrap();
                     // println!("b_hat={:?}", b_hat);
                     let y_pred: DMatrix<f64> =
@@ -167,7 +161,7 @@ mod tests {
     use statrs;
     // use statrs::statistics::Distribution;
     #[test]
-    fn test_ols() {
+    fn test_cv() {
         // Expected
         let expected_output1: DMatrix<f64> = DMatrix::from_column_slice(3, 1, &[-0.73, 5.53, 6.42]);
         // Inputs
@@ -199,10 +193,12 @@ mod tests {
         // Outputs
         let n = 100;
         let p = 1_000;
+        let q = 5;
         let mut rng = rand::thread_rng();
         let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
         let dist_gaus = statrs::distribution::Normal::new(0.0, 0.01).unwrap();
-        let f: DMatrix<f64> = DMatrix::from_column_slice(
+        // Simulate allele frequencies
+        let mut f: DMatrix<f64> = DMatrix::from_column_slice(
             n,
             p,
             &dist_unif
@@ -210,15 +206,7 @@ mod tests {
                 .take(n * p)
                 .collect::<Vec<f64>>(),
         );
-        let e: DMatrix<f64> = DMatrix::from_column_slice(
-            n,
-            1,
-            &dist_gaus
-                .sample_iter(&mut rng)
-                .take(n)
-                .collect::<Vec<f64>>(),
-        );
-        let q = 2;
+        // Simulate effects
         let mut b: DMatrix<f64> = DMatrix::from_element(p, 1, 0.0);
         let idx_b: Vec<usize> = dist_unif
             .sample_iter(&mut rng)
@@ -228,38 +216,57 @@ mod tests {
         for i in idx_b.into_iter() {
             b[(i, 0)] = 1.00;
         }
+        // Insert intercept
+        f = f.insert_column(0, 1.0);
+        b = b.insert_row(0, 0.0);
+        // Simulate phenotype
+        let e: DMatrix<f64> = DMatrix::from_column_slice(
+            n,
+            1,
+            &dist_gaus
+                .sample_iter(&mut rng)
+                .take(n)
+                .collect::<Vec<f64>>(),
+        );
         let y = (&f * &b) + e;
         // let y = DMatrix::from_column_slice(n, 1, &dist_gaus.sample_iter(&mut rng).take(n).collect::<Vec<f64>>());
         let frequencies_and_phenotypes = FrequenciesAndPhenotypes {
             chromosome: vec!["".to_owned()],
             position: vec![0],
-            frequencies: f,
+            intercept_and_frequencies: f,
             phenotypes: y,
             pool_names: vec!["".to_owned()],
         };
         println!(
-            "frequencies_and_phenotypes.frequencies[(0, 1)]={:?}",
-            frequencies_and_phenotypes.frequencies[(0, 1)]
+            "frequencies_and_phenotypes.intercept_and_frequencies[(0, 1)]={:?}",
+            frequencies_and_phenotypes.intercept_and_frequencies[(0, 1)]
         );
         println!(
-            "frequencies_and_phenotypes.frequencies[(1, 2)]={:?}",
-            frequencies_and_phenotypes.frequencies[(1, 2)]
+            "frequencies_and_phenotypes.intercept_and_frequencies[(1, 2)]={:?}",
+            frequencies_and_phenotypes.intercept_and_frequencies[(1, 2)]
         );
         println!(
-            "frequencies_and_phenotypes.frequencies[(2, 3)]={:?}",
-            frequencies_and_phenotypes.frequencies[(2, 3)]
+            "frequencies_and_phenotypes.intercept_and_frequencies[(2, 3)]={:?}",
+            frequencies_and_phenotypes.intercept_and_frequencies[(2, 3)]
         );
         let (a, k, s) = frequencies_and_phenotypes.k_split(10).unwrap();
         let (k, r) = (10, 1);
+        let models: Vec<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>> =
+            vec![ols, penalise_lasso_like, penalise_ridge_like];
+        let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
-            .cross_validate(k, r, &vec![1.0, 0.9], vec![ols, penalise])
+            .cross_validate(k, r, models)
             .unwrap();
-        println!("prediction_performance={:?}", prediction_performance);
-        let cor = DMatrix::from_row_slice(k*r, 2, &prediction_performance.cor);
-        let rmse = DMatrix::from_row_slice(k*r, 2, &prediction_performance.rmse);
+        // println!("prediction_performance={:?}", prediction_performance);
+        let cor = DMatrix::from_row_slice(k * r, m, &prediction_performance.cor);
+        let rmse = DMatrix::from_row_slice(k * r, m, &prediction_performance.rmse);
+        println!(
+            "prediction_performance.models={:?}",
+            prediction_performance.models
+        );
         println!("cor.row_mean()={:?}", cor.row_mean());
         println!("rmse.row_mean()={:?}", rmse.row_mean());
         // Assertions
-        assert_eq!(0, 0); // Output dimensions
+        assert_eq!(0, 1); // Output dimensions
     }
 }

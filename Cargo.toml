@@ -8,8 +8,12 @@ edition = "2021"
 [dependencies]
 clap = { version="3.2.23", features=["derive"]}
 nalgebra = "0.32.1"
+nalgebra-lapack = "0.24.0"
 statrs = "0.16.0"
 argmin = {version="0.8.1", features=["rayon"]}
 argmin-math = "0.3.0"
 rand = "0.8.5"
 function_name = "0.3.0"
+
+[env]
+RUSTFLAGS="-Ctarget-cpu=native"

@@ -864,7 +864,7 @@ impl LoadAll for FileSyncPhen {
         Ok(FrequenciesAndPhenotypes {
             chromosome: chr,
             position: pos,
-            frequencies: mat,
+            intercept_and_frequencies: mat,
             phenotypes: self.phen_matrix.clone(),
             pool_names: self.pool_names.clone(),
         })
@@ -1054,43 +1054,43 @@ mod tests {
         );
         assert_eq!(
             expected_output6.matrix[(0, 0)],
-            frequencies_and_phenotypes.frequencies[(0, 0)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(0, 0)]
         );
         assert_eq!(
             expected_output6.matrix[(1, 0)],
-            frequencies_and_phenotypes.frequencies[(1, 0)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(1, 0)]
         );
         assert_eq!(
             expected_output6.matrix[(2, 0)],
-            frequencies_and_phenotypes.frequencies[(2, 0)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(2, 0)]
         );
         assert_eq!(
             expected_output6.matrix[(3, 0)],
-            frequencies_and_phenotypes.frequencies[(3, 0)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(3, 0)]
         );
         assert_eq!(
             expected_output6.matrix[(4, 0)],
-            frequencies_and_phenotypes.frequencies[(4, 0)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(4, 0)]
         );
         assert_eq!(
             expected_output7.matrix[(0, 0)],
-            frequencies_and_phenotypes.frequencies[(0, 1)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(0, 1)]
         );
         assert_eq!(
             expected_output7.matrix[(1, 0)],
-            frequencies_and_phenotypes.frequencies[(1, 1)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(1, 1)]
         );
         assert_eq!(
             expected_output7.matrix[(2, 0)],
-            frequencies_and_phenotypes.frequencies[(2, 1)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(2, 1)]
         );
         assert_eq!(
             expected_output7.matrix[(3, 0)],
-            frequencies_and_phenotypes.frequencies[(3, 1)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(3, 1)]
         );
         assert_eq!(
             expected_output7.matrix[(4, 0)],
-            frequencies_and_phenotypes.frequencies[(4, 1)]
+            frequencies_and_phenotypes.intercept_and_frequencies[(4, 1)]
         );
     }
 }

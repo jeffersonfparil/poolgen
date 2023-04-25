@@ -98,8 +98,8 @@ pub struct LocusCountsAndPhenotypes {
 pub struct FrequenciesAndPhenotypes {
     pub chromosome: Vec<String>,
     pub position: Vec<u64>,
-    pub frequencies: DMatrix<f64>, // n pools x p alleles across loci
-    pub phenotypes: DMatrix<f64>,  // n pools x k traits
+    pub intercept_and_frequencies: DMatrix<f64>, // n pools x 1 + p alleles across loci
+    pub phenotypes: DMatrix<f64>,                // n pools x k traits
     pub pool_names: Vec<String>,
 }
 
@@ -161,18 +161,11 @@ pub struct PredictionPerformance {
     pub rmse: Vec<f64>,
 }
 
-// Struct for elastic-net regression
-#[derive(Debug, Clone)]
-pub struct UnivariateElasticNet {
-    pub x: DMatrix<f64>,
-    pub y: DVector<f64>,
-    pub b: DVector<f64>,
-    pub alpha: f64,
+// Struct for penalised-like regression lambda path search with cross-validation
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub struct LambdaError {
     pub lambda: f64,
-    pub se: f64,
-    pub v_b: DVector<f64>,
-    pub t: DVector<f64>,
-    pub pval: DVector<f64>,
+    pub error: f64,
 }
 
 // TRAITS
@@ -249,13 +242,9 @@ pub trait Regression {
 }
 
 pub trait EstmateAndPredict<F> {
-    fn estimate_effects(
-        &self,
-        params: &Vec<f64>,
-        function: F,
-    ) -> io::Result<(DMatrix<f64>, String)>
+    fn estimate_effects(&self, function: F) -> io::Result<(DMatrix<f64>, String)>
     where
-        F: Fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<(DMatrix<f64>, String)>;
+        F: Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>;
     fn predict_phenotypes(&self) -> io::Result<DMatrix<f64>>;
 }
 
@@ -266,9 +255,8 @@ pub trait CrossValidate<F> {
         &self,
         k: usize,
         r: usize,
-        params: &Vec<f64>,
         functions: Vec<F>,
     ) -> io::Result<PredictionPerformance>
     where
-        F: Fn(&DMatrix<f64>, &DMatrix<f64>, &Vec<f64>) -> io::Result<(DMatrix<f64>, String)>;
+        F: Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>;
 }
