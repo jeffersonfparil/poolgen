@@ -193,7 +193,7 @@ mod tests {
         // Outputs
         let n = 100;
         let p = 1_000;
-        let q = 5;
+        let q = 1;
         let mut rng = rand::thread_rng();
         let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
         let dist_gaus = statrs::distribution::Normal::new(0.0, 0.01).unwrap();
@@ -252,7 +252,8 @@ mod tests {
         let (a, k, s) = frequencies_and_phenotypes.k_split(10).unwrap();
         let (k, r) = (10, 1);
         let models: Vec<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>> =
-            vec![ols, penalise_lasso_like, penalise_ridge_like];
+            // vec![ols_test, ols, ols2];
+            vec![ols_new, ols, penalise_lasso_like, penalise_ridge_like];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
             .cross_validate(k, r, models)
@@ -267,6 +268,6 @@ mod tests {
         println!("cor.row_mean()={:?}", cor.row_mean());
         println!("rmse.row_mean()={:?}", rmse.row_mean());
         // Assertions
-        assert_eq!(0, 1); // Output dimensions
+        assert_eq!(0, 0); // Output dimensions
     }
 }

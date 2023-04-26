@@ -215,7 +215,6 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
         .into_iter()
         .map(|x| (x as f64) / (max_usize as f64))
         .collect::<Vec<f64>>();
-
     let mut x_matrix_training = DMatrix::from_element(n - s, p + 1, 1.00); // including intercept in the first column
     let mut x_matrix_validation = DMatrix::from_element(s, p + 1, 1.00); // including intercept in the first column
     let mut y_matrix_training = DMatrix::from_element(n - s, 1, f64::NAN);
