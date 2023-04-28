@@ -192,11 +192,11 @@ mod tests {
 
         // Outputs
         let n = 100;
-        let p = 1_000;
-        let q = 1;
+        let p = 1000;
+        let q = 10;
+        let h2 = 0.99;
         let mut rng = rand::thread_rng();
         let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
-        let dist_gaus = statrs::distribution::Normal::new(0.0, 0.01).unwrap();
         // Simulate allele frequencies
         let mut f: DMatrix<f64> = DMatrix::from_column_slice(
             n,
@@ -220,6 +220,10 @@ mod tests {
         f = f.insert_column(0, 1.0);
         b = b.insert_row(0, 0.0);
         // Simulate phenotype
+        let xb = &f * &b;
+        let vg = xb.variance();
+        let ve = (vg/h2) - vg;
+        let dist_gaus = statrs::distribution::Normal::new(0.0, ve.sqrt()).unwrap();
         let e: DMatrix<f64> = DMatrix::from_column_slice(
             n,
             1,
@@ -228,7 +232,7 @@ mod tests {
                 .take(n)
                 .collect::<Vec<f64>>(),
         );
-        let y = (&f * &b) + e;
+        let y = &xb + e;
         // let y = DMatrix::from_column_slice(n, 1, &dist_gaus.sample_iter(&mut rng).take(n).collect::<Vec<f64>>());
         let frequencies_and_phenotypes = FrequenciesAndPhenotypes {
             chromosome: vec!["".to_owned()],
@@ -252,8 +256,7 @@ mod tests {
         let (a, k, s) = frequencies_and_phenotypes.k_split(10).unwrap();
         let (k, r) = (10, 1);
         let models: Vec<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>> =
-            // vec![ols_test, ols, ols2];
-            vec![ols_new, ols, penalise_lasso_like, penalise_ridge_like];
+            vec![ols, penalise_lasso_like, penalise_ridge_like];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
             .cross_validate(k, r, models)
