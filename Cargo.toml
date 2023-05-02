@@ -17,3 +17,9 @@ function_name = "0.3.0"
 
 [env]
 RUSTFLAGS="-Ctarget-cpu=native"
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3

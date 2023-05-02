@@ -1,4 +1,4 @@
-#name,poolSizes,Trait_A,TrAiT_BbBb,traitA_quantiles,traitA_min,traitA_sig
+#name,poolSizes,Trait_A,Trait_B,traitA_percs,traitA_min,traitA_sig
 G1,0.2,0.1,83.2,0.2,0.0,0.01
 G2,0.2,0.3,75.3,0.4,0.0,0.01
 G3,0.2,0.5,49.8,0.6,0.0,0.01

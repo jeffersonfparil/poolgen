@@ -11,7 +11,7 @@ pub fn penalise_lasso_like(
     y: &DMatrix<f64>,
 ) -> io::Result<(DMatrix<f64>, String)> {
     let (b_hat, lambda) =
-        penalised_lambda_path_with_k_fold_cross_validation(x, y, "Lasso-like".to_owned(), 0.1)
+        penalised_lambda_path_with_k_fold_cross_validation(x, y, "Lasso-like".to_owned(), 0.01)
             .unwrap();
     // println!("##############################");
     // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
@@ -27,7 +27,7 @@ pub fn penalise_ridge_like(
     y: &DMatrix<f64>,
 ) -> io::Result<(DMatrix<f64>, String)> {
     let (b_hat, lambda) =
-        penalised_lambda_path_with_k_fold_cross_validation(x, y, "Ridge-like".to_owned(), 0.1)
+        penalised_lambda_path_with_k_fold_cross_validation(x, y, "Ridge-like".to_owned(), 0.01)
             .unwrap();
     // println!("##############################");
     // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
@@ -86,7 +86,7 @@ fn expand_and_contract(
             added_penalised += normed[(i, 0)];
         }
     }
-    // Find total depenalised values
+    // Find total depenalised (expanded) values
     let mut subtracted_depenalised = 0.0;
     let mut added_depenalised = 0.0;
     for i in idx_depenalised.clone().into_iter() {
@@ -98,14 +98,18 @@ fn expand_and_contract(
     }
     // Account for the absence of available slots to transfer the contracted effects into
     if (subtracted_penalised > 0.0) & (subtracted_depenalised == 0.0) {
-        added_penalised += subtracted_penalised;
+        added_penalised -= subtracted_penalised;
+        subtracted_penalised = 0.0;
     } else if (added_penalised > 0.0) & (added_depenalised == 0.0) {
         subtracted_penalised -= added_penalised;
+        added_penalised = 0.0;
     }
     if (subtracted_penalised < 0.0) | ((subtracted_depenalised == 0.0) & (added_depenalised == 0.0))
     {
         intercept += subtracted_penalised;
-        intercept += added_penalised;
+        intercept -= added_penalised;
+        subtracted_penalised = 0.0;
+        added_penalised = 0.0;
     }
     // Depenalise: expand
     for i in idx_depenalised.into_iter() {
@@ -154,8 +158,9 @@ fn error_index(b_hat: &DMatrix<f64>, x: &DMatrix<f64>, y_true: &DMatrix<f64>) ->
     let mae = (y_true - &y_pred).norm() / (max - min);
     let mse = (y_true - &y_pred).norm_squared() / f64::powf(max - min, 2.0);
     let rmse = mse.sqrt() / (max - min);
-    let error_index = ((1.0 - cor) + mae + mse + rmse) / 4.0;
+    // let error_index = ((1.0 - cor.abs()) + mae + mse + rmse) / 4.0;
     // let error_index = rmse;
+    let error_index = ((1.0 - cor.abs()) + mae) / 2.0;
     Ok(error_index)
 }
 
@@ -309,4 +314,23 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     let (b_hat, _model_name) = ols(x, y).unwrap();
     let b_hat_penalised = expand_and_contract(&b_hat, norm, lambda).unwrap();
     Ok((b_hat_penalised, lambda))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gp::*;
+    use rand::prelude::*;
+    use statrs;
+    #[test]
+    fn test_penalised() {
+        let b: DMatrix<f64> =
+            DMatrix::from_column_slice(7, 1, &[5.0, -0.4, 0.0, 1.0, -0.1, 1.0, 0.0]);
+        let new_b: DMatrix<f64> = expand_and_contract(&b, "Lasso-like".to_owned(), 0.5).unwrap();
+        // let new_b = expand_and_contract(&b, "Ridge-like".to_owned(), 0.5);
+        println!("new_b={:?}", new_b);
+        let expected_output1: DMatrix<f64> =
+            DMatrix::from_column_slice(7, 1, &[4.5, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0]);
+        assert_eq!(expected_output1, new_b);
+    }
 }

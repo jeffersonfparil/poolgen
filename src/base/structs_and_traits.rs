@@ -149,11 +149,12 @@ pub struct UnivariateMaximumLikelihoodEstimation {
 
 #[derive(Debug, Clone)]
 pub struct PredictionPerformance {
-    pub n: usize,            // number of observations
-    pub p: usize,            // number of predictors
-    pub k: usize,            // number cross-validation folds
+    pub n: usize,                                           // number of observations
+    pub p: usize,                                           // number of predictors
+    pub k: usize,                                           // number cross-validation folds
     pub r: usize, // number replications where each cross-validation results in random groupings
     pub models: Vec<String>, // genomic prediction model used
+    pub b_histogram: Vec<(Vec<f64>, Vec<f64>, Vec<usize>)>, // bin_start (inclusive), bin_end (exclusive), counts or frequency
     pub cor: Vec<f64>,
     pub mbe: Vec<f64>,
     pub mae: Vec<f64>,

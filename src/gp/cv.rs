@@ -92,6 +92,7 @@ impl CrossValidate<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>,
         let mut y_matrix_training = DMatrix::from_element(n - s, 1, f64::NAN);
         let mut y_matrix_validation = DMatrix::from_element(s, 1, f64::NAN);
         let mut models: Vec<String> = vec![];
+        let mut b_histogram = vec![];
         let mut cor: Vec<f64> = vec![];
         let mut mbe: Vec<f64> = vec![];
         let mut mae: Vec<f64> = vec![];
@@ -129,6 +130,10 @@ impl CrossValidate<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>,
                         (&x_matrix_validation, &b_hat).predict_phenotypes().unwrap();
                     let metrics = self.performance(&y_matrix_validation, &y_pred).unwrap();
                     models.push(model_name);
+                    b_histogram.push(histogram(
+                        b_hat.iter().map(|x| x.clone()).collect::<Vec<f64>>(),
+                        10,
+                    ));
                     cor.push(metrics[0]);
                     mbe.push(metrics[1]);
                     mae.push(metrics[2]);
@@ -143,6 +148,7 @@ impl CrossValidate<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>,
             k: k,
             r: r,
             models: models,
+            b_histogram: b_histogram,
             cor: cor,
             mbe: mbe,
             mae: mae,
@@ -192,9 +198,11 @@ mod tests {
 
         // Outputs
         let n = 100;
-        let p = 1000;
-        let q = 10;
-        let h2 = 0.99;
+        // let p = 50_000;
+        let p = 1_000;
+        // let q = 20;
+        let q = 1;
+        let h2 = 0.9;
         let mut rng = rand::thread_rng();
         let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
         // Simulate allele frequencies
@@ -222,7 +230,7 @@ mod tests {
         // Simulate phenotype
         let xb = &f * &b;
         let vg = xb.variance();
-        let ve = (vg/h2) - vg;
+        let ve = (vg / h2) - vg;
         let dist_gaus = statrs::distribution::Normal::new(0.0, ve.sqrt()).unwrap();
         let e: DMatrix<f64> = DMatrix::from_column_slice(
             n,
@@ -233,7 +241,8 @@ mod tests {
                 .collect::<Vec<f64>>(),
         );
         let y = &xb + e;
-        // let y = DMatrix::from_column_slice(n, 1, &dist_gaus.sample_iter(&mut rng).take(n).collect::<Vec<f64>>());
+        // let y_ = &xb + e;
+        // let y = y_.add_scalar(-y_.mean()) / y_.variance().sqrt();
         let frequencies_and_phenotypes = FrequenciesAndPhenotypes {
             chromosome: vec!["".to_owned()],
             position: vec![0],
@@ -264,10 +273,10 @@ mod tests {
         // println!("prediction_performance={:?}", prediction_performance);
         let cor = DMatrix::from_row_slice(k * r, m, &prediction_performance.cor);
         let rmse = DMatrix::from_row_slice(k * r, m, &prediction_performance.rmse);
-        println!(
-            "prediction_performance.models={:?}",
-            prediction_performance.models
-        );
+        for i in 0..prediction_performance.models.len() {
+            println!("{:?}:  beta distributions = {:?}", prediction_performance.models[i], prediction_performance.b_histogram[i]);
+        }
+            
         println!("cor.row_mean()={:?}", cor.row_mean());
         println!("rmse.row_mean()={:?}", rmse.row_mean());
         // Assertions

@@ -18,9 +18,17 @@ pub fn ols(x: &DMatrix<f64>, y: &DMatrix<f64>) -> io::Result<(DMatrix<f64>, Stri
     }
     let lambda = 1.0;
     let b_hat: DMatrix<f64> = if n < p {
-        x.transpose() * ((x * x.transpose()).add_scalar(lambda)).pseudo_inverse(f64::EPSILON).unwrap() * y
+        x.transpose()
+            * ((x * x.transpose()).add_scalar(lambda))
+                .pseudo_inverse(f64::EPSILON)
+                .unwrap()
+            * y
     } else {
-        ((x.transpose() * x).add_scalar(lambda)).pseudo_inverse(f64::EPSILON).unwrap() * x.transpose() * y
+        ((x.transpose() * x).add_scalar(lambda))
+            .pseudo_inverse(f64::EPSILON)
+            .unwrap()
+            * x.transpose()
+            * y
     };
     // println!("##############################");
     // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
