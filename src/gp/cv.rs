@@ -274,9 +274,12 @@ mod tests {
         let cor = DMatrix::from_row_slice(k * r, m, &prediction_performance.cor);
         let rmse = DMatrix::from_row_slice(k * r, m, &prediction_performance.rmse);
         for i in 0..prediction_performance.models.len() {
-            println!("{:?}:  beta distributions = {:?}", prediction_performance.models[i], prediction_performance.b_histogram[i]);
+            println!(
+                "{:?}:  beta distributions = {:?}",
+                prediction_performance.models[i], prediction_performance.b_histogram[i]
+            );
         }
-            
+
         println!("cor.row_mean()={:?}", cor.row_mean());
         println!("rmse.row_mean()={:?}", rmse.row_mean());
         // Assertions

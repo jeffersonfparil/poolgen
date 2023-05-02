@@ -1,21 +1,16 @@
 [package]
 name = "poolgen"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 clap = { version="3.2.23", features=["derive"]}
 nalgebra = "0.32.1"
 statrs = "0.16.0"
-argmin = {version="0.8.1", features=["rayon"]}
+argmin = "0.8.1"
 argmin-math = "0.3.0"
 rand = "0.8.5"
 function_name = "0.3.0"
-
-[env]
-RUSTFLAGS="-Ctarget-cpu=native"
 
 [profile.dev]
 opt-level = 0
