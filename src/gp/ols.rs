@@ -1,7 +1,5 @@
-use nalgebra::{self, DMatrix, DVector};
-use nalgebra_lapack::{self, SVD};
+use nalgebra::{self, DMatrix};
 use std::io::{self, Error, ErrorKind};
-use std::sync::{Arc, Mutex};
 
 #[function_name::named]
 pub fn ols(x: &DMatrix<f64>, y: &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)> {
