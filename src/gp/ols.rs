@@ -1,8 +1,13 @@
+use crate::base::*;
 use nalgebra::{self, DMatrix};
 use std::io::{self, Error, ErrorKind};
+use std::sync::{Arc, RwLock};
 
 #[function_name::named]
-pub fn ols(x: &DMatrix<f64>, y: &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)> {
+pub fn ols(genotypes_and_phenotypes: Arc<RwLock<GenotypesAndPhenotypes>>) -> io::Result<(DMatrix<f64>, String)> {
+    let data = genotypes_and_phenotypes.read().unwrap();
+    let x = &data.intercept_and_allele_frequencies;
+    let y = &data.phenotypes;
     let (n, p) = x.shape();
     let (n_, _) = y.shape();
     if n != n_ {

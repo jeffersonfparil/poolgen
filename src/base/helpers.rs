@@ -19,7 +19,7 @@ fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
     return out;
 }
 
-pub fn find_file_splits(fname: &String, n_threads: &u64) -> io::Result<Vec<u64>> {
+pub fn find_file_splits(fname: &String, n_threads: &usize) -> io::Result<Vec<u64>> {
     let mut file = match File::open(fname) {
         Ok(x) => x,
         Err(_) => return Err(Error::new(ErrorKind::Other, "The input file: ".to_owned() + fname + " does not exist. Please make sure you are entering the correct filename and/or the correct path.")),
@@ -27,9 +27,7 @@ pub fn find_file_splits(fname: &String, n_threads: &u64) -> io::Result<Vec<u64>>
     let _ = file.seek(SeekFrom::End(0));
     let mut reader = BufReader::new(file);
     let end = reader.seek(SeekFrom::Current(0)).unwrap();
-    let mut out = (0..end)
-        .step_by((end / n_threads) as usize)
-        .collect::<Vec<u64>>();
+    let mut out = (0..end).step_by((end as usize) / n_threads).collect::<Vec<u64>>();
     out.push(end);
     for i in 0..out.len() {
         out[i] = find_start_of_next_line(fname, out[i]);
@@ -123,13 +121,13 @@ mod tests {
         );
         // Inputs
         let fname: &String = &"./tests/test.pileup".to_owned();
-        let n_threads: &u64 = &2;
+        let n_threads = 2;
         let number: f64 = 0.420000012435;
         let betas = vec![
             0.0, 0.2, 0.3, 0.4, 0.5, 0.55, 0.6, 0.7, 0.75, 0.77, 0.8, 0.85, 0.86, 0.89, 1.0,
         ];
         // Output
-        let splits = find_file_splits(fname, n_threads).unwrap();
+        let splits = find_file_splits(fname, &n_threads).unwrap();
         let string_f64 = parse_f64_roundup_and_own(number, 4);
         let binning = histogram(betas, 5);
         // Assertion

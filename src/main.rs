@@ -58,7 +58,7 @@ struct Args {
     phen_value_col: Vec<String>,
     /// Number of threads to use for parallel processing
     #[clap(long, default_value_t = 1)]
-    n_threads: u64,
+    n_threads: usize,
     ////////////////////////////////////////////////////
     ////// Additional parameters
     //////////////////////////////////////////////////////

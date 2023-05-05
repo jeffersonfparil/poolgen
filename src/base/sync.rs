@@ -381,7 +381,7 @@ impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> O
         &self,
         filter_stats: &FilterStats,
         out: &String,
-        n_threads: &u64,
+        n_threads: &usize,
         function: fn(&mut LocusCounts, &FilterStats) -> Option<String>,
     ) -> io::Result<String> {
         // Unpack pileup and pool names filenames
@@ -421,7 +421,13 @@ impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> O
             .expect(&error_writing_file);
         // // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
-        let outname_ndigits = chunks[*n_threads as usize].to_string().len();
+        let n_chunks = chunks.len();
+        let n_threads = if n_chunks < *n_threads {
+            &n_chunks
+        } else {
+            n_threads
+        };
+        let outname_ndigits = chunks[*n_threads].to_string().len();
         println!("Chunks: {:?}", chunks);
         // Tuple arguments of pileup2sync_chunks
         // Instantiate thread object for parallel execution
@@ -429,7 +435,7 @@ impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> O
         // Vector holding all returns from pileup2sync_chunk()
         let thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
                                                                                        // Making four separate threads calling the `search_for_word` function
-        for i in 0..(*n_threads as usize) {
+        for i in 0..*n_threads {
             // Clone pileup2sync_chunk parameters
             let self_clone = self.clone();
             let start = chunks[i].clone();
@@ -564,7 +570,7 @@ impl
         &self,
         filter_stats: &FilterStats,
         out: &String,
-        n_threads: &u64,
+        n_threads: &usize,
         function: fn(&mut LocusCountsAndPhenotypes, &FilterStats) -> Option<String>,
     ) -> io::Result<String> {
         // Unpack pileup and pool names filenames
@@ -604,7 +610,7 @@ impl
             .expect(&error_writing_file);
         // // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
-        let outname_ndigits = chunks[*n_threads as usize].to_string().len();
+        let outname_ndigits = chunks[*n_threads].to_string().len();
         println!("Chunks: {:?}", chunks);
         // Tuple arguments of pileup2sync_chunks
         // Instantiate thread object for parallel execution
@@ -612,7 +618,7 @@ impl
         // Vector holding all returns from pileup2sync_chunk()
         let thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
                                                                                        // Making four separate threads calling the `search_for_word` function
-        for i in 0..(*n_threads as usize) {
+        for i in 0..*n_threads {
             // Clone pileup2sync_chunk parameters
             let self_clone = self.clone();
             let start = chunks[i].clone();
@@ -730,7 +736,7 @@ impl LoadAll for FileSyncPhen {
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
-        n_threads: &u64,
+        n_threads: &usize,
     ) -> io::Result<Vec<LocusFrequencies>> {
         let fname = self.filename_sync.clone();
         // Find the positions whereto split the file into n_threads pieces
@@ -742,7 +748,7 @@ impl LoadAll for FileSyncPhen {
         // Vector holding all returns from pileup2sync_chunk()
         let thread_ouputs: Arc<Mutex<Vec<LocusFrequencies>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
                                                                                                  // Making four separate threads calling the `search_for_word` function
-        for i in 0..(*n_threads as usize) {
+        for i in 0..*n_threads {
             // Clone pileup2sync_chunk parameters
             let self_clone = self.clone();
             let start = chunks[i].clone();
@@ -778,7 +784,7 @@ impl LoadAll for FileSyncPhen {
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
-        n_threads: &u64,
+        n_threads: &usize,
     ) -> io::Result<String> {
         // Output filename
         let time = SystemTime::now()
@@ -844,8 +850,8 @@ impl LoadAll for FileSyncPhen {
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
-        n_threads: &u64,
-    ) -> io::Result<FrequenciesAndPhenotypes> {
+        n_threads: &usize,
+    ) -> io::Result<GenotypesAndPhenotypes> {
         let freqs = self.load(filter_stats, keep_n_minus_1, n_threads).unwrap();
         let n = self.pool_names.len();
         let mut chr: Vec<String> = Vec::new();
@@ -861,10 +867,10 @@ impl LoadAll for FileSyncPhen {
             }
         }
         let mat: DMatrix<f64> = DMatrix::from_column_slice(n, vec.len() / n, &vec);
-        Ok(FrequenciesAndPhenotypes {
+        Ok(GenotypesAndPhenotypes {
             chromosome: chr,
             position: pos,
-            intercept_and_frequencies: mat,
+            intercept_and_allele_frequencies: mat,
             phenotypes: self.phen_matrix.clone(),
             pool_names: self.pool_names.clone(),
         })
@@ -1054,43 +1060,43 @@ mod tests {
         );
         assert_eq!(
             expected_output6.matrix[(0, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(0, 0)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 0)]
         );
         assert_eq!(
             expected_output6.matrix[(1, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(1, 0)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 0)]
         );
         assert_eq!(
             expected_output6.matrix[(2, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(2, 0)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 0)]
         );
         assert_eq!(
             expected_output6.matrix[(3, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(3, 0)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(3, 0)]
         );
         assert_eq!(
             expected_output6.matrix[(4, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(4, 0)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(4, 0)]
         );
         assert_eq!(
             expected_output7.matrix[(0, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(0, 1)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]
         );
         assert_eq!(
             expected_output7.matrix[(1, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(1, 1)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 1)]
         );
         assert_eq!(
             expected_output7.matrix[(2, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(2, 1)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 1)]
         );
         assert_eq!(
             expected_output7.matrix[(3, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(3, 1)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(3, 1)]
         );
         assert_eq!(
             expected_output7.matrix[(4, 0)],
-            frequencies_and_phenotypes.intercept_and_frequencies[(4, 1)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(4, 1)]
         );
     }
 }

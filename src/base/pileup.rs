@@ -405,7 +405,7 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
         &self,
         filter_stats: &FilterStats,
         out: &String,
-        n_threads: &u64,
+        n_threads: &usize,
         function: fn(&mut PileupLine, &FilterStats) -> Option<String>,
     ) -> io::Result<String> {
         // Unpack pileup and pool names filenames
@@ -446,7 +446,7 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
         let names = self.pool_names.join("\t");
         // // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
-        let outname_ndigits = chunks[*n_threads as usize].to_string().len();
+        let outname_ndigits = chunks[*n_threads].to_string().len();
         println!("Chunks: {:?}", chunks);
         // Tuple arguments of pileup2sync_chunks
         // Instantiate thread object for parallel execution
@@ -454,7 +454,7 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
         // Vector holding all returns from pileup2sync_chunk()
         let thread_ouputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
                                                                                        // Making four separate threads calling the `search_for_word` function
-        for i in 0..(*n_threads as usize) {
+        for i in 0..*n_threads {
             // Clone pileup2sync_chunk parameters
             let self_clone = self.clone();
             let start = chunks[i].clone();

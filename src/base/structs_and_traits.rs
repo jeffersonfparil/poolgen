@@ -1,7 +1,10 @@
 use nalgebra::{DMatrix, DVector};
 use std::io;
 
+///////////////////////////////////////////////////////////////////////////////
 // STRUCTS
+///////////////////////////////////////////////////////////////////////////////
+///
 #[derive(Debug, Clone)]
 pub struct FilePileup {
     pub filename: String,
@@ -93,16 +96,6 @@ pub struct LocusCountsAndPhenotypes {
     pub pool_names: Vec<String>,
 }
 
-// Struct of allele frequencies and phenotypes for genomic prediction
-#[derive(Debug, Clone)]
-pub struct FrequenciesAndPhenotypes {
-    pub chromosome: Vec<String>,
-    pub position: Vec<u64>,
-    pub intercept_and_frequencies: DMatrix<f64>, // n pools x 1 + p alleles across loci
-    pub phenotypes: DMatrix<f64>,                // n pools x k traits
-    pub pool_names: Vec<String>,
-}
-
 // Struct for GWAlpha's least squares cost function minimisation
 #[derive(Debug, Clone)]
 pub struct LeastSquaresBeta {
@@ -147,6 +140,16 @@ pub struct UnivariateMaximumLikelihoodEstimation {
     pub pval: DVector<f64>,
 }
 
+// Struct of allele frequencies and phenotypes for genomic prediction
+#[derive(Debug, Clone)]
+pub struct GenotypesAndPhenotypes {
+    pub chromosome: Vec<String>,                        // 1 + p
+    pub position: Vec<u64>,                             // 1 + p
+    pub intercept_and_allele_frequencies: DMatrix<f64>, // n pools x 1 + p alleles across loci
+    pub phenotypes: DMatrix<f64>,                       // n pools x k traits
+    pub pool_names: Vec<String>,                        // n
+}
+
 #[derive(Debug, Clone)]
 pub struct PredictionPerformance {
     pub n: usize,                                           // number of observations
@@ -169,7 +172,11 @@ pub struct LambdaError {
     pub error: f64,
 }
 
+
+///////////////////////////////////////////////////////////////////////////////
 // TRAITS
+///////////////////////////////////////////////////////////////////////////////
+
 pub trait Parse<T> {
     fn lparse(&self) -> io::Result<Box<T>>;
 }
@@ -199,7 +206,7 @@ pub trait ChunkyReadAnalyseWrite<T, F> {
         &self,
         filter_stats: &FilterStats,
         out: &String,
-        n_threads: &u64,
+        n_threads: &usize,
         function: F,
     ) -> io::Result<String>
     where
@@ -218,20 +225,20 @@ pub trait LoadAll {
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
-        n_threads: &u64,
+        n_threads: &usize,
     ) -> io::Result<Vec<LocusFrequencies>>;
     fn write_csv(
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
-        n_threads: &u64,
+        n_threads: &usize,
     ) -> io::Result<String>;
     fn into_frequencies_and_phenotypes(
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
-        n_threads: &u64,
-    ) -> io::Result<FrequenciesAndPhenotypes>;
+        n_threads: &usize,
+    ) -> io::Result<GenotypesAndPhenotypes>;
 }
 
 pub trait Regression {
@@ -242,22 +249,15 @@ pub trait Regression {
     fn estimate_significance(&mut self) -> io::Result<&mut Self>;
 }
 
-pub trait EstmateAndPredict<F> {
-    fn estimate_effects(&self, function: F) -> io::Result<(DMatrix<f64>, String)>
-    where
-        F: Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>;
-    fn predict_phenotypes(&self) -> io::Result<DMatrix<f64>>;
-}
-
-pub trait CrossValidate<F> {
+pub trait CrossValidation<F> {
     fn k_split(&self, k: usize) -> io::Result<(Vec<usize>, usize, usize)>;
-    fn performance(&self, y_true: &DMatrix<f64>, y_hat: &DMatrix<f64>) -> io::Result<Vec<f64>>;
-    fn cross_validate(
-        &self,
-        k: usize,
-        r: usize,
-        functions: Vec<F>,
-    ) -> io::Result<PredictionPerformance>
-    where
-        F: Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>;
+    fn performance(&self, y_true: &DMatrix<f64>, y_hat: &DMatrix<f64>) -> io::Result<Vec<DVector<f64>>>;
+    // fn cross_validate(
+    //     &self,
+    //     k: usize,
+    //     r: usize,
+    //     functions: Vec<F>,
+    // ) -> io::Result<PredictionPerformance>
+    // where
+    //     F: Fn(&DMatrix<f64>, &DVector<f64>) -> io::Result<(DVector<f64>, String)>;
 }
