@@ -27,7 +27,9 @@ pub fn find_file_splits(fname: &String, n_threads: &usize) -> io::Result<Vec<u64
     let _ = file.seek(SeekFrom::End(0));
     let mut reader = BufReader::new(file);
     let end = reader.seek(SeekFrom::Current(0)).unwrap();
-    let mut out = (0..end).step_by((end as usize) / n_threads).collect::<Vec<u64>>();
+    let mut out = (0..end)
+        .step_by((end as usize) / n_threads)
+        .collect::<Vec<u64>>();
     out.push(end);
     for i in 0..out.len() {
         out[i] = find_start_of_next_line(fname, out[i]);

@@ -1,5 +1,6 @@
 use nalgebra::{DMatrix, DVector};
 use std::io;
+use std::sync::{Arc, RwLock};
 
 ///////////////////////////////////////////////////////////////////////////////
 // STRUCTS
@@ -158,11 +159,11 @@ pub struct PredictionPerformance {
     pub r: usize, // number replications where each cross-validation results in random groupings
     pub models: Vec<String>, // genomic prediction model used
     pub b_histogram: Vec<(Vec<f64>, Vec<f64>, Vec<usize>)>, // bin_start (inclusive), bin_end (exclusive), counts or frequency
-    pub cor: Vec<f64>,
-    pub mbe: Vec<f64>,
-    pub mae: Vec<f64>,
-    pub mse: Vec<f64>,
-    pub rmse: Vec<f64>,
+    pub cor: DMatrix<f64>,
+    pub mbe: DMatrix<f64>,
+    pub mae: DMatrix<f64>,
+    pub mse: DMatrix<f64>,
+    pub rmse: DMatrix<f64>,
 }
 
 // Struct for penalised-like regression lambda path search with cross-validation
@@ -171,7 +172,6 @@ pub struct LambdaError {
     pub lambda: f64,
     pub error: f64,
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // TRAITS
@@ -251,13 +251,17 @@ pub trait Regression {
 
 pub trait CrossValidation<F> {
     fn k_split(&self, k: usize) -> io::Result<(Vec<usize>, usize, usize)>;
-    fn performance(&self, y_true: &DMatrix<f64>, y_hat: &DMatrix<f64>) -> io::Result<Vec<DVector<f64>>>;
-    // fn cross_validate(
-    //     &self,
-    //     k: usize,
-    //     r: usize,
-    //     functions: Vec<F>,
-    // ) -> io::Result<PredictionPerformance>
-    // where
-    //     F: Fn(&DMatrix<f64>, &DVector<f64>) -> io::Result<(DVector<f64>, String)>;
+    fn performance(
+        &self,
+        y_true: &DMatrix<f64>,
+        y_hat: &DMatrix<f64>,
+    ) -> io::Result<Vec<DVector<f64>>>;
+    fn cross_validate(
+        &self,
+        k: usize,
+        r: usize,
+        functions: Vec<F>,
+    ) -> io::Result<PredictionPerformance>
+    where
+        F: Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>;
 }
