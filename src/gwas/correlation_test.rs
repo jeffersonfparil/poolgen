@@ -1,10 +1,13 @@
 use crate::base::*;
-use nalgebra::{self, DVector};
+use ndarray::prelude::*;
 use std::io::{self, Error, ErrorKind};
 
 use statrs::distribution::{ContinuousCDF, StudentsT};
 
-pub fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f64, f64)> {
+pub fn pearsons_correlation(
+    x: &ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>>,
+    y: &ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>>,
+) -> io::Result<(f64, f64)> {
     let n = x.len();
     if n != y.len() {
         return Err(Error::new(
@@ -12,13 +15,13 @@ pub fn pearsons_correlation(x: &DVector<f64>, y: &DVector<f64>) -> io::Result<(f
             "Input vectors are not the same size.",
         ));
     }
-    let mu_x = x.mean();
-    let mu_y = y.mean();
+    let mu_x = x.mean().unwrap();
+    let mu_y = y.mean().unwrap();
     let x_less_mu_x = x.map(|x| x - mu_x);
     let y_less_mu_y = y.map(|y| y - mu_y);
     let x_less_mu_x_squared = x_less_mu_x.map(|x| x.powf(2.0));
     let y_less_mu_y_squared = y_less_mu_y.map(|y| y.powf(2.0));
-    let numerator = x_less_mu_x.component_mul(&y_less_mu_y).sum();
+    let numerator = (x_less_mu_x * y_less_mu_y).sum();
     let denominator = x_less_mu_x_squared.sum().sqrt() * y_less_mu_y_squared.sum().sqrt();
     let r_tmp = numerator / denominator;
     let r = match r_tmp.is_nan() {
@@ -57,13 +60,15 @@ pub fn correlation(
     let mut x_matrix = locus_frequencies.matrix.clone();
     let y_matrix = locus_counts_and_phenotypes.phenotypes.clone();
     // Keep p-1 alleles for conciseness
-    let (_, p) = x_matrix.shape();
+    let p = x_matrix.ncols();
     if p >= 2 {
-        x_matrix = x_matrix.clone().remove_columns(p - 1, 1);
+        x_matrix.remove_index(Axis(1), p - 1);
     }
     // Check if we have a compatible allele frequency and phenotype matrix or vector
-    let (n, p) = x_matrix.shape();
-    let (m, k) = y_matrix.shape();
+    let n = x_matrix.nrows();
+    let p = x_matrix.ncols();
+    let m = y_matrix.nrows();
+    let k = y_matrix.ncols();
     if n != m {
         return None;
     }
@@ -75,13 +80,13 @@ pub fn correlation(
     ];
     let mut line: Vec<String> = vec![];
     for i in 0..p {
-        let x = DVector::from(x_matrix.column(i));
+        let x: ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>> = x_matrix.column(i);
         for j in 0..k {
             line.append(&mut first_2_col.clone());
             line.push(locus_frequencies.alleles_vector[i].clone());
-            line.push(x.mean().to_string());
+            line.push(x.mean().unwrap().to_string());
             line.push("Pheno_".to_string() + &(j.to_string())[..]);
-            let y = DVector::from(y_matrix.column(j));
+            let y: ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>> = y_matrix.column(j);
             (corr, pval) = pearsons_correlation(&x, &y).unwrap();
             line.push(parse_f64_roundup_and_own(corr, 6));
             line.push(pval.to_string() + "\n");
@@ -95,7 +100,6 @@ pub fn correlation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nalgebra::DMatrix;
     #[test]
     fn test_correlation() {
         // Expected
@@ -104,9 +108,12 @@ mod tests {
         let expected_output3: String =
             "Chromosome1,12345,A,0.3,Pheno_0,0.3849,0.5223146158470686\n".to_owned();
         // Inputs
-        let x: DVector<f64> = DVector::from_column_slice(&[0.1, 0.2, 0.3, 0.4, 0.5]);
-        let y: DVector<f64> = DVector::from_column_slice(&[2.0, 1.0, 1.0, 5.0, 2.0]);
-        let counts: DMatrix<u64> = DMatrix::from_row_slice(5, 2, &[1, 9, 2, 8, 3, 7, 4, 6, 5, 5]);
+        let x_ = Array1::from_vec(vec![0.1, 0.2, 0.3, 0.4, 0.5]);
+        let x = x_.view();
+        let y_ = Array1::from_vec(vec![2.0, 1.0, 1.0, 5.0, 2.0]);
+        let y = y_.view();
+        let counts: Array2<u64> =
+            Array2::from_shape_vec((5, 2), vec![1, 9, 2, 8, 3, 7, 4, 6, 5, 5]).unwrap();
         let filter_stats = FilterStats {
             remove_ns: true,
             min_quality: 0.005,
@@ -120,7 +127,7 @@ mod tests {
             alleles_vector: vec!["A".to_owned(), "T".to_owned()],
             matrix: counts,
         };
-        let phenotypes: DMatrix<f64> = DMatrix::from_columns(&[y.clone()]);
+        let phenotypes: Array2<f64> = y_.clone().into_shape((y_.len(), 1)).unwrap();
         let mut locus_counts_and_phenotypes = LocusCountsAndPhenotypes {
             locus_counts: locus_counts,
             phenotypes: phenotypes,

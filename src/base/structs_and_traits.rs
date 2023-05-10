@@ -1,6 +1,5 @@
-use nalgebra::{DMatrix, DVector};
+use ndarray::{Array1, Array2};
 use std::io;
-use std::sync::{Arc, RwLock};
 
 ///////////////////////////////////////////////////////////////////////////////
 // STRUCTS
@@ -32,7 +31,7 @@ pub struct FilePhen {
 pub struct Phen {
     pub pool_names: Vec<String>,
     pub pool_sizes: Vec<f64>,
-    pub phen_matrix: DMatrix<f64>,
+    pub phen_matrix: Array2<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,7 +39,7 @@ pub struct FileSyncPhen {
     pub filename_sync: String,
     pub pool_names: Vec<String>,
     pub pool_sizes: Vec<f64>,
-    pub phen_matrix: DMatrix<f64>,
+    pub phen_matrix: Array2<f64>,
     pub test: String,
 }
 
@@ -69,16 +68,17 @@ pub struct LocusCounts {
     pub chromosome: String,
     pub position: u64,
     pub alleles_vector: Vec<String>,
-    pub matrix: DMatrix<u64>, // n pools x p alleles
+    pub matrix: Array2<u64>, // n pools x p alleles
 }
 
 // Struct of allele frequencies to convert reads into syncx
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+// #[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LocusFrequencies {
     pub chromosome: String,
     pub position: u64,
     pub alleles_vector: Vec<String>,
-    pub matrix: DMatrix<f64>, // n pools x p alleles
+    pub matrix: Array2<f64>, // n pools x p alleles
 }
 
 // Struct for tracking the insertions and deletions prepended with +/i which we want to skip as they refer to the next base position and not the current locus
@@ -93,62 +93,63 @@ pub struct IndelMarker {
 #[derive(Debug, Clone)]
 pub struct LocusCountsAndPhenotypes {
     pub locus_counts: LocusCounts,
-    pub phenotypes: DMatrix<f64>, // n pools x k traits
+    pub phenotypes: Array2<f64>, // n pools x k traits
     pub pool_names: Vec<String>,
 }
 
 // Struct for GWAlpha's least squares cost function minimisation
 #[derive(Debug, Clone)]
 pub struct LeastSquaresBeta {
-    pub q_prime: DMatrix<f64>,
-    pub percs_a: DMatrix<f64>,
-    pub percs_b: DMatrix<f64>,
+    pub q_prime: Array1<f64>,
+    pub percs_a: Array1<f64>,
+    pub percs_b: Array1<f64>,
 }
 
 // Struct for GWAlpha's maximum likelihood estimation
 #[derive(Debug, Clone)]
 pub struct MaximumLikelihoodBeta {
-    pub percs_a: DMatrix<f64>,
-    pub percs_a0: DMatrix<f64>,
-    pub percs_b: DMatrix<f64>,
-    pub percs_b0: DMatrix<f64>,
+    pub percs_a: Array1<f64>,
+    pub percs_a0: Array1<f64>,
+    pub percs_b: Array1<f64>,
+    pub percs_b0: Array1<f64>,
 }
 
 // Struct for regression objects
 #[derive(Debug, Clone)]
 pub struct UnivariateOrdinaryLeastSquares {
-    pub x: DMatrix<f64>,
-    pub y: DVector<f64>,
-    pub b: DVector<f64>,
-    pub xt: DMatrix<f64>,
-    pub inv_xtx: DMatrix<f64>,
-    pub inv_xxt: DMatrix<f64>,
-    pub e: DVector<f64>,
+    pub x: Array2<f64>,
+    pub y: Array1<f64>,
+    pub b: Array1<f64>,
+    pub xt: Array2<f64>,
+    pub inv_xtx: Array2<f64>,
+    pub inv_xxt: Array2<f64>,
+    pub e: Array1<f64>,
     pub se: f64,
-    pub v_b: DVector<f64>,
-    pub t: DVector<f64>,
-    pub pval: DVector<f64>,
+    pub v_b: Array1<f64>,
+    pub t: Array1<f64>,
+    pub pval: Array1<f64>,
 }
 
 #[derive(Debug, Clone)]
 pub struct UnivariateMaximumLikelihoodEstimation {
-    pub x: DMatrix<f64>,
-    pub y: DVector<f64>,
-    pub b: DVector<f64>,
+    pub x: Array2<f64>,
+    pub y: Array1<f64>,
+    pub b: Array1<f64>,
     pub se: f64,
-    pub v_b: DVector<f64>,
-    pub t: DVector<f64>,
-    pub pval: DVector<f64>,
+    pub v_b: Array1<f64>,
+    pub t: Array1<f64>,
+    pub pval: Array1<f64>,
 }
 
 // Struct of allele frequencies and phenotypes for genomic prediction
 #[derive(Debug, Clone)]
 pub struct GenotypesAndPhenotypes {
-    pub chromosome: Vec<String>,                        // 1 + p
-    pub position: Vec<u64>,                             // 1 + p
-    pub intercept_and_allele_frequencies: DMatrix<f64>, // n pools x 1 + p alleles across loci
-    pub phenotypes: DMatrix<f64>,                       // n pools x k traits
-    pub pool_names: Vec<String>,                        // n
+    pub chromosome: Vec<String>,                       // 1 + p
+    pub position: Vec<u64>,                            // 1 + p
+    pub allele: Vec<String>,                           // 1 + p
+    pub intercept_and_allele_frequencies: Array2<f64>, // n pools x 1 + p alleles across loci
+    pub phenotypes: Array2<f64>,                       // n pools x k traits
+    pub pool_names: Vec<String>,                       // n
 }
 
 #[derive(Debug, Clone)]
@@ -159,11 +160,11 @@ pub struct PredictionPerformance {
     pub r: usize, // number replications where each cross-validation results in random groupings
     pub models: Vec<String>, // genomic prediction model used
     pub b_histogram: Vec<(Vec<f64>, Vec<f64>, Vec<usize>)>, // bin_start (inclusive), bin_end (exclusive), counts or frequency
-    pub cor: DMatrix<f64>,
-    pub mbe: DMatrix<f64>,
-    pub mae: DMatrix<f64>,
-    pub mse: DMatrix<f64>,
-    pub rmse: DMatrix<f64>,
+    pub cor: Array2<f64>,
+    pub mbe: Array2<f64>,
+    pub mae: Array2<f64>,
+    pub mse: Array2<f64>,
+    pub rmse: Array2<f64>,
 }
 
 // Struct for penalised-like regression lambda path search with cross-validation
@@ -233,7 +234,7 @@ pub trait LoadAll {
         keep_n_minus_1: bool,
         n_threads: &usize,
     ) -> io::Result<String>;
-    fn into_frequencies_and_phenotypes(
+    fn into_genotypes_and_phenotypes(
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
@@ -249,13 +250,17 @@ pub trait Regression {
     fn estimate_significance(&mut self) -> io::Result<&mut Self>;
 }
 
+pub trait MoorePenrosePseudoInverse {
+    fn pinv(&self) -> io::Result<Array2<f64>>;
+}
+
 pub trait CrossValidation<F> {
     fn k_split(&self, k: usize) -> io::Result<(Vec<usize>, usize, usize)>;
     fn performance(
         &self,
-        y_true: &DMatrix<f64>,
-        y_hat: &DMatrix<f64>,
-    ) -> io::Result<Vec<DVector<f64>>>;
+        y_true: &Array2<f64>,
+        y_hat: &Array2<f64>,
+    ) -> io::Result<Vec<Array1<f64>>>;
     fn cross_validate(
         &self,
         k: usize,
@@ -263,5 +268,5 @@ pub trait CrossValidation<F> {
         functions: Vec<F>,
     ) -> io::Result<PredictionPerformance>
     where
-        F: Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>;
+        F: Fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>;
 }

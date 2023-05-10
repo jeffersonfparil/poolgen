@@ -1,5 +1,5 @@
 use crate::base::*;
-use nalgebra::DMatrix;
+use ndarray::prelude::*;
 use std::fs::{File, OpenOptions};
 use std::io::{self, prelude::*, BufReader, BufWriter, Error, ErrorKind, SeekFrom};
 use std::str;
@@ -170,7 +170,7 @@ impl Filter for PileupLine {
     fn to_counts(&self) -> io::Result<Box<LocusCounts>> {
         let n: usize = self.coverages.len();
         let p: usize = 6;
-        let mut matrix: DMatrix<u64> = DMatrix::from_element(n, p, 0 as u64);
+        let mut matrix: Array2<u64> = Array2::from_elem((n, p), 0);
         let mut counts: Vec<Vec<u64>> = vec![
             Vec::new(),
             Vec::new(),
@@ -215,9 +215,10 @@ impl Filter for PileupLine {
     // PileupLine to AlleleFrequencies
     fn to_frequencies(&self) -> io::Result<Box<LocusFrequencies>> {
         let locus_counts = self.to_counts().unwrap();
-        let (n, p) = locus_counts.matrix.shape();
-        let row_sums = locus_counts.matrix.column_sum(); // summation across the columns which means sum of all elements per row
-        let mut matrix: DMatrix<f64> = DMatrix::from_element(n, p, 0.0 as f64);
+        let n = locus_counts.matrix.nrows();
+        let p = locus_counts.matrix.ncols();
+        let row_sums = locus_counts.matrix.sum_axis(Axis(1)); // summation across the columns which means sum of all elements per row
+        let mut matrix: Array2<f64> = Array2::from_elem((n, p), 0.0);
         for i in 0..n {
             for j in 0..p {
                 matrix[(i, j)] = locus_counts.matrix[(i, j)] as f64 / row_sums[i] as f64;
@@ -273,9 +274,12 @@ impl Filter for PileupLine {
             }
         };
         //// Next account for pool sizes to get the proper minmum allele frequency across all pools
-        let (n, mut m) = allele_frequencies.matrix.shape();
+        let n = allele_frequencies.matrix.nrows();
+        let mut m = allele_frequencies.matrix.ncols();
         let mut q: f64;
         let mut j: usize = 1;
+        // let mut matrix_new: Array2<f64>;
+        // let mut alleles_vector_new: Vec<String>;
         while j < m {
             q = 0.0;
             for i in 0..n {
@@ -285,13 +289,20 @@ impl Filter for PileupLine {
             if (q < filter_stats.min_allele_frequency)
                 | (q > (1.00 - filter_stats.min_allele_frequency))
             {
-                allele_frequencies.matrix = allele_frequencies.matrix.remove_column(j);
+                // allele_frequencies.matrix = allele_frequencies.matrix.remove_column(j);
                 m -= 1;
             } else {
+                // if matrix_new.len() == 0 {
+                //     matrix_new = allele_frequencies.matrix.slice(s![..,j..j]).to_owned();
+                //     alleles_vector_new = vec![allele_frequencies.alleles_vector[j]];
+                // } else {
+                //     matrix_new = concatenate![Axis(0),  matrix_new, allele_frequencies.matrix.slice(s![..,j..j]).to_owned()];
+                //     alleles_vector_new.push(allele_frequencies.alleles_vector[j]);
+                // }
                 j += 1;
             }
         }
-        // Filter the whole locus depending on whether or not we haveretained at least 2 alleles
+        // Filter the whole locus depending on whether or not we have retained at least 2 alleles
         if m < 2 {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
@@ -311,7 +322,7 @@ pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) 
         Ok(x) => x,
         Err(_) => return None,
     };
-    let (n, _p) = locus_counts.matrix.shape();
+    let n = locus_counts.matrix.nrows();
     // Instantiate the output line
     let mut x = vec![
         pileup_line.chromosome.clone(),
@@ -529,20 +540,19 @@ mod tests {
                 vec![74, 74, 74, 74, 60, 55, 74],
             ],
         };
-        let counts_matrix: DMatrix<u64> = DMatrix::from_row_slice(
-            5,
-            6,
-            &[
+        let counts_matrix: Array2<u64> = Array2::from_shape_vec(
+            (5, 6),
+            vec![
                 0, 0, 4, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 2, 4, 0, 1, 0, 0, 1, 4, 0, 0, 0, 0, 1, 6, 0,
                 0, 0,
             ],
-        );
-        let mut frequencies_matrix: DMatrix<f64> =
-            DMatrix::from_element(counts_matrix.nrows(), counts_matrix.ncols(), 0.0);
+        )
+        .unwrap();
+        let mut frequencies_matrix: Array2<f64> =
+            Array2::from_elem((counts_matrix.nrows(), counts_matrix.ncols()), 0.0);
         let row_sums: Vec<f64> = counts_matrix
-            .column_sum()
+            .sum_axis(Axis(1))
             .into_iter()
-            .cloned()
             .map(|x| x as f64)
             .collect::<Vec<f64>>();
         for i in 0..counts_matrix.nrows() {

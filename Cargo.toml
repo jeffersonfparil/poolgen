@@ -5,12 +5,14 @@ edition = "2021"
 
 [dependencies]
 clap = { version="3.2.23", features=["derive"]}
-nalgebra = "0.32.1"
+ndarray = { version = "0.15.6", features = ["rayon"]}
+ndarray-linalg = { version = "0.16.0", features = ["openblas"] }
 statrs = "0.16.0"
 argmin = "0.8.1"
 argmin-math = "0.3.0"
 rand = "0.8.5"
 function_name = "0.3.0"
+rayon = "1.7.0"
 
 [profile.dev]
 opt-level = 0

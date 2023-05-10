@@ -1,4 +1,4 @@
-use nalgebra::DMatrix;
+use ndarray::prelude::*;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
 use std::{str, vec};
@@ -61,7 +61,7 @@ impl Parse<Phen> for FilePhen {
             let pool_sizes = pool_sizes.into_iter().map(|x| x / s).collect::<Vec<f64>>();
             // Reshape the vector of phenotypes into an nxk matrix
             let n = phen_vec.len() / k;
-            let mut phen_matrix = DMatrix::from_element(n, k, 0.0);
+            let mut phen_matrix: Array2<f64> = Array2::from_elem((n, k), 0.0);
             for i in 0..n {
                 for j in 0..k {
                     phen_matrix[(i, j)] = phen_vec[(i * k) + j]
@@ -102,22 +102,22 @@ impl Parse<Phen> for FilePhen {
             // For ML
             let mut _perc0 = perc.clone();
             _perc0.push(1.0);
-            let perc0: DMatrix<f64> = DMatrix::from_vec(_perc0.len(), 1, _perc0);
+            let perc0: Array1<f64> = Array1::from_vec(_perc0);
             let mut _perc1 = vec![0.0];
             _perc1.append(&mut perc.clone());
-            let perc1: DMatrix<f64> = DMatrix::from_vec(_perc1.len(), 1, _perc1);
+            let perc1: Array1<f64> = Array1::from_vec(_perc1);
             let bins = perc0 - perc1;
             let mut n = bins.len();
             if n < 3 {
                 n = 3;
             }
             // For LS
-            let mut q_prime: DMatrix<f64> = DMatrix::from_element(n, 1, 0.0);
+            let mut q_prime: Array1<f64> = Array1::from_elem(n, 0.0);
             for i in 0..q.len() {
                 q_prime[i + 1] = (q[i] - min) / (max - min);
             }
-            let mut phen_matrix = DMatrix::from_element(n, 3, f64::NEG_INFINITY);
-            for i in 0..bins.nrows() {
+            let mut phen_matrix = Array2::from_elem((n, 3), f64::NEG_INFINITY);
+            for i in 0..bins.len() {
                 phen_matrix[(i, 0)] = bins[i];
                 phen_matrix[(i, 1)] = q_prime[i];
             }
@@ -183,20 +183,6 @@ mod tests {
     use super::*;
     #[test]
     fn test_phen() {
-        let expected_output = FileSyncPhen {
-            filename_sync: "./tests/test.sync".to_owned(),
-            pool_names: vec!["G1", "G2", "G3", "G4", "G5"]
-                .into_iter()
-                .map(|x| x.to_owned())
-                .collect::<Vec<String>>(),
-            pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
-            phen_matrix: DMatrix::from_column_slice(
-                5,
-                2,
-                &[0.1, 0.3, 0.5, 0.7, 0.9, 83.2, 75.3, 49.8, 23.9, 12.0],
-            ),
-            test: "".to_owned(),
-        };
         // Inputs
         let file_phen = FilePhen {
             filename: "./tests/test.csv".to_owned(),
@@ -213,6 +199,23 @@ mod tests {
         // Output
         let output = *(file_sync, file_phen).lparse().unwrap();
         // Assertion
-        assert_eq!(expected_output, output);
+        assert_eq!(
+            output,
+            FileSyncPhen {
+                filename_sync: "./tests/test.sync".to_owned(),
+                pool_names: vec!["G1", "G2", "G3", "G4", "G5"]
+                    .into_iter()
+                    .map(|x| x.to_owned())
+                    .collect::<Vec<String>>(),
+                pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
+                phen_matrix: Array2::from_shape_vec(
+                    (2, 5),
+                    vec![0.1, 0.3, 0.5, 0.7, 0.9, 83.2, 75.3, 49.8, 23.9, 12.0],
+                )
+                .unwrap()
+                .reversed_axes(),
+                test: "".to_owned(),
+            }
+        );
     }
 }

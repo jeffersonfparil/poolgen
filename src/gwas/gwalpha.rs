@@ -1,7 +1,7 @@
 use crate::base::*;
 use argmin::core::{self, CostFunction, Executor};
 use argmin::solver::neldermead::NelderMead;
-use nalgebra::{self, DMatrix};
+use ndarray::prelude::*;
 
 use statrs::distribution::{Beta, ContinuousCDF};
 
@@ -10,9 +10,9 @@ const PARAMETER_UPPER_LIMIT: f64 = 10.00;
 
 fn least_squares_beta(
     params: &Vec<f64>,
-    percs_a: &DMatrix<f64>,
-    percs_b: &DMatrix<f64>,
-    q_prime: &DMatrix<f64>,
+    percs_a: &Array1<f64>,
+    percs_b: &Array1<f64>,
+    q_prime: &Array1<f64>,
 ) -> f64 {
     let shapes = bound_parameters_with_logit(params, PARAMETER_LOWER_LIMIT, PARAMETER_UPPER_LIMIT);
     // println!("shapes={:?}", shapes);
@@ -42,10 +42,10 @@ fn least_squares_beta(
 
 fn maximum_likelihood_beta(
     params: &Vec<f64>,
-    percs_a: &DMatrix<f64>,
-    percs_b: &DMatrix<f64>,
-    percs_a0: &DMatrix<f64>,
-    percs_b0: &DMatrix<f64>,
+    percs_a: &Array1<f64>,
+    percs_b: &Array1<f64>,
+    percs_a0: &Array1<f64>,
+    percs_b0: &Array1<f64>,
 ) -> f64 {
     let shapes = bound_parameters_with_logit(params, PARAMETER_LOWER_LIMIT, PARAMETER_UPPER_LIMIT);
     let a_dist = Beta::new(shapes[0], shapes[1]).unwrap();
@@ -107,9 +107,9 @@ impl CostFunction for MaximumLikelihoodBeta {
 
 fn gwalpha_minimise_ls(
     solver: NelderMead<Vec<f64>, f64>,
-    q_prime: DMatrix<f64>,
-    percs_a: DMatrix<f64>,
-    percs_b: DMatrix<f64>,
+    q_prime: Array1<f64>,
+    percs_a: Array1<f64>,
+    percs_b: Array1<f64>,
 ) -> Option<Vec<f64>> {
     let cost = LeastSquaresBeta {
         q_prime: q_prime.clone(),
@@ -133,10 +133,10 @@ fn gwalpha_minimise_ls(
 
 fn gwalpha_minimise_ml(
     solver: NelderMead<Vec<f64>, f64>,
-    percs_a: DMatrix<f64>,
-    percs_a0: DMatrix<f64>,
-    percs_b: DMatrix<f64>,
-    percs_b0: DMatrix<f64>,
+    percs_a: Array1<f64>,
+    percs_a0: Array1<f64>,
+    percs_b: Array1<f64>,
+    percs_b0: Array1<f64>,
 ) -> Option<Vec<f64>> {
     let cost = MaximumLikelihoodBeta {
         percs_a: percs_a,
@@ -164,8 +164,8 @@ fn prepare_geno_and_pheno_stats(
     filter_stats: &FilterStats,
 ) -> Option<(
     LocusFrequencies,
-    DMatrix<f64>,
-    DMatrix<f64>,
+    Array1<f64>,
+    Array1<f64>,
     f64,
     f64,
     f64,
@@ -185,13 +185,13 @@ fn prepare_geno_and_pheno_stats(
         Err(_) => return None,
     };
     // Sort before we remove the major allele
-    let mut locus_frequencies = match locus_frequencies.sort_by_allele_freq(true) {
+    match locus_frequencies.sort_by_allele_freq(true) {
         Ok(x) => x,
         Err(_) => return None,
     };
     // Keep p-1 alleles if p >= 2 so we have degrees of freedom to fit the intercept
     if locus_frequencies.matrix.ncols() >= 2 {
-        locus_frequencies.matrix = locus_frequencies.matrix.clone().remove_columns(0, 1);
+        locus_frequencies.matrix.remove_index(Axis(1), 0);
         locus_frequencies.alleles_vector.remove(0);
     }
     // Extract phenotype information (Note: removing NEG_INFINITY from the bins and q columns if we have less than 3 pools, each corresponds to sig, MIN, and MAX rows with 3 as the minimum number of rows)
@@ -209,48 +209,50 @@ fn prepare_geno_and_pheno_stats(
         .filter(|x| **x != f64::NEG_INFINITY)
         .map(|x| x.to_owned())
         .collect::<Vec<f64>>();
-    let bins = DMatrix::from_vec(bins_tmp.len(), 1, bins_tmp);
-    let q = DMatrix::from_vec(q_tmp.len(), 1, q_tmp);
+    let bins = Array1::from_vec(bins_tmp);
+    let q = Array1::from_vec(q_tmp);
     let sig = locus_counts_and_phenotypes.phenotypes[(0, 2)];
     let min = locus_counts_and_phenotypes.phenotypes[(1, 2)];
     let max = locus_counts_and_phenotypes.phenotypes[(2, 2)];
     // Check if we have a compatible allele frequency and phenotype matrix or vector
-    let (n, p) = locus_frequencies.matrix.shape();
+    let n = locus_frequencies.matrix.nrows();
+    let p = locus_frequencies.matrix.ncols();
     let m = bins.len();
     if n != m {
         return None;
     }
-    Some((locus_frequencies.clone(), bins, q, sig, min, max, n, p))
+    Some((*locus_frequencies.clone(), bins, q, sig, min, max, n, p))
 }
 
 fn prepare_freqs_and_qprime(
     locus_frequencies: &LocusFrequencies,
-    bins: &DMatrix<f64>,
-    q: &DMatrix<f64>,
+    bins: &Array1<f64>,
+    q: &Array1<f64>,
     min: f64,
     max: f64,
     n: usize,
     j: usize,
 ) -> (
     f64,
-    DMatrix<f64>,
-    DMatrix<f64>,
-    DMatrix<f64>,
-    DMatrix<f64>,
-    DMatrix<f64>,
+    Array1<f64>,
+    Array1<f64>,
+    Array1<f64>,
+    Array1<f64>,
+    Array1<f64>,
 ) {
-    let freqs_a: DMatrix<f64> = DMatrix::from_columns(&[locus_frequencies.matrix.column(j)]);
-    let p_a = (freqs_a.clone().transpose() * bins.clone())[(0, 0)]; // mean allele frequency across pools
-                                                                    // println!("p_a={:?}", p_a);
-                                                                    // Quantiles per pool (for least squares estimation)
-    let mut q_prime: DMatrix<f64> = DMatrix::from_element(n, 1, 0.0);
+    let freqs_a: ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>> =
+        locus_frequencies.matrix.column(j);
+    let p_a = freqs_a.reversed_axes().dot(bins); // mean allele frequency across pools
+                                                 // println!("p_a={:?}", p_a);
+                                                 // Quantiles per pool (for least squares estimation)
+    let mut q_prime: Array1<f64> = Array1::zeros(n);
     for i in 1..n {
         q_prime[i] = (q[i] - min) / (max - min);
     }
     // println!("q_prime={:?}", q_prime);
     // Bins (sums up to 1.0) of the current allele and its additive inverse representing the rest of the alleles
-    let mut bins_a = DMatrix::from_element(n, 1, 0.0);
-    let mut bins_b = DMatrix::from_element(n, 1, 0.0);
+    let mut bins_a = Array1::zeros(n);
+    let mut bins_b = Array1::zeros(n);
     for i in 0..n {
         bins_a[i] = (freqs_a[i]) * bins[i] / (p_a);
         bins_b[i] = (1.0 - freqs_a[i]) * bins[i] / (1.0 - p_a);
@@ -258,17 +260,17 @@ fn prepare_freqs_and_qprime(
     // println!("bins_a={:?}", bins_a);
     // println!("bins_b={:?}", bins_b);
     // Percentiles (cummulative bins summing up to 1.0) of the current allele and its additive inverse representing the rest of the alleles
-    let mut percs_a = bins_a.clone();
-    let mut percs_b = bins_b.clone();
-    for i in 1..bins_a.nrows() {
-        percs_a[i] = bins_a.view((0, 0), (i + 1, 1)).sum();
-        percs_b[i] = bins_b.view((0, 0), (i + 1, 1)).sum();
+    let mut percs_a: Array1<f64> = bins_a.clone();
+    let mut percs_b: Array1<f64> = bins_b.clone();
+    for i in 1..bins_a.len() {
+        percs_a[i] = bins_a.slice(s![0..(i + 1)]).sum();
+        percs_b[i] = bins_b.slice(s![0..(i + 1)]).sum();
     }
     // println!("percs_a={:?}", percs_a);
     // println!("percs_b={:?}", percs_b);
     // Percentiles of the current allele and its additive inverse for modelling their distrbutions across pools
-    let mut percs_a0: DMatrix<f64> = DMatrix::from_element(n, 1, 0.0);
-    let mut percs_b0: DMatrix<f64> = DMatrix::from_element(n, 1, 0.0);
+    let mut percs_a0: Array1<f64> = Array1::zeros(n);
+    let mut percs_b0: Array1<f64> = Array1::zeros(n);
     for i in 0..n - 1 {
         percs_a0[i + 1] = percs_a[i];
         percs_b0[i + 1] = percs_b[i];
@@ -314,7 +316,7 @@ pub fn gwalpha_ls(
         line.append(&mut first_2_col.clone());
         line.push(locus_frequencies.alleles_vector[j].clone());
         line.push(parse_f64_roundup_and_own(
-            locus_frequencies.matrix.column(j).mean(),
+            locus_frequencies.matrix.column(j).mean().unwrap(),
             6,
         ));
         line.push("Pheno_0".to_string());
@@ -363,7 +365,7 @@ pub fn gwalpha_ml(
         line.append(&mut first_2_col.clone());
         line.push(locus_frequencies.alleles_vector[j].clone());
         line.push(parse_f64_roundup_and_own(
-            locus_frequencies.matrix.column(j).mean(),
+            locus_frequencies.matrix.column(j).mean().unwrap(),
             6,
         ));
         line.push("Pheno_0".to_string());
@@ -383,12 +385,12 @@ mod tests {
         let expected_output1: String = "Chromosome1,12345,A,0.353287,Pheno_0,5.816067,Unknown\nChromosome1,12345,T,0.267133,Pheno_0,9.176892,Unknown\n".to_owned();
         let expected_output2: String = "Chromosome1,12345,A,0.353287,Pheno_0,-3.293261,Unknown\nChromosome1,12345,T,0.267133,Pheno_0,-7.098985,Unknown\n".to_owned();
         // Inputs
-        let counts: DMatrix<u64> =
-            DMatrix::from_row_slice(5, 3, &[5, 2, 6, 2, 2, 7, 3, 2, 5, 4, 3, 3, 5, 5, 0]);
-        let gwalpha_fmt: DMatrix<f64> = DMatrix::from_column_slice(
-            5,
-            3,
-            &[
+        let counts: Array2<u64> =
+            Array2::from_shape_vec((5, 3), vec![5, 2, 6, 2, 2, 7, 3, 2, 5, 4, 3, 3, 5, 5, 0])
+                .unwrap();
+        let gwalpha_fmt: Array2<f64> = Array2::from_shape_vec(
+            (3, 5),
+            vec![
                 0.2,
                 0.2,
                 0.2,
@@ -405,7 +407,9 @@ mod tests {
                 f64::NEG_INFINITY,
                 f64::NEG_INFINITY,
             ],
-        );
+        )
+        .unwrap()
+        .reversed_axes();
         let filter_stats = FilterStats {
             remove_ns: true,
             min_quality: 0.005,

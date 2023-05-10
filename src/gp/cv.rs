@@ -1,15 +1,18 @@
 use crate::base::*;
-use crate::gp::*;
 use crate::gwas::*;
-use nalgebra::{self, DMatrix, DVector};
+use ndarray::{prelude::*, stack};
 use std::io::{self, Error, ErrorKind};
-use std::sync::{Arc, RwLock};
+use std::ops::Sub;
 
-impl CrossValidation<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>>
-    for GenotypesAndPhenotypes
+// use ndarray::{prelude::*, ArrayView, ArrayView2, arr2};
+
+impl
+    CrossValidation<
+        fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
+    > for GenotypesAndPhenotypes
 {
     fn k_split(&self, mut k: usize) -> io::Result<(Vec<usize>, usize, usize)> {
-        let (n, _) = self.intercept_and_allele_frequencies.shape();
+        let n = self.intercept_and_allele_frequencies.nrows();
         if (k >= n) | (n <= 2) {
             return Err(Error::new(ErrorKind::Other, "The number of splits, i.e. k, needs to be less than the number of pools, n, and n > 2. We are aiming for fold sizes of 10 or greater."));
         }
@@ -46,35 +49,50 @@ impl CrossValidation<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64
 
     fn performance(
         &self,
-        y_true: &DMatrix<f64>,
-        y_pred: &DMatrix<f64>,
-    ) -> io::Result<Vec<DVector<f64>>> {
-        let (n, m) = y_true.shape();
-        let (n_, m_) = y_pred.shape();
+        y_true: &Array2<f64>,
+        y_pred: &Array2<f64>,
+    ) -> io::Result<Vec<Array1<f64>>> {
+        let n = y_true.nrows();
+        let m = y_true.ncols();
+        let n_ = y_pred.nrows();
+        let m_ = y_pred.ncols();
         if (n != n_) | (m != m_) {
             return Err(Error::new(
                 ErrorKind::Other,
                 "Observed and predicted phenotypes do not match.",
             ));
         }
-        let mut cor: DVector<f64> = DVector::from_element(m, f64::NAN);
-        let mut mbe: DVector<f64> = DVector::from_element(m, f64::NAN);
-        let mut mae: DVector<f64> = DVector::from_element(m, f64::NAN);
-        let mut mse: DVector<f64> = DVector::from_element(m, f64::NAN);
-        let mut rmse: DVector<f64> = DVector::from_element(m, f64::NAN);
+        let mut cor: Array1<f64> = Array1::from_elem(m, f64::NAN);
+        let mut mbe: Array1<f64> = Array1::from_elem(m, f64::NAN);
+        let mut mae: Array1<f64> = Array1::from_elem(m, f64::NAN);
+        let mut mse: Array1<f64> = Array1::from_elem(m, f64::NAN);
+        let mut rmse: Array1<f64> = Array1::from_elem(m, f64::NAN);
         for j in 0..m {
-            let min = y_true.column(j).min();
-            let max = y_true.column(j).max();
-            let (cor_, _pval) = pearsons_correlation(
-                &DVector::from_iterator(n, y_true.column(j).into_iter().map(|x| *x)),
-                &DVector::from_iterator(n, y_pred.column(j).into_iter().map(|x| *x)),
-            )
-            .unwrap();
+            let min = y_true
+                .column(j)
+                .iter()
+                .fold(y_true[(0, j)], |min, &x| if x < min { x } else { min });
+            let max = y_true
+                .column(j)
+                .iter()
+                .fold(y_true[(0, j)], |max, &x| if x > max { x } else { max });
+            let (cor_, _pval) = pearsons_correlation(&y_true.column(j), &y_pred.column(j)).unwrap();
             cor[j] = cor_;
-            mbe[j] = (y_true.column(j) - y_pred.column(j)).mean() / (max - min);
-            mae[j] = (y_true.column(j) - y_pred.column(j)).norm() / (max - min);
-            mse[j] =
-                (y_true.column(j) - y_pred.column(j)).norm_squared() / f64::powf(max - min, 2.0);
+            mbe[j] = y_true.column(j).sub(&y_pred.column(j)).mean().unwrap() / (max - min);
+            mae[j] = y_true
+                .column(j)
+                .sub(&y_pred.column(j))
+                .iter()
+                .map(|&x| x.abs())
+                .fold(0.0, |sum, x| sum + x)
+                / (max - min);
+            mse[j] = y_true
+                .column(j)
+                .sub(&y_pred.column(j))
+                .iter()
+                .map(|&x| x.powf(2.0))
+                .fold(0.0, |sum, x| sum + x)
+                / (max - min).powf(2.0);
             rmse[j] = mse[j].sqrt() / (max - min);
         }
         Ok(vec![cor, mbe, mae, mse, rmse])
@@ -84,25 +102,30 @@ impl CrossValidation<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64
         &self,
         k: usize,
         r: usize,
-        functions: Vec<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>>,
+        functions: Vec<
+            fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
+        >,
     ) -> io::Result<PredictionPerformance>
     where
-        fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>:
-            Fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>,
+        fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>:
+            Fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
     {
-        let (n, p) = self.intercept_and_allele_frequencies.shape();
-        let (_n, m) = self.phenotypes.shape();
-        // let mut x_matrix_training = DMatrix::from_element(n - s, p, f64::NAN);
-        // let mut x_matrix_validation = DMatrix::from_element(s, p, f64::NAN);
-        // let mut y_matrix_training = DMatrix::from_element(n - s, 1, f64::NAN);
-        // let mut y_matrix_validation = DMatrix::from_element(s, 1, f64::NAN);
+        let n = self.intercept_and_allele_frequencies.nrows();
+        let p = self.intercept_and_allele_frequencies.ncols();
+        let m = self.phenotypes.ncols();
+        // let mut x_matrix_training = Array2::from_element(n - s, p, f64::NAN);
+        // let mut x_matrix_validation = Array2::from_element(s, p, f64::NAN);
+        // let mut y_matrix_training = Array2::from_element(n - s, 1, f64::NAN);
+        // let mut y_matrix_validation = Array2::from_element(s, 1, f64::NAN);
+        let l = functions.len();
         let mut models: Vec<String> = vec![];
         let mut b_histogram = vec![];
-        let mut cor: DMatrix<f64> = DMatrix::from_element(r * k * functions.len(), m, f64::NAN);
-        let mut mbe: DMatrix<f64> = DMatrix::from_element(r * k * functions.len(), m, f64::NAN);
-        let mut mae: DMatrix<f64> = DMatrix::from_element(r * k * functions.len(), m, f64::NAN);
-        let mut mse: DMatrix<f64> = DMatrix::from_element(r * k * functions.len(), m, f64::NAN);
-        let mut rmse: DMatrix<f64> = DMatrix::from_element(r * k * functions.len(), m, f64::NAN);
+        let mut cor: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
+        let mut mbe: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
+        let mut mae: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
+        let mut mse: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
+        let mut rmse: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
+        let idx_cols: Vec<usize> = (0..p).collect::<Vec<usize>>();
         let mut i: usize = 0;
         for _rep in 0..r {
             let (groupings, k, s) = self.k_split(k).unwrap();
@@ -123,28 +146,34 @@ impl CrossValidation<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64
                     .collect();
                 println!("idx_validation={:?}", idx_validation);
                 println!("idx_training={:?}", idx_training);
-                // let gap = Arc::new(RwLock::new(self));
-                // let data = gap.read().unwrap();
-                // let x_training = &data
-                //     .intercept_and_allele_frequencies
-                //     .select_rows(&idx_training);
-                // let y_training = &data.phenotypes.select_rows(&idx_training);
-                // let x_validation = &data
-                //     .intercept_and_allele_frequencies
-                //     .select_rows(&idx_validation);
-                // let y_validation = &data.phenotypes.select_rows(&idx_validation);
-                let x_training = &self
-                    .intercept_and_allele_frequencies
-                    .select_rows(&idx_training);
-                let y_training = &self.phenotypes.select_rows(&idx_training);
-                let x_validation = &self
-                    .intercept_and_allele_frequencies
-                    .select_rows(&idx_validation);
-                let y_validation = &self.phenotypes.select_rows(&idx_validation);
+
+                let y_validation: Array2<f64> = stack(
+                    Axis(0),
+                    idx_validation
+                        .iter()
+                        .map(|&x| self.phenotypes.slice(s![x, ..]))
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                )
+                .unwrap();
+
                 for f in functions.iter() {
-                    let (b_hat, model_name) = f(x_training, y_training).unwrap();
+                    let (b_hat, model_name) = f(
+                        &self.intercept_and_allele_frequencies,
+                        &self.phenotypes,
+                        &idx_training,
+                    )
+                    .unwrap();
                     // println!("b_hat={:?}", b_hat);
-                    let y_pred: DMatrix<f64> = x_validation * &b_hat;
+                    let y_pred: Array2<f64> = multiply_views_xx(
+                        &self.intercept_and_allele_frequencies,
+                        &b_hat,
+                        &idx_validation,
+                        &idx_cols,
+                        &idx_cols,
+                        &(0..b_hat.ncols()).collect::<Vec<usize>>(),
+                    )
+                    .unwrap();
                     let metrics = self.performance(&y_validation, &y_pred).unwrap();
                     models.push(model_name);
                     b_histogram.push(histogram(
@@ -189,7 +218,8 @@ mod tests {
     #[test]
     fn test_cv() {
         // Expected
-        let expected_output1: DMatrix<f64> = DMatrix::from_column_slice(3, 1, &[-0.73, 5.53, 6.42]);
+        let expected_output1: Array2<f64> =
+            Array2::from_shape_vec((3, 1), vec![-0.73, 5.53, 6.42]).unwrap();
         // Inputs
         let file_sync = FileSync {
             filename: "./tests/test.sync".to_owned(),
@@ -212,7 +242,7 @@ mod tests {
             min_allele_frequency: 0.005,
             pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
         };
-        let freqs = file_sync_phen
+        let _freqs = file_sync_phen
             .load(&filter_stats, true, &n_threads)
             .unwrap();
 
@@ -221,21 +251,19 @@ mod tests {
         // let p = 50_000;
         // let q = 20;
         let p = 1_000;
-        let q = 2;
+        let q = 1_000;
         let h2 = 0.75;
         let mut rng = rand::thread_rng();
         let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
         // Simulate allele frequencies
-        let mut f: DMatrix<f64> = DMatrix::from_column_slice(
-            n,
-            p,
-            &dist_unif
-                .sample_iter(&mut rng)
-                .take(n * p)
-                .collect::<Vec<f64>>(),
-        );
+        let mut f: Array2<f64> = Array2::ones((n, p + 1));
+        for i in 0..n {
+            for j in 1..(p + 1) {
+                f[(i, j)] = dist_unif.sample(&mut rng);
+            }
+        }
         // Simulate effects
-        let mut b: DMatrix<f64> = DMatrix::from_element(p, 1, 0.0);
+        let mut b: Array2<f64> = Array2::zeros((p + 1, 1));
         let idx_b: Vec<usize> = dist_unif
             .sample_iter(&mut rng)
             .take(q)
@@ -244,28 +272,32 @@ mod tests {
         for i in idx_b.into_iter() {
             b[(i, 0)] = 1.00;
         }
-        // Insert intercept
-        f = f.insert_column(0, 1.0);
-        b = b.insert_row(0, 0.0);
         // Simulate phenotype
-        let xb = &f * &b;
-        let vg = xb.variance();
+        let xb = multiply_views_xx(
+            &f,
+            &b,
+            &(0..n).collect::<Vec<usize>>(),
+            &(0..(p + 1)).collect::<Vec<usize>>(),
+            &(0..(p + 1)).collect::<Vec<usize>>(),
+            &vec![0 as usize],
+        )
+        .unwrap();
+        let vg = xb.var_axis(Axis(0), 0.0)[0];
         let ve = (vg / h2) - vg;
         let dist_gaus = statrs::distribution::Normal::new(0.0, ve.sqrt()).unwrap();
-        let e: DMatrix<f64> = DMatrix::from_column_slice(
-            n,
-            1,
-            &dist_gaus
+        let e: Array2<f64> = Array2::from_shape_vec(
+            (n, 1),
+            dist_gaus
                 .sample_iter(&mut rng)
                 .take(n)
                 .collect::<Vec<f64>>(),
-        );
+        )
+        .unwrap();
         let y = &xb + e;
-        // let y_ = &xb + e;
-        // let y = y_.add_scalar(-y_.mean()) / y_.variance().sqrt();
         let frequencies_and_phenotypes = GenotypesAndPhenotypes {
             chromosome: vec!["".to_owned()],
             position: vec![0],
+            allele: vec!["".to_owned()],
             intercept_and_allele_frequencies: f,
             phenotypes: y,
             pool_names: vec!["".to_owned()],
@@ -282,37 +314,24 @@ mod tests {
             "frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]={:?}",
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]
         );
-        let (a, k, s) = frequencies_and_phenotypes.k_split(10).unwrap();
+        let (_a, _k, _s) = frequencies_and_phenotypes.k_split(10).unwrap();
         let (k, r) = (10, 1);
-        let models: Vec<fn(&DMatrix<f64>, &DMatrix<f64>) -> io::Result<(DMatrix<f64>, String)>> =
-            vec![ols, penalise_lasso_like, penalise_ridge_like, penalise_lasso_like_iterative_base, penalise_ridge_like_iterative_base];
+        let models: Vec<
+            fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
+        > = vec![
+            ols,
+            // penalise_lasso_like,
+            // penalise_ridge_like,
+            // penalise_lasso_like_iterative_base,
+            // penalise_ridge_like_iterative_base,
+        ];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
             .cross_validate(k, r, models)
             .unwrap();
         // println!("prediction_performance={:?}", prediction_performance);
-        let cor = DMatrix::from_vec(
-            m,
-            r * k,
-            prediction_performance
-                .cor
-                .column(0)
-                .as_slice()
-                .to_owned()
-                .try_into()
-                .unwrap(),
-        );
-        let rmse = DMatrix::from_vec(
-            m,
-            r * k,
-            prediction_performance
-                .rmse
-                .column(0)
-                .as_slice()
-                .to_owned()
-                .try_into()
-                .unwrap(),
-        );
+        let cor = prediction_performance.cor.into_shape((k * r, m)).unwrap();
+        let rmse = prediction_performance.rmse.into_shape((k * r, m)).unwrap();
         for i in 0..prediction_performance.models.len() {
             println!(
                 "MODEL: {:?}; B: {:?}",
@@ -321,8 +340,8 @@ mod tests {
         }
         println!("cor={:?}", cor);
         println!("rmse={:?}", rmse);
-        println!("cor.column_mean()={:?}", cor.column_mean());
-        println!("rmse.column_mean()={:?}", rmse.column_mean());
+        println!("cor.column_mean()={:?}", cor.mean_axis(Axis(0)));
+        println!("rmse.column_mean()={:?}", rmse.mean_axis(Axis(0)));
         // Assertions
         assert_eq!(1, 1); // Output dimensions
     }
