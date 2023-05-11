@@ -1,11 +1,11 @@
 use crate::base::*;
+use argmin::solver::neldermead::NelderMead;
+use ndarray::{prelude::*, Zip};
+use ndarray_linalg::svd::*;
 use std;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, SeekFrom};
 use std::io::{Error, ErrorKind};
-use argmin::solver::neldermead::NelderMead;
-use ndarray::{prelude::*, Zip};
-use ndarray_linalg::svd::*;
 
 // File splitting for thread allocation for parallele computation
 fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {

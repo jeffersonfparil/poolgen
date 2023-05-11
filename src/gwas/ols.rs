@@ -249,7 +249,7 @@ pub fn ols_iterate(
             ));
             line.push("Pheno_".to_string() + &(j.to_string())[..]);
             line.push(parse_f64_roundup_and_own(beta[(i, j)], 6));
-            line.push(pval[(i, j)].to_string() + "\n");
+            line.push(parse_f64_roundup_and_own(pval[(i, j)], 12) + "\n");
         }
     }
     let out = line.join(",").replace("\n,", "\n");
@@ -269,7 +269,7 @@ mod tests {
         let expected_output4: Array1<f64> = Array1::from_vec(vec![0.08, 0.99, -0.41]);
         let expected_output5: Array1<f64> = Array1::from_vec(vec![0.31, 4.30, 2.00]);
         let expected_output6: Array1<f64> = Array1::from_vec(vec![0.82, 0.84, 0.86]);
-        let expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.6578079667975851\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.8391972604375777\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.3264468640416216\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.8576486439367661\n".to_owned();
+        let expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.657807966798\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.839197260438\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.326446864042\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.857648643937\n".to_owned();
         // Inputs
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 3),
