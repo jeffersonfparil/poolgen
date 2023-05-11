@@ -30,9 +30,10 @@
 
 // #[function_name::named]
 // pub fn penalise_ridge_like(
-//     x: &DMatrix<f64>,
-//     y: &DMatrix<f64>,
-// ) -> io::Result<(DMatrix<f64>, String)> {
+//     x: &Array2<f64>,
+//     y: &Array2<f64>,
+//     row_idx: &Vec<usize>,
+// ) -> io::Result<(Array2<f64>, String)> {
 //     let (b_hat, lambda) = penalised_lambda_path_with_k_fold_cross_validation(
 //         x,
 //         y,
@@ -52,11 +53,11 @@
 
 // #[function_name::named]
 // fn ols_iterative_for_penalisation(
-//     x: &DMatrix<f64>,
-//     y: &DMatrix<f64>,
-// ) -> io::Result<(DMatrix<f64>, String)> {
-//     let (n, p) = x.shape();
-//     let (n_, m) = y.shape();
+//     x: &Array2<f64>,
+//     y: &Array2<f64>,
+// ) -> io::Result<(Array2<f64>, String)> {
+//     let (n, p) = (x.nrows(), x.ncols());
+//     let (n_, m) = (y.nrows(), y.ncols());
 //     if n != n_ {
 //         return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
 //     }
@@ -66,11 +67,11 @@
 //             "Please add the intercept in the X matrix.",
 //         ));
 //     }
-//     let mut b_hat = DMatrix::from_element(p, m, f64::NAN); // No need to fill the intercept effect
-//     let mut x_sub = DMatrix::from_element(n, 2, 1.0);
-//     let mut y_sub = DMatrix::from_element(n, 1, f64::NAN);
+//     let mut b_hat = Array2::from_elem((p, m), f64::NAN); // No need to fill the intercept effect
+//     let mut x_sub = Array2::from_elem((n, 2), 1.0);
+//     let mut y_sub = Array2::from_elem((n, 1), f64::NAN);
 //     for j in 0..m {
-//         b_hat[(0, j)] = y.row_mean()[j];
+//         b_hat[(0, j)] = y.mean_axis(Axis(0)).unwrap()[j];
 //     }
 //     for i in 1..p {
 //         for i_ in 0..n {
@@ -89,12 +90,13 @@
 
 // #[function_name::named]
 // pub fn penalise_lasso_like_iterative_base(
-//     x: &DMatrix<f64>,
-//     y: &DMatrix<f64>,
-// ) -> io::Result<(DMatrix<f64>, String)> {
+//     x: &Array2<f64>,
+//     y: &Array2<f64>,
+// ) -> io::Result<(Array2<f64>, String)> {
 //     let (b_hat, lambda) = penalised_lambda_path_with_k_fold_cross_validation(
 //         x,
 //         y,
+//         row_idx,
 //         true,
 //         "Lasso-like".to_owned(),
 //         0.1,
@@ -111,12 +113,14 @@
 
 // #[function_name::named]
 // pub fn penalise_ridge_like_iterative_base(
-//     x: &DMatrix<f64>,
-//     y: &DMatrix<f64>,
-// ) -> io::Result<(DMatrix<f64>, String)> {
+//     x: &Array2<f64>,
+//     y: &Array2<f64>,
+//     row_idx: &Vec<usize>,
+// ) -> io::Result<(Array2<f64>, String)> {
 //     let (b_hat, lambda) = penalised_lambda_path_with_k_fold_cross_validation(
 //         x,
 //         y,
+//         row_idx,
 //         true,
 //         "Ridge-like".to_owned(),
 //         0.1,
@@ -132,17 +136,17 @@
 // }
 
 // fn expand_and_contract(
-//     b_hat: &DMatrix<f64>,
+//     b_hat: &Array2<f64>,
 //     norm: String,
 //     lambda: f64,
-// ) -> io::Result<DMatrix<f64>> {
+// ) -> io::Result<Array2<f64>> {
 //     // Clone b_hat
-//     let mut b_hat: DMatrix<f64> = b_hat.clone();
+//     let mut b_hat: Array2<f64> = b_hat.clone();
 //     // Exclude the intercept from penalisation
 //     let mut intercept = b_hat[(0, 0)];
 //     let (p, k) = b_hat.shape();
 //     // Norm 1 or norm 2
-//     let normed: DMatrix<f64> = if norm == "Lasso-like".to_owned() {
+//     let normed: Array2<f64> = if norm == "Lasso-like".to_owned() {
 //         b_hat.rows(1, p - 1).map(|x| x.abs())
 //     } else if norm == "Ridge-like".to_owned() {
 //         b_hat.rows(1, p - 1).map(|x| x.powf(2.0))
@@ -154,7 +158,7 @@
 //     };
 //     // Find estimates that will be penalised
 //     let normed_max = normed.max();
-//     let normed_scaled: DMatrix<f64> = &normed / normed_max;
+//     let normed_scaled: Array2<f64> = &normed / normed_max;
 //     let idx_penalised = normed_scaled
 //         .iter()
 //         .enumerate()
@@ -218,7 +222,7 @@
 //     Ok(b_hat)
 // }
 
-// fn error_index(b_hat: &DMatrix<f64>, x: &DMatrix<f64>, y_true: &DMatrix<f64>) -> io::Result<f64> {
+// fn error_index(b_hat: &Array2<f64>, x: &Array2<f64>, y_true: &Array2<f64>) -> io::Result<f64> {
 //     let (n, p) = x.shape();
 //     if p != b_hat.nrows() {
 //         return Err(Error::new(
@@ -238,7 +242,7 @@
 //             "The y matrix/vector is incompatible with b_hat.",
 //         ));
 //     }
-//     let y_pred: DMatrix<f64> = x * b_hat;
+//     let y_pred: Array2<f64> = x * b_hat;
 //     // Assumes y is a column-vector //TODO: Make it matrix-compatible
 //     let n = y_true.len();
 //     let min = y_true.min();
@@ -258,7 +262,7 @@
 //     Ok(error_index)
 // }
 
-// fn k_split(x: &DMatrix<f64>, mut k: usize) -> io::Result<(Vec<usize>, usize, usize)> {
+// fn k_split(x: &Array2<f64>, mut k: usize) -> io::Result<(Vec<usize>, usize, usize)> {
 //     let (n, _) = x.shape();
 //     if (k >= n) | (n <= 2) {
 //         return Err(Error::new(ErrorKind::Other, "The number of splits, i.e. k, needs to be less than the number of pools, n, and n > 2. We are aiming for fold sizes of 10 or greater."));
@@ -295,13 +299,13 @@
 // }
 
 // fn penalised_lambda_path_with_k_fold_cross_validation(
-//     x: &DMatrix<f64>,
-//     y: &DMatrix<f64>,
+//     x: &Array2<f64>,
+//     y: &Array2<f64>,
 //     iterative: bool,
 //     norm: String,
 //     lambda_step_size: f64,
 //     r: usize,
-// ) -> io::Result<(DMatrix<f64>, f64)> {
+// ) -> io::Result<(Array2<f64>, f64)> {
 //     let (n, p) = x.shape();
 //     if n != y.nrows() {
 //         return Err(Error::new(
@@ -350,17 +354,17 @@
 //             let thread_ouputs: Arc<Mutex<Vec<LambdaError>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
 
 //             for lambda in lambda_path.clone().into_iter() {
-//                 // let b_hat_new: DMatrix<f64> =
+//                 // let b_hat_new: Array2<f64> =
 //                 //     expand_and_contract(&b_hat, norm.clone(), lambda).unwrap();
 //                 // performances
 //                 //     .push(error_index(&b_hat_new, &x_validation, &y_validation).unwrap());
-//                 let b_hat_clone: DMatrix<f64> = b_hat.clone();
+//                 let b_hat_clone: Array2<f64> = b_hat.clone();
 //                 let norm_clone: String = norm.clone();
-//                 let x_matrix_validation_clone: DMatrix<f64> = x_validation.clone();
-//                 let y_matrix_validation_clone: DMatrix<f64> = y_validation.clone();
+//                 let x_matrix_validation_clone: Array2<f64> = x_validation.clone();
+//                 let y_matrix_validation_clone: Array2<f64> = y_validation.clone();
 //                 let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
 //                 let thread = std::thread::spawn(move || {
-//                     let b_hat_new: DMatrix<f64> =
+//                     let b_hat_new: Array2<f64> =
 //                         expand_and_contract(&b_hat_clone, norm_clone, lambda).unwrap();
 //                     let error = error_index(
 //                         &b_hat_new,
@@ -396,9 +400,9 @@
 //         }
 //     }
 
-//     let error_indices_across_folds_x_lambdas: DMatrix<f64> =
-//         DMatrix::from_row_slice(r * k, lambda_path.len(), &performances);
-//     // DMatrix::from_row_slice(k, lambda_path.len(), &(0..(k*lambda_path.len())).into_iter().map(|x| x as f64).collect::<Vec<f64>>());
+//     let error_indices_across_folds_x_lambdas: Array2<f64> =
+//         Array2::from_row_slice(r * k, lambda_path.len(), &performances);
+//     // Array2::from_row_slice(k, lambda_path.len(), &(0..(k*lambda_path.len())).into_iter().map(|x| x as f64).collect::<Vec<f64>>());
 //     // Find best lambda and estimate effects on the full dataset
 //     let mean_error = error_indices_across_folds_x_lambdas.row_mean();
 //     let idx = mean_error
@@ -421,13 +425,13 @@
 //     use statrs;
 //     #[test]
 //     fn test_penalised() {
-//         let b: DMatrix<f64> =
-//             DMatrix::from_column_slice(7, 1, &[5.0, -0.4, 0.0, 1.0, -0.1, 1.0, 0.0]);
-//         let new_b: DMatrix<f64> = expand_and_contract(&b, "Lasso-like".to_owned(), 0.5).unwrap();
+//         let b: Array2<f64> =
+//             Array2::from_column_slice(7, 1, &[5.0, -0.4, 0.0, 1.0, -0.1, 1.0, 0.0]);
+//         let new_b: Array2<f64> = expand_and_contract(&b, "Lasso-like".to_owned(), 0.5).unwrap();
 //         // let new_b = expand_and_contract(&b, "Ridge-like".to_owned(), 0.5);
 //         println!("new_b={:?}", new_b);
-//         let expected_output1: DMatrix<f64> =
-//             DMatrix::from_column_slice(7, 1, &[4.5, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0]);
+//         let expected_output1: Array2<f64> =
+//             Array2::from_column_slice(7, 1, &[4.5, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0]);
 //         assert_eq!(expected_output1, new_b);
 //     }
 // }
