@@ -120,7 +120,7 @@ impl Regression for UnivariateMaximumLikelihoodEstimation {
         if n != n_ {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
-        let xt = self.x.clone().reversed_axes();
+        let xt = self.x.t();
         let vcv: Array2<f64>;
         if n < p {
             let inv_xxt = match (self.x.dot(&xt)).inv() {

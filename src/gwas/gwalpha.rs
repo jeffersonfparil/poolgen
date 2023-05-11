@@ -112,9 +112,9 @@ fn gwalpha_minimise_ls(
     percs_b: Array1<f64>,
 ) -> Option<Vec<f64>> {
     let cost = LeastSquaresBeta {
-        q_prime: q_prime.clone(),
-        percs_a: percs_a.clone(),
-        percs_b: percs_b.clone(),
+        q_prime: q_prime,
+        percs_a: percs_a,
+        percs_b: percs_b,
     };
     let res = match Executor::new(cost, solver)
         .configure(|state| state.max_iters(1_000))
@@ -242,7 +242,7 @@ fn prepare_freqs_and_qprime(
 ) {
     let freqs_a: ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>> =
         locus_frequencies.matrix.column(j);
-    let p_a = freqs_a.reversed_axes().dot(bins); // mean allele frequency across pools
+    let p_a = freqs_a.t().dot(bins); // mean allele frequency across pools
                                                  // println!("p_a={:?}", p_a);
                                                  // Quantiles per pool (for least squares estimation)
     let mut q_prime: Array1<f64> = Array1::zeros(n);

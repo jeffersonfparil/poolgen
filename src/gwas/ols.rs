@@ -95,7 +95,7 @@ impl Regression for UnivariateOrdinaryLeastSquares {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
         self.e = &self.y - (&self.x.dot(&self.b));
-        self.se = (&self.e.clone().reversed_axes().dot(&self.e)) / (n as f64 - p as f64);
+        self.se = (&self.e.t().dot(&self.e)) / (n as f64 - p as f64);
         let vcv: Array2<f64> = if n < p {
             self.se
                 * (&self.xt)
