@@ -39,7 +39,7 @@ impl Regression for UnivariateOrdinaryLeastSquares {
                     Err(_) => (0.0, f64::NAN),
                 };
                 if cor.abs() >= 0.99 {
-                    self.x.clone().remove_index(Axis(1), j);
+                    self.x.remove_index(Axis(1), j);
                     i -= 1;
                     j -= 1;
                 }

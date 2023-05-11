@@ -2,6 +2,7 @@
 // use crate::gp::*;
 // use crate::gwas::*;
 // use ndarray::{prelude::*, Zip};
+// use statrs::statistics::Statistics;
 // use std::io::{self, Error, ErrorKind};
 // use std::sync::{Arc, Mutex};
 
@@ -14,6 +15,7 @@
 //     let (b_hat, lambda) = penalised_lambda_path_with_k_fold_cross_validation(
 //         x,
 //         y,
+//         row_idx,
 //         false,
 //         "Lasso-like".to_owned(),
 //         0.1,
@@ -37,6 +39,7 @@
 //     let (b_hat, lambda) = penalised_lambda_path_with_k_fold_cross_validation(
 //         x,
 //         y,
+//         row_idx,
 //         false,
 //         "Ridge-like".to_owned(),
 //         0.1,
@@ -55,12 +58,10 @@
 // fn ols_iterative_for_penalisation(
 //     x: &Array2<f64>,
 //     y: &Array2<f64>,
+//     row_idx: &Vec<usize>,
 // ) -> io::Result<(Array2<f64>, String)> {
-//     let (n, p) = (x.nrows(), x.ncols());
-//     let (n_, m) = (y.nrows(), y.ncols());
-//     if n != n_ {
-//         return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
-//     }
+//     let (n, p) = (row_idx.len(), x.ncols());
+//     let m = y.ncols();
 //     if x.column(0).sum() < n as f64 {
 //         return Err(Error::new(
 //             ErrorKind::Other,
@@ -70,19 +71,17 @@
 //     let mut b_hat = Array2::from_elem((p, m), f64::NAN); // No need to fill the intercept effect
 //     let mut x_sub = Array2::from_elem((n, 2), 1.0);
 //     let mut y_sub = Array2::from_elem((n, 1), f64::NAN);
-//     for j in 0..m {
-//         b_hat[(0, j)] = y.mean_axis(Axis(0)).unwrap()[j];
-//     }
-//     for i in 1..p {
-//         for i_ in 0..n {
-//             x_sub[(i_, 1)] = x[(i_, i)];
+//     for k in 0..m {
+//         b_hat[(0, k)] = y.mean_axis(Axis(0)).unwrap()[k]; // set the intercept
+//         for i in 0..n {
+//             y_sub[(i,0)] = y[(i,k)]; // fill the single column trait array
 //         }
-//         for j in 0..m {
-//             for i_ in 0..n {
-//                 y_sub[(i_, 0)] = y[(i_, j)];
+//         for j in 1..p {
+//             for i in 0..n {
+//                 x_sub[(i,1)] = x[(i,j)]; // fill the 2-column genotype array for the locus of interest with an intercept in front
 //             }
-//             let (b, _) = ols(&x_sub, &y_sub).unwrap();
-//             b_hat[(i, j)] = b[1];
+//             let (b, _) = ols(&x_sub, &y_sub, row_idx).unwrap();
+//             b_hat[(j, k)] = b[(1,0)]; // locus effect
 //         }
 //     }
 //     Ok((b_hat, function_name!().to_owned()))
@@ -92,6 +91,7 @@
 // pub fn penalise_lasso_like_iterative_base(
 //     x: &Array2<f64>,
 //     y: &Array2<f64>,
+//     row_idx: &Vec<usize>,
 // ) -> io::Result<(Array2<f64>, String)> {
 //     let (b_hat, lambda) = penalised_lambda_path_with_k_fold_cross_validation(
 //         x,
@@ -144,126 +144,133 @@
 //     let mut b_hat: Array2<f64> = b_hat.clone();
 //     // Exclude the intercept from penalisation
 //     let mut intercept = b_hat[(0, 0)];
-//     let (p, k) = b_hat.shape();
-//     // Norm 1 or norm 2
-//     let normed: Array2<f64> = if norm == "Lasso-like".to_owned() {
-//         b_hat.rows(1, p - 1).map(|x| x.abs())
-//     } else if norm == "Ridge-like".to_owned() {
-//         b_hat.rows(1, p - 1).map(|x| x.powf(2.0))
-//     } else {
-//         return Err(Error::new(
-//             ErrorKind::Other,
-//             "Please enter: 'Lasso-like' or 'Ridge-like' norms.",
-//         ));
-//     };
-//     // Find estimates that will be penalised
-//     let normed_max = normed.max();
-//     let normed_scaled: Array2<f64> = &normed / normed_max;
-//     let idx_penalised = normed_scaled
-//         .iter()
-//         .enumerate()
-//         .filter(|(_, &value)| value < lambda)
-//         .map(|(index, _)| index)
-//         .collect::<Vec<usize>>();
-//     let idx_depenalised = normed_scaled
-//         .iter()
-//         .enumerate()
-//         .filter(|(_, &value)| value >= lambda)
-//         .map(|(index, _)| index)
-//         .collect::<Vec<usize>>();
+//     let (p, k) = (b_hat.nrows(), b_hat.ncols());
+//     for j in 0..k {
+//         // Norm 1 or norm 2
+//         let normed: Array1<f64> = if norm == "Lasso-like".to_owned() {
+//             b_hat.column(j).map(|&x| x.abs())
+//             // b_hat.rows(1, p - 1).map(|x| x.abs())
+//         } else if norm == "Ridge-like".to_owned() {
+//             b_hat.column(j).map(|&x| x.powf(2.0))
+//             // b_hat.rows(1, p - 1).map(|x| x.powf(2.0))
+//         } else {
+//             return Err(Error::new(
+//                 ErrorKind::Other,
+//                 "Please enter: 'Lasso-like' or 'Ridge-like' norms.",
+//             ));
+//         };
+//         // Find estimates that will be penalised
+//         let normed_max = normed.max();
+//         let normed_scaled: Array1<f64> = &normed / normed_max;
+//         let idx_penalised = normed_scaled
+//             .iter()
+//             .enumerate()
+//             .filter(|(_, &value)| value < lambda)
+//             .map(|(index, _)| index)
+//             .collect::<Vec<usize>>();
+//         let idx_depenalised = normed_scaled
+//             .iter()
+//             .enumerate()
+//             .filter(|(_, &value)| value >= lambda)
+//             .map(|(index, _)| index)
+//             .collect::<Vec<usize>>();
 
-//     // Penalise: contract
-//     let mut subtracted_penalised = 0.0;
-//     let mut added_penalised = 0.0;
-//     for i in idx_penalised.into_iter() {
-//         if b_hat[i + 1] >= 0.0 {
-//             b_hat[i + 1] -= normed[(i, 0)];
-//             subtracted_penalised += normed[(i, 0)];
-//         } else {
-//             b_hat[i + 1] += normed[(i, 0)];
-//             added_penalised += normed[(i, 0)];
+//         // Penalise: contract
+//         let mut subtracted_penalised = 0.0;
+//         let mut added_penalised = 0.0;
+//         for i in idx_penalised.into_iter() {
+//             if b_hat[(i+1,j)] >= 0.0 {
+//                 b_hat[(i+1,j)] -= normed[i];
+//                 subtracted_penalised += normed[i];
+//             } else {
+//                 b_hat[(i+1,j)] += normed[i];
+//                 added_penalised += normed[i];
+//             }
 //         }
-//     }
-//     // Find total depenalised (expanded) values
-//     let mut subtracted_depenalised = 0.0;
-//     let mut added_depenalised = 0.0;
-//     for i in idx_depenalised.clone().into_iter() {
-//         if b_hat[i + 1] >= 0.0 {
-//             subtracted_depenalised += normed[(i, 0)];
-//         } else {
-//             added_depenalised += normed[(i, 0)];
+//         // Find total depenalised (expanded) values
+//         let mut subtracted_depenalised = 0.0;
+//         let mut added_depenalised = 0.0;
+//         for i in idx_depenalised.clone().into_iter() {
+//             if b_hat[(i+1,j)] >= 0.0 {
+//                 subtracted_depenalised += normed[i];
+//             } else {
+//                 added_depenalised += normed[i];
+//             }
 //         }
-//     }
-//     // Account for the absence of available slots to transfer the contracted effects into
-//     if (subtracted_penalised > 0.0) & (subtracted_depenalised == 0.0) {
-//         added_penalised -= subtracted_penalised;
-//         subtracted_penalised = 0.0;
-//     } else if (added_penalised > 0.0) & (added_depenalised == 0.0) {
-//         subtracted_penalised -= added_penalised;
-//         added_penalised = 0.0;
-//     }
-//     if (subtracted_penalised < 0.0) | ((subtracted_depenalised == 0.0) & (added_depenalised == 0.0))
-//     {
-//         intercept += subtracted_penalised;
-//         intercept -= added_penalised;
-//         subtracted_penalised = 0.0;
-//         added_penalised = 0.0;
-//     }
-//     // Depenalise: expand
-//     for i in idx_depenalised.into_iter() {
-//         if b_hat[i + 1] >= 0.0 {
-//             b_hat[i + 1] += subtracted_penalised * (normed[(i, 0)] / subtracted_depenalised);
-//         } else {
-//             b_hat[i + 1] -= added_penalised * (normed[(i, 0)] / added_depenalised);
+//         // Account for the absence of available slots to transfer the contracted effects into
+//         if (subtracted_penalised > 0.0) & (subtracted_depenalised == 0.0) {
+//             added_penalised -= subtracted_penalised;
+//             subtracted_penalised = 0.0;
+//         } else if (added_penalised > 0.0) & (added_depenalised == 0.0) {
+//             subtracted_penalised -= added_penalised;
+//             added_penalised = 0.0;
 //         }
+//         if (subtracted_penalised < 0.0) | ((subtracted_depenalised == 0.0) & (added_depenalised == 0.0))
+//         {
+//             intercept += subtracted_penalised;
+//             intercept -= added_penalised;
+//             subtracted_penalised = 0.0;
+//             added_penalised = 0.0;
+//         }
+//         // Depenalise: expand
+//         for i in idx_depenalised.into_iter() {
+//             if b_hat[(i+1,j)] >= 0.0 {
+//                 b_hat[(i+1,j)] += subtracted_penalised * (normed[i] / subtracted_depenalised);
+//             } else {
+//                 b_hat[(i+1,j)] -= added_penalised * (normed[i] / added_depenalised);
+//             }
+//         }
+//         // Insert the unpenalised intercept
+//         b_hat[(0, k)] = intercept;
 //     }
-//     // Insert the unpenalised intercept
-//     b_hat[(0, 0)] = intercept;
 //     Ok(b_hat)
 // }
 
-// fn error_index(b_hat: &Array2<f64>, x: &Array2<f64>, y_true: &Array2<f64>) -> io::Result<f64> {
-//     let (n, p) = x.shape();
-//     if p != b_hat.nrows() {
+// fn error_index(b_hat: &Array2<f64>, x: &Array2<f64>, y_true: &Array2<f64>) -> io::Result<Vec<f64>> {
+//     let (n, p) = (x.nrows(), x.ncols());
+//     let (n_, k) = (y_true.nrows(), y_true.ncols());
+//     let (p_, k_) = (b_hat.nrows(), b_hat.ncols());
+//     if p != p_ {
 //         return Err(Error::new(
 //             ErrorKind::Other,
 //             "The X matrix is incompatible with b_hat.",
 //         ));
 //     }
-//     if n != y_true.nrows() {
+//     if n != n_ {
 //         return Err(Error::new(
 //             ErrorKind::Other,
 //             "The X matrix is incompatible with y.",
 //         ));
 //     }
-//     if y_true.ncols() != b_hat.ncols() {
+//     if k != k_ {
 //         return Err(Error::new(
 //             ErrorKind::Other,
 //             "The y matrix/vector is incompatible with b_hat.",
 //         ));
 //     }
-//     let y_pred: Array2<f64> = x * b_hat;
-//     // Assumes y is a column-vector //TODO: Make it matrix-compatible
-//     let n = y_true.len();
-//     let min = y_true.min();
-//     let max = y_true.max();
-//     let (cor, _pval) = pearsons_correlation(
-//         &DVector::from_iterator(n, y_true.column(0).into_iter().map(|x| *x)),
-//         &DVector::from_iterator(n, y_pred.column(0).into_iter().map(|x| *x)),
-//     )
-//     .unwrap();
-//     // let mbe = (y_true - &y_pred).mean() / (max - min);vec![0.0]
-//     let mae = (y_true - &y_pred).norm() / (max - min);
-//     let mse = (y_true - &y_pred).norm_squared() / f64::powf(max - min, 2.0);
-//     let rmse = mse.sqrt() / (max - min);
-//     let error_index = ((1.0 - cor.abs()) + mae + mse + rmse) / 4.0;
-//     // let error_index = rmse;
-//     // let error_index = ((1.0 - cor.abs()) + mae) / 2.0;
+//     let mut error_index: Vec<f64> = Vec::with_capacity(k);
+//     for j in 0..k {
+//         let y_pred: Array2<f64> = x * b_hat;
+//         // Assumes y is a column-vector //TODO: Make it matrix-compatible
+//         let n = y_true.len();
+//         let min = y_true.min();
+//         let max = y_true.max();
+//         let (cor, _pval) = pearsons_correlation(
+//             &y_true.column(j),
+//             &y_pred.column(j),
+//         )
+//         .unwrap();
+//         // let mbe = (y_true - &y_pred).mean() / (max - min);vec![0.0]
+//         let mae = (y_true - &y_pred).iter().fold(0.0, |norm, &x| norm + x.abs()) / (max - min);
+//         let mse = (y_true - &y_pred).iter().fold(0.0, |norm, &x| norm + x.powf(2.0)) / (max - min).powf(2.0);
+//         let rmse = mse.sqrt() / (max - min);
+//         error_index[j] = ((1.0 - cor.abs()) + mae + mse + rmse) / 4.0;
+//     }
 //     Ok(error_index)
 // }
 
 // fn k_split(x: &Array2<f64>, mut k: usize) -> io::Result<(Vec<usize>, usize, usize)> {
-//     let (n, _) = x.shape();
+//     let n = x.nrows();
 //     if (k >= n) | (n <= 2) {
 //         return Err(Error::new(ErrorKind::Other, "The number of splits, i.e. k, needs to be less than the number of pools, n, and n > 2. We are aiming for fold sizes of 10 or greater."));
 //     }
@@ -301,12 +308,13 @@
 // fn penalised_lambda_path_with_k_fold_cross_validation(
 //     x: &Array2<f64>,
 //     y: &Array2<f64>,
+//     row_idx: &Vec<usize>,
 //     iterative: bool,
 //     norm: String,
 //     lambda_step_size: f64,
 //     r: usize,
 // ) -> io::Result<(Array2<f64>, f64)> {
-//     let (n, p) = x.shape();
+//     let (n, p) = (x.nrows(), x.ncols());
 //     if n != y.nrows() {
 //         return Err(Error::new(
 //             ErrorKind::Other,
