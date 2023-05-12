@@ -243,8 +243,8 @@ fn prepare_freqs_and_qprime(
     let freqs_a: ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>> =
         locus_frequencies.matrix.column(j);
     let p_a = freqs_a.t().dot(bins); // mean allele frequency across pools
-                                                 // println!("p_a={:?}", p_a);
-                                                 // Quantiles per pool (for least squares estimation)
+                                     // println!("p_a={:?}", p_a);
+                                     // Quantiles per pool (for least squares estimation)
     let mut q_prime: Array1<f64> = Array1::zeros(n);
     for i in 1..n {
         q_prime[i] = (q[i] - min) / (max - min);

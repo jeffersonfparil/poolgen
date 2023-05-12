@@ -167,13 +167,6 @@ pub struct PredictionPerformance {
     pub rmse: Array2<f64>,
 }
 
-// Struct for penalised-like regression lambda path search with cross-validation
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub struct LambdaError {
-    pub lambda: f64,
-    pub error: f64,
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 // TRAITS
 ///////////////////////////////////////////////////////////////////////////////
