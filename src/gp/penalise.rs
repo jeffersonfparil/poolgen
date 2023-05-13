@@ -280,11 +280,6 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
                 .filter(|(_, x)| *x != &fold)
                 .map(|(i, _)| row_idx[i])
                 .collect();
-            // let (b_hat, _) = if iterative {
-            //     ols_iterative_for_penalisation(&x, &y, &idx_training).unwrap()
-            // } else {
-            //     ols(&x, &y, &idx_training).unwrap()
-            // };
             let (b_hat, _) = ols(&x, &y, &idx_training).unwrap();
             let mut errors: Array1<Vec<f64>> = Array1::from_elem(lambda_path.len(), vec![]);
             Zip::from(&mut errors)
@@ -307,10 +302,6 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
             }
         }
     }
-
-    // let error_indices_across_folds_x_lambdas: Array2<f64> =
-    //     Array2::from_row_slice(r * k, lambda_path.len(), &performances);
-    // Array2::from_row_slice(k, lambda_path.len(), &(0..(k*lambda_path.len())).into_iter().map(|x| x as f64).collect::<Vec<f64>>());
     // Find best lambda and estimate effects on the full dataset
     let (b_hat, _) = ols(x, y, row_idx).unwrap();
     let mut b_hat_penalised = b_hat.clone();
@@ -334,6 +325,77 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
             b_hat_penalised[(i, j)] = b_hat_penalised_2d[(i, j)];
         }
     }
+    // let rep_vec = (0..r)
+    //     .flat_map(|x| std::iter::repeat(x).take(nfolds * lambda_path.len()))
+    //     .collect::<Vec<usize>>();
+    // let fold_vec = std::iter::repeat(
+    //     (0..nfolds)
+    //         .flat_map(|x| std::iter::repeat(x).take(lambda_path.len()))
+    //         .collect::<Vec<usize>>(),
+    // )
+    // .take(r)
+    // .flatten()
+    // .collect::<Vec<usize>>();
+    // let lambda_path_vec = std::iter::repeat(
+    //     std::iter::repeat(lambda_path.clone())
+    //         .take(nfolds)
+    //         .flatten()
+    //         .collect::<Vec<f64>>(),
+    // )
+    // .take(r)
+    // .flatten()
+    // .collect::<Vec<f64>>();
+    // let mut err_vec = std::iter::repeat(vec![f64::NAN])
+    //     .take(r * nfolds * lambda_path.len())
+    //     .collect::<Vec<Vec<f64>>>();
+    // let (groupings, _, _) = k_split(row_idx, 10).unwrap();
+    // Zip::from(&mut err_vec)
+    //     .and(&rep_vec)
+    //     .and(&fold_vec)
+    //     .and(&lambda_path_vec)
+    //     .par_for_each(|err, &rep, &fold, &lambda| {
+    //         let idx_validation: Vec<usize> = groupings
+    //             .iter()
+    //             .enumerate()
+    //             .filter(|(_, x)| *x == &fold)
+    //             .map(|(i, _)| row_idx[i])
+    //             .collect();
+    //         let idx_training: Vec<usize> = groupings
+    //             .iter()
+    //             .enumerate()
+    //             .filter(|(_, x)| *x != &fold)
+    //             .map(|(i, _)| row_idx[i])
+    //             .collect();
+    //         let (b_hat, _) = ols(&x, &y, &idx_training).unwrap();
+    //         let b_hat_new: Array2<f64> = expand_and_contract(&b_hat, norm.clone(), lambda).unwrap();
+    //         *err = error_index(&b_hat_new, x, y, &idx_validation).unwrap();
+    //     });
+    // let perf: Array4<f64> = Array4::from_shape_vec(
+    //     (r, nfolds, lambda_path.len(), k),
+    //     err_vec.into_iter().flatten().collect::<Vec<f64>>(),
+    // )
+    // .unwrap();
+    // let mean_error_across_reps_and_folds: Array2<f64> =
+    //     perf.mean_axis(Axis(0)).unwrap().mean_axis(Axis(0)).unwrap();
+    // // Find best lambda and estimate effects on the full dataset
+    // let (b_hat, _) = ols(x, y, row_idx).unwrap();
+    // let mut b_hat_penalised = b_hat.clone();
+    // let mut lambdas = vec![];
+    // for j in 0..k {
+    //     let mean_error = mean_error_across_reps_and_folds.column(j);
+    //     let min_error = mean_error
+    //         .iter()
+    //         .fold(mean_error[0], |min, &x| if x < min { x } else { min });
+    //     let idx = mean_error.iter().position(|&x| x == min_error).unwrap();
+    //     lambdas.push(lambda_path[idx]);
+    //     println!("mean_error={:?}", mean_error);
+    //     println!("lambdas={:?}", lambdas);
+    //     let b_hat_penalised_2d: Array2<f64> =
+    //         expand_and_contract(&b_hat, norm.clone(), lambdas[j]).unwrap();
+    //     for i in 0..p {
+    //         b_hat_penalised[(i, j)] = b_hat_penalised_2d[(i, j)];
+    //     }
+    // }
     Ok((b_hat_penalised, lambdas))
 }
 

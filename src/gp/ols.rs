@@ -2,34 +2,54 @@ use crate::base::*;
 use ndarray::prelude::*;
 use std::io::{self, Error, ErrorKind};
 
+use ndarray_linalg::least_squares::LeastSquaresSvd;
+
 #[function_name::named]
 pub fn ols(
     x: &Array2<f64>,
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
+    // let mut x: Array2<f64> = Array2::from_elem((row_idx.len(), x_orig.ncols()), f64::NAN);
+    // let mut y: Array2<f64> = Array2::from_elem((row_idx.len(), y_orig.ncols()), f64::NAN);
+    // for i in row_idx.iter() {
+    //     for j in 0..x_orig.ncols() {
+    //         x[(*i, j)] = x_orig[(*i, j)];
+    //     }
+    //     for k in 0..y_orig.ncols() {
+    //         y[(*i, k)] = y_orig[(*i, k)];
+    //     }
+    // }
     let n = x.nrows();
     let p = x.ncols();
-    let n_ = y.nrows();
     let k = y.ncols();
-    if n != n_ {
-        return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
-    }
     if x.column(0).sum() < n as f64 {
         return Err(Error::new(
             ErrorKind::Other,
             "Please add the intercept in the X matrix.",
         ));
     }
+    // let mut b_hat: Array2<f64> = Array2::from_elem((p, k), f64::NAN);
+    // for j in 0..k {
+    //     let yj: Array1<f64> = y.column(j).to_owned();
+    //     println!("x={:?}", x);
+    //     println!("yj={:?}", yj);
+    //     let ls = x.least_squares(&yj).unwrap();
+    //     let bj = ls.solution;
+    //     println!("bj={:?}", bj);
+    //     for i in 0..p {
+    //         b_hat[(i, j)] = bj[j];
+    //     }
+    // }
     let col_idx = &(0..p).collect::<Vec<usize>>();
     let new_row_idx = &(0..row_idx.len()).collect::<Vec<usize>>();
     let new_col_idx = &(0..k).collect::<Vec<usize>>();
     let b_hat: Array2<f64> = if n < p {
-        // x.transpose()
-        //     * ((x * x.transpose()).add_scalar(lambda))
-        //         .pseudo_inverse(f64::EPSILON)
+        // x.t()
+        //     .dot(&x.dot(&x.t()))
+        //         .inv()
         //         .unwrap()
-        //     * y
+        //     .dot(&y)
         multiply_views_xx(
             &multiply_views_xtx(
                 x,
@@ -51,11 +71,11 @@ pub fn ols(
         )
         .unwrap()
     } else {
-        // ((x.transpose() * x).add_scalar(lambda))
-        //     .pseudo_inverse(f64::EPSILON)
+        // (x.t().dot(&x))
+        //     .inv()
         //     .unwrap()
-        //     * x.transpose()
-        //     * y
+        //     .dot(&x.t())
+        //     .dot(&y)
         multiply_views_xx(
             &multiply_views_xxt(
                 &multiply_views_xtx(x, x, row_idx, col_idx, row_idx, col_idx)
@@ -77,8 +97,6 @@ pub fn ols(
         )
         .unwrap()
     };
-    // println!("##############################");
-    // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
     Ok((b_hat, function_name!().to_owned()))
 }
 

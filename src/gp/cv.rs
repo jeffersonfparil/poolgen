@@ -246,103 +246,106 @@ mod tests {
             .load(&filter_stats, true, &n_threads)
             .unwrap();
 
-        // // Outputs
-        // let n = 100;
+        // Outputs
+        let n = 100;
         // let p = 50_000;
         // let q = 5;
-        // // let p = 1_000;
-        // // let q = 50;
-        // let h2 = 0.75;
-        // let mut rng = rand::thread_rng();
-        // let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
-        // // Simulate allele frequencies
-        // let mut f: Array2<f64> = Array2::ones((n, p + 1));
-        // for i in 0..n {
-        //     for j in 1..(p + 1) {
-        //         f[(i, j)] = dist_unif.sample(&mut rng);
-        //     }
-        // }
-        // // Simulate effects
-        // let mut b: Array2<f64> = Array2::zeros((p + 1, 1));
-        // let idx_b: Vec<usize> = dist_unif
-        //     .sample_iter(&mut rng)
-        //     .take(q)
-        //     .map(|x| (x * p as f64).floor() as usize)
-        //     .collect::<Vec<usize>>();
-        // for i in idx_b.into_iter() {
-        //     b[(i, 0)] = 1.00;
-        // }
-        // // Simulate phenotype
-        // let xb = multiply_views_xx(
-        //     &f,
-        //     &b,
-        //     &(0..n).collect::<Vec<usize>>(),
-        //     &(0..(p + 1)).collect::<Vec<usize>>(),
-        //     &(0..(p + 1)).collect::<Vec<usize>>(),
-        //     &vec![0 as usize],
-        // )
-        // .unwrap();
-        // let vg = xb.var_axis(Axis(0), 0.0)[0];
-        // let ve = (vg / h2) - vg;
-        // let dist_gaus = statrs::distribution::Normal::new(0.0, ve.sqrt()).unwrap();
-        // let e: Array2<f64> = Array2::from_shape_vec(
-        //     (n, 1),
-        //     dist_gaus
-        //         .sample_iter(&mut rng)
-        //         .take(n)
-        //         .collect::<Vec<f64>>(),
-        // )
-        // .unwrap();
-        // let y = &xb + e;
-        // let frequencies_and_phenotypes = GenotypesAndPhenotypes {
-        //     chromosome: vec!["".to_owned()],
-        //     position: vec![0],
-        //     allele: vec!["".to_owned()],
-        //     intercept_and_allele_frequencies: f,
-        //     phenotypes: y,
-        //     pool_names: vec!["".to_owned()],
-        // };
-        // println!(
-        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]={:?}",
-        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]
-        // );
-        // println!(
-        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]={:?}",
-        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]
-        // );
-        // println!(
-        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]={:?}",
-        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]
-        // );
-        // let (_a, _k, _s) = frequencies_and_phenotypes.k_split(10).unwrap();
-        // let (k, r) = (10, 1);
-        // let models: Vec<
-        //     fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
-        // > = vec![
-        //     ols,
-        //     penalise_lasso_like,
-        //     penalise_ridge_like,
-        //     // penalise_lasso_like_iterative_base,
-        //     // penalise_ridge_like_iterative_base,
-        // ];
-        // let m = models.len();
-        // let prediction_performance = frequencies_and_phenotypes
-        //     .cross_validate(k, r, models)
-        //     .unwrap();
-        // // println!("prediction_performance={:?}", prediction_performance);
-        // let cor = prediction_performance.cor.into_shape((k * r, m)).unwrap();
-        // let rmse = prediction_performance.rmse.into_shape((k * r, m)).unwrap();
-        // for i in 0..prediction_performance.models.len() {
-        //     println!(
-        //         "MODEL: {:?}; B: {:?}",
-        //         prediction_performance.models[i], prediction_performance.b_histogram[i]
-        //     );
-        // }
-        // println!("cor={:?}", cor);
-        // println!("rmse={:?}", rmse);
-        // println!("cor.column_mean()={:?}", cor.mean_axis(Axis(0)));
-        // println!("rmse.column_mean()={:?}", rmse.mean_axis(Axis(0)));
-        // // Assertions
-        // assert_eq!(1, 0); // Output dimensions
+        let p = 1_000;
+        let q = 1;
+        let h2 = 0.75;
+        let mut rng = rand::thread_rng();
+        let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
+        // Simulate allele frequencies
+        let mut f: Array2<f64> = Array2::ones((n, p + 1));
+        for i in 0..n {
+            for j in 1..(p + 1) {
+                f[(i, j)] = dist_unif.sample(&mut rng);
+            }
+        }
+        // Simulate effects
+        let mut b: Array2<f64> = Array2::zeros((p + 1, 1));
+        let idx_b: Vec<usize> = dist_unif
+            .sample_iter(&mut rng)
+            .take(q)
+            .map(|x| (x * p as f64).floor() as usize)
+            .collect::<Vec<usize>>();
+        for i in idx_b.into_iter() {
+            b[(i, 0)] = 1.00;
+        }
+        // Simulate phenotype
+        let xb = multiply_views_xx(
+            &f,
+            &b,
+            &(0..n).collect::<Vec<usize>>(),
+            &(0..(p + 1)).collect::<Vec<usize>>(),
+            &(0..(p + 1)).collect::<Vec<usize>>(),
+            &vec![0 as usize],
+        )
+        .unwrap();
+        let vg = xb.var_axis(Axis(0), 0.0)[0];
+        let ve = (vg / h2) - vg;
+        let dist_gaus = statrs::distribution::Normal::new(0.0, ve.sqrt()).unwrap();
+        let e: Array2<f64> = Array2::from_shape_vec(
+            (n, 1),
+            dist_gaus
+                .sample_iter(&mut rng)
+                .take(n)
+                .collect::<Vec<f64>>(),
+        )
+        .unwrap();
+        let y = &xb + e;
+        let frequencies_and_phenotypes = GenotypesAndPhenotypes {
+            chromosome: vec!["".to_owned()],
+            position: vec![0],
+            allele: vec!["".to_owned()],
+            intercept_and_allele_frequencies: f.clone(),
+            phenotypes: y,
+            pool_names: vec!["".to_owned()],
+        };
+        println!(
+            "frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]={:?}",
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]
+        );
+        println!(
+            "frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]={:?}",
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]
+        );
+        println!(
+            "frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]={:?}",
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]
+        );
+        let (_a, _k, _s) = frequencies_and_phenotypes.k_split(10).unwrap();
+        let (k, r) = (10, 1);
+        let models: Vec<
+            fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
+        > = vec![
+            ols,
+            penalise_lasso_like,
+            penalise_ridge_like,
+            // penalise_lasso_like_iterative_base,
+            // penalise_ridge_like_iterative_base,
+        ];
+        let m = models.len();
+        let prediction_performance = frequencies_and_phenotypes
+            .cross_validate(k, r, models)
+            .unwrap();
+        // println!("prediction_performance={:?}", prediction_performance);
+        let cor = prediction_performance.cor.into_shape((k * r, m)).unwrap();
+        let rmse = prediction_performance.rmse.into_shape((k * r, m)).unwrap();
+        for i in 0..prediction_performance.models.len() {
+            println!(
+                "MODEL: {:?}; B: {:?}",
+                prediction_performance.models[i], prediction_performance.b_histogram[i]
+            );
+        }
+        println!("cor={:?}", cor);
+        println!("rmse={:?}", rmse);
+        println!("cor.column_mean()={:?}", cor.mean_axis(Axis(0)));
+        println!("rmse.column_mean()={:?}", rmse.mean_axis(Axis(0)));
+        println!("n={:?}", f.nrows());
+        println!("p={:?}", f.ncols());
+        println!("q={:?}", q);
+        // Assertions
+        assert_eq!(1, 1); // Output dimensions
     }
 }
