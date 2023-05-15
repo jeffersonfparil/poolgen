@@ -145,7 +145,6 @@ pub fn ols_iterative_with_kinship_pca_covariate(
     let (_eigen_values, eigen_vectors): (Array1<_>, Array2<_>) = xxt.eig().unwrap();
 
     let mut b_hat: Array2<f64> = Array2::from_elem((p, k), f64::NAN);
-    let mut x_sub: Array2<f64> = Array2::ones((n, 3)); // intercept, 1st eigenvector, and the jth locus
     let mut y_sub: Array2<f64> = Array2::from_elem((n, k), f64::NAN);
     for i in 0..n {
         for j in 0..k {
@@ -153,20 +152,49 @@ pub fn ols_iterative_with_kinship_pca_covariate(
         }
     }
     let y_sub_means: Array1<f64> = y_sub.mean_axis(Axis(0)).unwrap();
-    for j in 0..k {
-        b_hat[(0,j)] = y_sub_means[j];
-    }
-    for j in 0..p - 1 {
-        for i in 0..n {
-            x_sub[(i, 1)] = eigen_vectors[(i, 0)].re; // extract the eigenvector value's real number component
-            x_sub[(i, 2)] = x[(row_idx[i], j + 1)]; // use the row_idx and add 1 to the column indexes to account for the intercept in the input x
-        }
-        let (b, _) = ols(&x_sub, &y_sub, &row_idx_new).unwrap();
-        for j_ in 0..k {
-            b_hat[(j+1, j_)] = b[(2, j_)]; // extract the effect of the locus i.e. j==2 or the third row
-        }
-    }
-    println!("BEFORE: b_hat={:?}", b_hat);
+
+    // for j in 0..p {
+    //     for j_ in 0..k {
+
+    let vec_j: Array2<usize> = Array2::from_shape_vec(
+        (p, k),
+        (0..p)
+            .flat_map(|x| std::iter::repeat(x).take(k))
+            .collect::<Vec<usize>>(),
+    )
+    .unwrap();
+    let vec_j_: Array2<usize> = Array2::from_shape_vec(
+        (k, p),
+        (0..k)
+            .flat_map(|x| std::iter::repeat(x).take(p))
+            .collect::<Vec<usize>>(),
+    )
+    .unwrap()
+    .reversed_axes();
+
+    Zip::from(&mut b_hat)
+        .and(&vec_j)
+        .and(&vec_j_)
+        .par_for_each(|b, &j, &j_| {
+            if j == 0 {
+                *b = y_sub_means[j_];
+                // b_hat[(j,j_)] = y_sub_means[j_];
+            } else {
+                let mut x_sub: Array2<f64> = Array2::ones((n, 3)); // intercept, 1st eigenvector, and the jth locus
+                for i in 0..n {
+                    x_sub[(i, 1)] = eigen_vectors[(i, 0)].re; // extract the eigenvector value's real number component
+                    x_sub[(i, 2)] = x[(row_idx[i], j)]; // use the row_idx and add 1 to the column indexes to account for the intercept in the input x
+                }
+                *b = (x_sub.t().dot(&x_sub))
+                    .pinv()
+                    .unwrap()
+                    .dot(&x_sub.t())
+                    .dot(&y_sub.column(j_))[2];
+                // b_hat[(j,j_)] = (x_sub.t().dot(&x_sub)).pinv().unwrap().dot(&x_sub.t()).dot(&y_sub.column(j_))[2];
+            }
+        });
+    //     }
+    // }
     Ok((b_hat, function_name!().to_owned()))
 }
 
@@ -220,6 +248,24 @@ mod tests {
         let (b_wide_iterative, _) =
             ols_iterative_with_kinship_pca_covariate(&x_wide, &y, &vec![0, 1, 2, 3, 4]).unwrap();
         println!("b_wide_iterative={:?}", b_wide_iterative);
-        assert_eq!(0, 0);
+        assert_eq!(
+            b_wide_iterative,
+            Array2::from_shape_vec(
+                (10, 1),
+                vec![
+                    0.6,
+                    0.4139549436795996,
+                    0.41731066460587296,
+                    0.4203296703296699,
+                    0.42301898162097007,
+                    0.42538644470868014,
+                    0.42744063324538256,
+                    0.42919075144508667,
+                    0.43064653944745057,
+                    0.431818181818182
+                ]
+            )
+            .unwrap()
+        );
     }
 }
