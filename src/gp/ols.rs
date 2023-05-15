@@ -189,29 +189,6 @@ pub fn ols_iterative_with_kinship_pca_covariate(
                 *b = x_sub.least_squares(&y_sub.column(j_)).unwrap().solution[2]; // using the LS solution without pseudoinverse as we have enough degrees of freedom to estimate the effects of 3 parameters, i.e. intercept, kinship PC1 and the locus in focus.
             }
         });
-
-let j_ = 0;
-for j in 1..p {
-    let mut x_sub: Array2<f64> = Array2::ones((n, 3)); // intercept, 1st eigenvector, and the jth locus
-    for i in 0..n {
-        x_sub[(i, 1)] = eigen_vectors[(i, 0)].re; // extract the eigenvector value's real number component
-        x_sub[(i, 2)] = x[(row_idx[i], j)]; // use the row_idx and add 1 to the column indexes to account for the intercept in the input x
-    }
-    // *b = (x_sub.t().dot(&x_sub))
-    //     .inv()
-    //     .unwrap()
-    //     .dot(&x_sub.t())
-    //     .dot(&y_sub.column(j_))[2];
-    let b = x_sub.least_squares(&y_sub.column(j_)).unwrap().solution;
-    let y_hat = x_sub.dot(&b);
-    let diff = &y_hat - &y_sub.column(j_);
-    println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-    println!("b={:?}", b);
-    println!("y_hat={:?}", y_hat);
-    println!("y_sub.column(j_)={:?}", y_sub.column(j_));
-    println!("y_hat-y_sub={:?}", diff);
-}
-
     Ok((b_hat, function_name!().to_owned()))
 }
 
