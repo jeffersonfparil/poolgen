@@ -152,10 +152,6 @@ pub fn ols_iterative_with_kinship_pca_covariate(
         }
     }
     let y_sub_means: Array1<f64> = y_sub.mean_axis(Axis(0)).unwrap();
-
-    // for j in 0..p {
-    //     for j_ in 0..k {
-
     let vec_j: Array2<usize> = Array2::from_shape_vec(
         (p, k),
         (0..p)
@@ -185,16 +181,37 @@ pub fn ols_iterative_with_kinship_pca_covariate(
                     x_sub[(i, 1)] = eigen_vectors[(i, 0)].re; // extract the eigenvector value's real number component
                     x_sub[(i, 2)] = x[(row_idx[i], j)]; // use the row_idx and add 1 to the column indexes to account for the intercept in the input x
                 }
-                *b = (x_sub.t().dot(&x_sub))
-                    .pinv()
-                    .unwrap()
-                    .dot(&x_sub.t())
-                    .dot(&y_sub.column(j_))[2];
-                // b_hat[(j,j_)] = (x_sub.t().dot(&x_sub)).pinv().unwrap().dot(&x_sub.t()).dot(&y_sub.column(j_))[2];
+                // *b = (x_sub.t().dot(&x_sub))
+                //     .inv()
+                //     .unwrap()
+                //     .dot(&x_sub.t())
+                //     .dot(&y_sub.column(j_))[2];
+                *b = x_sub.least_squares(&y_sub.column(j_)).unwrap().solution[2]; // using the LS solution without pseudoinverse as we have enough degrees of freedom to estimate the effects of 3 parameters, i.e. intercept, kinship PC1 and the locus in focus.
             }
         });
-    //     }
-    // }
+
+let j_ = 0;
+for j in 1..p {
+    let mut x_sub: Array2<f64> = Array2::ones((n, 3)); // intercept, 1st eigenvector, and the jth locus
+    for i in 0..n {
+        x_sub[(i, 1)] = eigen_vectors[(i, 0)].re; // extract the eigenvector value's real number component
+        x_sub[(i, 2)] = x[(row_idx[i], j)]; // use the row_idx and add 1 to the column indexes to account for the intercept in the input x
+    }
+    // *b = (x_sub.t().dot(&x_sub))
+    //     .inv()
+    //     .unwrap()
+    //     .dot(&x_sub.t())
+    //     .dot(&y_sub.column(j_))[2];
+    let b = x_sub.least_squares(&y_sub.column(j_)).unwrap().solution;
+    let y_hat = x_sub.dot(&b);
+    let diff = &y_hat - &y_sub.column(j_);
+    println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+    println!("b={:?}", b);
+    println!("y_hat={:?}", y_hat);
+    println!("y_sub.column(j_)={:?}", y_sub.column(j_));
+    println!("y_hat-y_sub={:?}", diff);
+}
+
     Ok((b_hat, function_name!().to_owned()))
 }
 
@@ -255,14 +272,14 @@ mod tests {
                 vec![
                     0.6,
                     0.4139549436795996,
-                    0.41731066460587296,
-                    0.4203296703296699,
-                    0.42301898162097007,
-                    0.42538644470868014,
-                    0.42744063324538256,
+                    0.4173106646058736,
+                    1.0653120464441221,
+                    0.9265306122448984,
+                    1.0,
+                    0.4274406332453825,
                     0.42919075144508667,
-                    0.43064653944745057,
-                    0.431818181818182
+                    0.9460317460317462,
+                    1.0000000000000002
                 ]
             )
             .unwrap()
