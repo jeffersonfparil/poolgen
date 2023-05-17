@@ -43,7 +43,7 @@ impl Regression for UnivariateMaximumLikelihoodEstimation {
             x: Array2::from_elem((1, 1), f64::NAN),
             y: Array1::from_elem(1, f64::NAN),
             b: Array1::from_elem(1, f64::NAN),
-            se: f64::NAN,
+            ve: f64::NAN,
             v_b: Array1::from_elem(1, f64::NAN),
             t: Array1::from_elem(1, f64::NAN),
             pval: Array1::from_elem(1, f64::NAN),
@@ -102,7 +102,7 @@ impl Regression for UnivariateMaximumLikelihoodEstimation {
             } // Error occurs when the optimiser MoreThuenteLineSearch moves in the wrong direction
         };
         let params = res.state().param.clone().unwrap();
-        self.se = bound_parameters_with_logit(&vec![params[0]], f64::EPSILON, 1e9)[0];
+        self.ve = bound_parameters_with_logit(&vec![params[0]], f64::EPSILON, 1e9)[0];
         self.b = Array1::from_vec((&params[1..(p + 1)]).to_owned());
         Ok(self)
     }
@@ -130,7 +130,7 @@ impl Regression for UnivariateMaximumLikelihoodEstimation {
             if inv_xxt.det().unwrap() == 0.0 {
                 return Err(Error::new(ErrorKind::Other, "Non-invertible x_matrix"));
             }
-            vcv = self.se * (&xt.dot(&inv_xxt).dot(&inv_xxt).dot(&self.x));
+            vcv = self.ve * (&xt.dot(&inv_xxt).dot(&inv_xxt).dot(&self.x));
         } else {
             let inv_xtx = match (xt.dot(&self.x)).inv() {
                 Ok(x) => x,
@@ -139,7 +139,7 @@ impl Regression for UnivariateMaximumLikelihoodEstimation {
             if inv_xtx.det().unwrap() == 0.0 {
                 return Err(Error::new(ErrorKind::Other, "Non-invertible x_matrix"));
             }
-            vcv = self.se * &inv_xtx;
+            vcv = self.ve * &inv_xtx;
         }
         self.v_b = Array1::from_elem(p, f64::NAN);
         for i in 0..p {

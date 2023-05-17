@@ -249,10 +249,11 @@ mod tests {
         // Outputs
         let n = 100;
         // let p = 50_000;
-        // let q = 5;
+        // let q = 10;
         let p = 1_000;
-        let q = 1;
+        let q = 3;
         let h2 = 0.75;
+        let (k, r) = (10, 5);
         let mut rng = rand::thread_rng();
         let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
         // Simulate allele frequencies
@@ -315,15 +316,14 @@ mod tests {
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]
         );
         let (_a, _k, _s) = frequencies_and_phenotypes.k_split(10).unwrap();
-        let (k, r) = (10, 1);
         let models: Vec<
             fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
         > = vec![
             ols,
             penalise_lasso_like,
             penalise_ridge_like,
-            // penalise_lasso_like_iterative_base,
-            // penalise_ridge_like_iterative_base,
+            penalise_lasso_like_with_iterative_proxy_norms,
+            penalise_ridge_like_with_iterative_proxy_norms,
         ];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
@@ -346,6 +346,23 @@ mod tests {
         println!("p={:?}", f.ncols());
         println!("q={:?}", q);
         // Assertions
-        assert_eq!(1, 1); // Output dimensions
+        assert_eq!(0, 0); // Output dimensions
     }
 }
+
+// // In R testing the relationships between RMSE, etc...
+// mbe = c()
+// mae = c()
+// mse = c()
+// rmse = c()
+// n = 1000
+// for (i in 1:n) {
+//     x = runif(0,1,n=10000)
+//     y = runif(0,1,n=10000)
+//     mbe = c(mbe, mean(x-y))
+//     mae = c(mae, mean(abs(x-y)))
+//     mse = c(mse, mean((x-y)^2))
+//     rmse = c(rmse, sqrt(mean((x-y)^2)))
+// }
+// df = data.frame(mbe, mae, mse, rmse)
+// plot(df)

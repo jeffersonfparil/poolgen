@@ -17,7 +17,7 @@ impl Regression for UnivariateOrdinaryLeastSquares {
             inv_xxt: Array2::from_elem((1, 1), f64::NAN),
             inv_xtx: Array2::from_elem((1, 1), f64::NAN),
             e: Array1::from_elem(1, f64::NAN),
-            se: f64::NAN,
+            ve: f64::NAN,
             v_b: Array1::from_elem(1, f64::NAN),
             t: Array1::from_elem(1, f64::NAN),
             pval: Array1::from_elem(1, f64::NAN),
@@ -95,15 +95,15 @@ impl Regression for UnivariateOrdinaryLeastSquares {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
         self.e = &self.y - (&self.x.dot(&self.b));
-        self.se = (&self.e.t().dot(&self.e)) / (n as f64 - p as f64);
+        self.ve = (&self.e.t().dot(&self.e)) / (n as f64 - p as f64);
         let vcv: Array2<f64> = if n < p {
-            self.se
+            self.ve
                 * (&self.xt)
                     .dot(&self.inv_xxt)
                     .dot(&self.inv_xxt)
                     .dot(&self.x)
         } else {
-            self.se * (&self.inv_xtx)
+            self.ve * (&self.inv_xtx)
         };
         self.v_b = Array1::from_elem(p, f64::NAN);
         for i in 0..p {

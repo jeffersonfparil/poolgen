@@ -66,6 +66,66 @@ pub fn penalise_ridge_like(
     ))
 }
 
+#[function_name::named]
+pub fn penalise_lasso_like_with_iterative_proxy_norms(
+    x: &Array2<f64>,
+    y: &Array2<f64>,
+    row_idx: &Vec<usize>,
+) -> io::Result<(Array2<f64>, String)> {
+    let (b_hat, lambdas) = penalised_lambda_path_with_k_fold_cross_validation(
+        x,
+        y,
+        row_idx,
+        true,
+        "Lasso-like".to_owned(),
+        0.1,
+        10,
+    )
+    .unwrap();
+    // println!("##############################");
+    // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
+    Ok((
+        b_hat,
+        function_name!().to_owned()
+            + "-"
+            + &lambdas
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("-"),
+    ))
+}
+
+#[function_name::named]
+pub fn penalise_ridge_like_with_iterative_proxy_norms(
+    x: &Array2<f64>,
+    y: &Array2<f64>,
+    row_idx: &Vec<usize>,
+) -> io::Result<(Array2<f64>, String)> {
+    let (b_hat, lambdas) = penalised_lambda_path_with_k_fold_cross_validation(
+        x,
+        y,
+        row_idx,
+        true,
+        "Ridge-like".to_owned(),
+        0.1,
+        10,
+    )
+    .unwrap();
+    // println!("##############################");
+    // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
+    Ok((
+        b_hat,
+        function_name!().to_owned()
+            + "-"
+            + &lambdas
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("-"),
+    ))
+}
+
 fn expand_and_contract(
     b_hat: &Array2<f64>,
     b_hat_proxy: &Array2<f64>,
@@ -91,11 +151,22 @@ fn expand_and_contract(
                 "Please enter: 'Lasso-like' or 'Ridge-like' norms.",
             ));
         };
+
+        // Take the mean between the two betas
+        let b_hat_mean = b_hat
+            .column(j)
+            .iter()
+            .zip(b_hat_proxy)
+            .map(|(b0, b1)| (b0 + b1) / 2.0)
+            .collect::<Array1<f64>>();
+
         // Proxy norm 1 or norm 2 (exclude the intercept) for finding the loci that need to be penalised
         let normed_proxy: Array1<f64> = if norm == "Lasso-like".to_owned() {
-            b_hat_proxy.column(j).slice(s![1..p]).map(|&x| x.abs())
+            // b_hat_proxy.column(j).slice(s![1..p]).map(|&x| x.abs())
+            b_hat_mean.slice(s![1..p]).map(|&x| x.abs())
         } else if norm == "Ridge-like".to_owned() {
-            b_hat_proxy.column(j).slice(s![1..p]).map(|&x| x.powf(2.0))
+            // b_hat_proxy.column(j).slice(s![1..p]).map(|&x| x.powf(2.0))
+            b_hat_mean.slice(s![1..p]).map(|&x| x.powf(2.0))
         } else {
             return Err(Error::new(
                 ErrorKind::Other,
@@ -225,7 +296,8 @@ fn error_index(
             .fold(0.0, |norm, &x| norm + x.powf(2.0))
             / (max - min).powf(2.0);
         let rmse = mse.sqrt() / (max - min);
-        error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
+        // error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
+        error_index.push(((1.0 - cor.abs()) + rmse) / 2.0);
     }
     Ok(error_index)
 }
@@ -299,13 +371,26 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
                 .collect();
             let (b_hat, _) = ols(&x, &y, &idx_training).unwrap();
             let mut errors: Array1<Vec<f64>> = Array1::from_elem(lambda_path.len(), vec![]);
-            Zip::from(&mut errors)
-                .and(&lambda_path)
-                .par_for_each(|err, &lambda| {
-                    let b_hat_new: Array2<f64> =
-                        expand_and_contract(&b_hat, &b_hat, norm.clone(), lambda).unwrap();
-                    *err = error_index(&b_hat_new, x, y, &idx_validation).unwrap();
-                });
+            if iterative == false {
+                Zip::from(&mut errors)
+                    .and(&lambda_path)
+                    .par_for_each(|err, &lambda| {
+                        let b_hat_new: Array2<f64> =
+                            expand_and_contract(&b_hat, &b_hat, norm.clone(), lambda).unwrap();
+                        *err = error_index(&b_hat_new, x, y, &idx_validation).unwrap();
+                    });
+            } else {
+                let (b_hat_proxy, _) =
+                    ols_iterative_with_kinship_pca_covariate(x, y, row_idx).unwrap();
+                Zip::from(&mut errors)
+                    .and(&lambda_path)
+                    .par_for_each(|err, &lambda| {
+                        let b_hat_new: Array2<f64> =
+                            expand_and_contract(&b_hat, &b_hat_proxy, norm.clone(), lambda)
+                                .unwrap();
+                        *err = error_index(&b_hat_new, x, y, &idx_validation).unwrap();
+                    });
+            }
 
             let start = (((rep * nfolds) + fold) * lambda_path.len()) + 0;
             let end = (((rep * nfolds) + fold) * lambda_path.len()) + lambda_path.len();
