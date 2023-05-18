@@ -251,7 +251,7 @@ mod tests {
         // let p = 50_000;
         // let q = 10;
         let p = 1_000;
-        let q = 3;
+        let q = 2;
         let h2 = 0.75;
         let (k, r) = (10, 5);
         let mut rng = rand::thread_rng();
@@ -324,6 +324,7 @@ mod tests {
             penalise_ridge_like,
             penalise_lasso_like_with_iterative_proxy_norms,
             penalise_ridge_like_with_iterative_proxy_norms,
+            penalise_glmnet,
         ];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
@@ -332,21 +333,18 @@ mod tests {
         // println!("prediction_performance={:?}", prediction_performance);
         let cor = prediction_performance.cor.into_shape((k * r, m)).unwrap();
         let rmse = prediction_performance.rmse.into_shape((k * r, m)).unwrap();
-        for i in 0..prediction_performance.models.len() {
-            println!(
-                "MODEL: {:?}; B: {:?}",
-                prediction_performance.models[i], prediction_performance.b_histogram[i]
-            );
-        }
+        let mean_cor = cor.mean_axis(Axis(0)).unwrap();
+        let mean_rmse = rmse.mean_axis(Axis(0)).unwrap();
         println!("cor={:?}", cor);
         println!("rmse={:?}", rmse);
-        println!("cor.column_mean()={:?}", cor.mean_axis(Axis(0)));
-        println!("rmse.column_mean()={:?}", rmse.mean_axis(Axis(0)));
+        println!("cor.column_mean()={:?}", mean_cor);
+        println!("rmse.column_mean()={:?}", mean_rmse);
         println!("n={:?}", f.nrows());
         println!("p={:?}", f.ncols());
         println!("q={:?}", q);
         // Assertions
-        assert_eq!(0, 0); // Output dimensions
+        // assert_eq!(0, 1); // Output dimensions
+        assert_eq!(mean_cor[1].round(), 1.0);
     }
 }
 

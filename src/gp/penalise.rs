@@ -12,16 +12,9 @@ pub fn penalise_lasso_like(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) = penalised_lambda_path_with_k_fold_cross_validation(
-        x,
-        y,
-        row_idx,
-        false,
-        "Lasso-like".to_owned(),
-        0.1,
-        10,
-    )
-    .unwrap();
+    let (b_hat, lambdas) =
+        penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, 1.00, false, 0.1, 10)
+            .unwrap();
     // println!("##############################");
     // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
     Ok((
@@ -42,16 +35,32 @@ pub fn penalise_ridge_like(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) = penalised_lambda_path_with_k_fold_cross_validation(
-        x,
-        y,
-        row_idx,
-        false,
-        "Ridge-like".to_owned(),
-        0.1,
-        10,
-    )
-    .unwrap();
+    let (b_hat, lambdas) =
+        penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, 0.00, false, 0.1, 10)
+            .unwrap();
+    // println!("##############################");
+    // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
+    Ok((
+        b_hat,
+        function_name!().to_owned()
+            + "-"
+            + &lambdas
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("-"),
+    ))
+}
+
+#[function_name::named]
+pub fn penalise_glmnet(
+    x: &Array2<f64>,
+    y: &Array2<f64>,
+    row_idx: &Vec<usize>,
+) -> io::Result<(Array2<f64>, String)> {
+    let (b_hat, lambdas) =
+        penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, -0.1, false, 0.1, 10)
+            .unwrap();
     // println!("##############################");
     // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
     Ok((
@@ -72,16 +81,9 @@ pub fn penalise_lasso_like_with_iterative_proxy_norms(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) = penalised_lambda_path_with_k_fold_cross_validation(
-        x,
-        y,
-        row_idx,
-        true,
-        "Lasso-like".to_owned(),
-        0.1,
-        10,
-    )
-    .unwrap();
+    let (b_hat, lambdas) =
+        penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, 1.00, true, 0.1, 10)
+            .unwrap();
     // println!("##############################");
     // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
     Ok((
@@ -102,16 +104,9 @@ pub fn penalise_ridge_like_with_iterative_proxy_norms(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) = penalised_lambda_path_with_k_fold_cross_validation(
-        x,
-        y,
-        row_idx,
-        true,
-        "Ridge-like".to_owned(),
-        0.1,
-        10,
-    )
-    .unwrap();
+    let (b_hat, lambdas) =
+        penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, 1.00, true, 0.1, 10)
+            .unwrap();
     // println!("##############################");
     // println!("{:?}: {:?}", function_name!().to_owned(), b_hat);
     Ok((
@@ -129,7 +124,7 @@ pub fn penalise_ridge_like_with_iterative_proxy_norms(
 fn expand_and_contract(
     b_hat: &Array2<f64>,
     b_hat_proxy: &Array2<f64>,
-    norm: String,
+    alpha: f64,
     lambda: f64,
 ) -> io::Result<Array2<f64>> {
     // Clone b_hat
@@ -139,40 +134,22 @@ fn expand_and_contract(
         //Exclude the intercept from penalisation
         let mut intercept = b_hat[(0, j)];
         // Norm 1 or norm 2 (exclude the intercept)
-        let normed: Array1<f64> = if norm == "Lasso-like".to_owned() {
-            b_hat.column(j).slice(s![1..p]).map(|&x| x.abs())
-            // b_hat.rows(1, p - 1).map(|x| x.abs())
-        } else if norm == "Ridge-like".to_owned() {
-            b_hat.column(j).slice(s![1..p]).map(|&x| x.powf(2.0))
-            // b_hat.rows(1, p - 1).map(|x| x.powf(2.0))
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Please enter: 'Lasso-like' or 'Ridge-like' norms.",
-            ));
-        };
-
-        // Take the mean between the two betas
-        let b_hat_mean = b_hat
-            .column(j)
-            .iter()
-            .zip(b_hat_proxy)
-            .map(|(b0, b1)| (b0 + b1) / 2.0)
-            .collect::<Array1<f64>>();
+        let normed1: Array1<f64> = b_hat.column(j).slice(s![1..p]).map(|&x| x.abs());
+        let normed2 = b_hat.column(j).slice(s![1..p]).map(|&x| x.powf(2.0));
+        let normed = ((1.00 - alpha) * normed2 / 1.00) + (alpha * normed1);
 
         // Proxy norm 1 or norm 2 (exclude the intercept) for finding the loci that need to be penalised
-        let normed_proxy: Array1<f64> = if norm == "Lasso-like".to_owned() {
-            // b_hat_proxy.column(j).slice(s![1..p]).map(|&x| x.abs())
-            b_hat_mean.slice(s![1..p]).map(|&x| x.abs())
-        } else if norm == "Ridge-like".to_owned() {
-            // b_hat_proxy.column(j).slice(s![1..p]).map(|&x| x.powf(2.0))
-            b_hat_mean.slice(s![1..p]).map(|&x| x.powf(2.0))
-        } else {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Please enter: 'Lasso-like' or 'Ridge-like' norms.",
-            ));
-        };
+        let normed1_proxy: Array1<f64> = b_hat_proxy.column(j).slice(s![1..p]).map(|&x| x.abs());
+        let normed2_proxy = b_hat_proxy.column(j).slice(s![1..p]).map(|&x| x.powf(2.0));
+        let normed_proxy = ((1.00 - alpha) * normed2_proxy / 1.00) + (alpha * normed1_proxy);
+
+        // // Partition the norms between actual and proxy betas
+        // let normed_proxy = normed
+        //     .iter()
+        //     .zip(&normed_proxy)
+        //     .map(|(&x, &y)| (x * (1.00 - 0.5)) + (y * (0.00 - 0.5)))
+        //     .collect::<Array1<f64>>();
+
         // Find estimates that will be penalised using the proxy b_hat norms
         let normed_proxy_max =
             normed_proxy
@@ -339,8 +316,8 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     x: &Array2<f64>,
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
+    alpha: f64,
     iterative: bool,
-    norm: String,
     lambda_step_size: f64,
     r: usize,
 ) -> io::Result<(Array2<f64>, Vec<f64>)> {
@@ -351,9 +328,37 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
         .into_iter()
         .map(|x| (x as f64) / (max_usize as f64))
         .collect();
+    let l = lambda_path.len();
+
+    let (alpha_path, a): (Array2<f64>, usize) = if alpha >= 0.0 {
+        (
+            Array2::from_shape_vec((1, l), std::iter::repeat(alpha).take(l).collect()).unwrap(),
+            1,
+        )
+    } else {
+        (
+            Array2::from_shape_vec(
+                (l, l),
+                lambda_path
+                    .iter()
+                    .flat_map(|&x| std::iter::repeat(x).take(l))
+                    .collect(),
+            )
+            .unwrap(),
+            l,
+        )
+    };
+    let lambda_path: Array2<f64> = Array2::from_shape_vec(
+        (a, l),
+        std::iter::repeat(lambda_path)
+            .take(a)
+            .flat_map(|x| x)
+            .collect(),
+    )
+    .unwrap();
+
     let (_, nfolds, s) = k_split(row_idx, 10).unwrap();
-    let mut performances: Array2<f64> =
-        Array2::from_elem((r * nfolds * lambda_path.len(), k), f64::NAN);
+    let mut performances: Array5<f64> = Array5::from_elem((r, nfolds, a, l, k), f64::NAN);
     for rep in 0..r {
         let (groupings, _, _) = k_split(row_idx, 10).unwrap();
         for fold in 0..nfolds {
@@ -370,59 +375,88 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
                 .map(|(i, _)| row_idx[i])
                 .collect();
             let (b_hat, _) = ols(&x, &y, &idx_training).unwrap();
-            let mut errors: Array1<Vec<f64>> = Array1::from_elem(lambda_path.len(), vec![]);
+            let mut errors: Array2<Vec<f64>> = Array2::from_elem((a, l), vec![]);
             if iterative == false {
                 Zip::from(&mut errors)
+                    .and(&alpha_path)
                     .and(&lambda_path)
-                    .par_for_each(|err, &lambda| {
+                    .par_for_each(|err, &alfa, &lambda| {
                         let b_hat_new: Array2<f64> =
-                            expand_and_contract(&b_hat, &b_hat, norm.clone(), lambda).unwrap();
+                            expand_and_contract(&b_hat, &b_hat, alfa, lambda).unwrap();
                         *err = error_index(&b_hat_new, x, y, &idx_validation).unwrap();
                     });
             } else {
                 let (b_hat_proxy, _) =
                     ols_iterative_with_kinship_pca_covariate(x, y, row_idx).unwrap();
                 Zip::from(&mut errors)
+                    .and(&alpha_path)
                     .and(&lambda_path)
-                    .par_for_each(|err, &lambda| {
+                    .par_for_each(|err, &alfa, &lambda| {
                         let b_hat_new: Array2<f64> =
-                            expand_and_contract(&b_hat, &b_hat_proxy, norm.clone(), lambda)
-                                .unwrap();
+                            expand_and_contract(&b_hat, &b_hat_proxy, alfa, lambda).unwrap();
                         *err = error_index(&b_hat_new, x, y, &idx_validation).unwrap();
                     });
             }
 
-            let start = (((rep * nfolds) + fold) * lambda_path.len()) + 0;
-            let end = (((rep * nfolds) + fold) * lambda_path.len()) + lambda_path.len();
-            let idx_performances = (start..end).collect::<Vec<usize>>();
+            // let start = (((rep * nfolds) + fold) * l) + 0;
+            // let end = (((rep * nfolds) + fold) * l) + l;
+            // let idx_performances = (start..end).collect::<Vec<usize>>();
 
-            for i in 0..lambda_path.len() {
-                let i_ = idx_performances[i];
-                for j in 0..k {
-                    performances[(i_, j)] = errors[i][j];
+            // for i in 0..l {
+            //     let i_ = idx_performances[i];
+            //     for j in 0..k {
+            //         performances[(rep, fold, i, i_, j)] = errors[i][j];
+            //     }
+            // }
+            for i0 in 0..a {
+                for i1 in 0..l {
+                    for j in 0..k {
+                        performances[(rep, fold, i0, i1, j)] = errors[(i0, i1)][j];
+                        // reps x folds x alpha x lambda x traits
+                    }
                 }
             }
         }
     }
     // Find best lambda and estimate effects on the full dataset
+
+    let mean_error_across_reps_and_folds: Array3<f64> = performances
+        .mean_axis(Axis(0))
+        .unwrap()
+        .mean_axis(Axis(0))
+        .unwrap();
+    let mean_error_lambdas: Array2<f64> =
+        mean_error_across_reps_and_folds.mean_axis(Axis(0)).unwrap();
+    let mean_error_alphas: Array2<f64> =
+        mean_error_across_reps_and_folds.mean_axis(Axis(1)).unwrap();
+
     let (b_hat, _) = ols(x, y, row_idx).unwrap();
     let mut b_hat_penalised = b_hat.clone();
+    let mut alphas = vec![];
     let mut lambdas = vec![];
     for j in 0..k {
-        let perf = performances
-            .column(j)
-            .into_shape((r * nfolds, lambda_path.len()))
-            .unwrap();
-        let mean_error: Array1<f64> = perf.mean_axis(Axis(0)).unwrap();
-        let min_error = mean_error
+        let min_error = mean_error_across_reps_and_folds
+            .index_axis(Axis(2), j)
             .iter()
-            .fold(mean_error[0], |min, &x| if x < min { x } else { min });
-        let idx = mean_error.iter().position(|&x| x == min_error).unwrap();
-        lambdas.push(lambda_path[idx]);
-        println!("mean_error={:?}", mean_error);
-        println!("lambdas={:?}", lambdas);
+            .fold(mean_error_across_reps_and_folds[(0, 0, j)], |min, &x| {
+                if x < min {
+                    x
+                } else {
+                    min
+                }
+            });
+
+        let ((idx_0, idx_1), _) = mean_error_across_reps_and_folds
+            .index_axis(Axis(2), j)
+            .indexed_iter()
+            .find(|((_i, _j), &x)| x == min_error)
+            .unwrap();
+
+        alphas.push(alpha_path[(idx_0, idx_1)]);
+        lambdas.push(lambda_path[(idx_0, idx_1)]);
+
         let b_hat_penalised_2d: Array2<f64> =
-            expand_and_contract(&b_hat, &b_hat, norm.clone(), lambdas[j]).unwrap();
+            expand_and_contract(&b_hat, &b_hat, alphas[j], lambdas[j]).unwrap();
         for i in 0..p {
             b_hat_penalised[(i, j)] = b_hat_penalised_2d[(i, j)];
         }
@@ -438,7 +472,7 @@ mod tests {
     fn test_penalised() {
         let b: Array2<f64> =
             Array2::from_shape_vec((7, 1), vec![5.0, -0.4, 0.0, 1.0, -0.1, 1.0, 0.0]).unwrap();
-        let new_b: Array2<f64> = expand_and_contract(&b, &b, "Lasso-like".to_owned(), 0.5).unwrap();
+        let new_b: Array2<f64> = expand_and_contract(&b, &b, 1.00, 0.5).unwrap();
         println!("new_b={:?}", new_b);
         let expected_output1: Array2<f64> =
             Array2::from_shape_vec((7, 1), vec![4.5, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0]).unwrap();
