@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2};
+use ndarray::prelude::*;
 use std::io;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -160,11 +160,11 @@ pub struct PredictionPerformance {
     pub r: usize, // number replications where each cross-validation results in random groupings
     pub models: Vec<String>, // genomic prediction model used
     pub b_histogram: Vec<(Vec<f64>, Vec<f64>, Vec<usize>)>, // bin_start (inclusive), bin_end (exclusive), counts or frequency
-    pub cor: Array2<f64>,
-    pub mbe: Array2<f64>,
-    pub mae: Array2<f64>,
-    pub mse: Array2<f64>,
-    pub rmse: Array2<f64>,
+    pub cor: Array4<f64>, // reps x folds x models x traits
+    pub mbe: Array4<f64>,
+    pub mae: Array4<f64>,
+    pub mse: Array4<f64>,
+    pub rmse: Array4<f64>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////

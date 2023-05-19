@@ -120,14 +120,13 @@ impl
         let l = functions.len();
         let mut models: Vec<String> = vec![];
         let mut b_histogram = vec![];
-        let mut cor: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
-        let mut mbe: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
-        let mut mae: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
-        let mut mse: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
-        let mut rmse: Array2<f64> = Array2::from_elem((r * k * l, m), f64::NAN);
+        let mut cor: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
+        let mut mbe: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
+        let mut mae: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
+        let mut mse: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
+        let mut rmse: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
         let idx_cols: Vec<usize> = (0..p).collect::<Vec<usize>>();
-        let mut i: usize = 0;
-        for _rep in 0..r {
+        for rep in 0..r {
             let (groupings, k, s) = self.k_split(k).unwrap();
             println!("groupings={:?}; k={:?}; s={:?}", groupings, k, s);
             for fold in 0..k {
@@ -157,8 +156,9 @@ impl
                 )
                 .unwrap();
 
-                for f in functions.iter() {
-                    let (b_hat, model_name) = f(
+                // for f in functions.iter() {
+                for i in 0..l {
+                    let (b_hat, model_name) = functions[i](
                         &self.intercept_and_allele_frequencies,
                         &self.phenotypes,
                         &idx_training,
@@ -175,19 +175,25 @@ impl
                     )
                     .unwrap();
                     let metrics = self.performance(&y_validation, &y_pred).unwrap();
-                    models.push(model_name);
+                    models.push(model_name.clone());
                     b_histogram.push(histogram(
                         b_hat.iter().map(|x| x.clone()).collect::<Vec<f64>>(),
                         10,
                     ));
+
+// Try to plot
+if rep == 0 {
+    let fname_svg = "test-".to_owned() + &model_name[..] + "-" + &fold.to_string()[..] + ".svg" ;
+    plot_scatter_2d(&y_validation.column(0).to_owned(), &y_pred.column(0).to_owned(), fname_svg).unwrap();
+}
+
                     for j in 0..m {
-                        cor[(i, j)] = metrics[0][j];
-                        mbe[(i, j)] = metrics[1][j];
-                        mae[(i, j)] = metrics[2][j];
-                        mse[(i, j)] = metrics[3][j];
-                        rmse[(i, j)] = metrics[4][j];
+                        cor[(rep, fold, i, j)] = metrics[0][j];
+                        mbe[(rep, fold, i, j)] = metrics[1][j];
+                        mae[(rep, fold, i, j)] = metrics[2][j];
+                        mse[(rep, fold, i, j)] = metrics[3][j];
+                        rmse[(rep, fold, i, j)] = metrics[4][j];
                     }
-                    i += 1;
                 }
             }
         }
@@ -249,9 +255,9 @@ mod tests {
         // Outputs
         let n = 100;
         // let p = 50_000;
-        // let q = 10;
+        // let q = 5;
         let p = 1_000;
-        let q = 2;
+        let q = 3;
         let h2 = 0.75;
         let (k, r) = (10, 5);
         let mut rng = rand::thread_rng();
@@ -320,23 +326,20 @@ mod tests {
             fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
         > = vec![
             ols,
-            penalise_lasso_like,
-            penalise_ridge_like,
-            penalise_lasso_like_with_iterative_proxy_norms,
-            penalise_ridge_like_with_iterative_proxy_norms,
+            // penalise_lasso_like,
+            // penalise_ridge_like,
+            // penalise_lasso_like_with_iterative_proxy_norms,
+            // penalise_ridge_like_with_iterative_proxy_norms,
             penalise_glmnet,
         ];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
             .cross_validate(k, r, models)
             .unwrap();
-        // println!("prediction_performance={:?}", prediction_performance);
-        let cor = prediction_performance.cor.into_shape((k * r, m)).unwrap();
-        let rmse = prediction_performance.rmse.into_shape((k * r, m)).unwrap();
-        let mean_cor = cor.mean_axis(Axis(0)).unwrap();
-        let mean_rmse = rmse.mean_axis(Axis(0)).unwrap();
-        println!("cor={:?}", cor);
-        println!("rmse={:?}", rmse);
+        let mean_cor = prediction_performance.cor.mean_axis(Axis(0)).unwrap()
+        .mean_axis(Axis(0)).unwrap();
+        let mean_rmse = prediction_performance.rmse.mean_axis(Axis(0)).unwrap()
+        .mean_axis(Axis(0)).unwrap();
         println!("cor.column_mean()={:?}", mean_cor);
         println!("rmse.column_mean()={:?}", mean_rmse);
         println!("n={:?}", f.nrows());
@@ -344,7 +347,7 @@ mod tests {
         println!("q={:?}", q);
         // Assertions
         // assert_eq!(0, 1); // Output dimensions
-        assert_eq!(mean_cor[1].round(), 1.0);
+        assert_eq!(mean_cor[(1,0)].round(), 1.0);
     }
 }
 
