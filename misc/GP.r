@@ -95,8 +95,8 @@ KFOLD_CV = function(x, y, r=5, k=10) {
 ### @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 start_time = Sys.time()
 n = 100
-p = 1000
-q = 3
+p = 50000
+q = 10
 maf = 1e-4
 h2 = 0.75
 X_sim = matrix(runif(n*p, min=maf, max=1-maf), nrow=n)

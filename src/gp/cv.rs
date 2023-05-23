@@ -277,7 +277,7 @@ mod tests {
         // Outputs
         let n = 100;
         // let p = 50_000;
-        // let q = 5;
+        // let q = 10;
         let p = 1_000;
         let q = 3;
         let h2 = 0.75;
@@ -368,7 +368,7 @@ mod tests {
         println!("p={:?}", f.ncols());
         println!("q={:?}", q);
         // Assertions
-        assert_eq!(0, 1); // Output dimensions
+        // assert_eq!(0, 1); // Output dimensions
         assert_eq!(mean_cor[(1,0)].round(), 1.0);
     }
 }

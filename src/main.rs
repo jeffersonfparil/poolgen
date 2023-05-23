@@ -3,6 +3,7 @@
 use clap::Parser;
 mod base;
 use base::{ChunkyReadAnalyseWrite, LoadAll, Parse};
+mod plot;
 mod gp;
 mod gwas;
 mod tables;
