@@ -12,7 +12,7 @@ pub fn penalise_lasso_like(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) =
+    let (b_hat, alphas, lambdas) =
         penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, 1.00, false, 0.1, 10)
             .unwrap();
     // println!("##############################");
@@ -20,12 +20,18 @@ pub fn penalise_lasso_like(
     Ok((
         b_hat,
         function_name!().to_owned()
-            + "-"
+            + "-alphas_"
+            + &alphas
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("_")
+            + "-lambdas_"
             + &lambdas
                 .iter()
                 .map(|&x| x.to_string())
                 .collect::<Vec<String>>()
-                .join("-"),
+                .join("_"),
     ))
 }
 
@@ -35,7 +41,7 @@ pub fn penalise_ridge_like(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) =
+    let (b_hat, alphas, lambdas) =
         penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, 0.00, false, 0.1, 10)
             .unwrap();
     // println!("##############################");
@@ -43,12 +49,18 @@ pub fn penalise_ridge_like(
     Ok((
         b_hat,
         function_name!().to_owned()
-            + "-"
+            + "-alphas_"
+            + &alphas
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("_")
+            + "-lambdas_"
             + &lambdas
                 .iter()
                 .map(|&x| x.to_string())
                 .collect::<Vec<String>>()
-                .join("-"),
+                .join("_"),
     ))
 }
 
@@ -58,7 +70,7 @@ pub fn penalise_glmnet(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) =
+    let (b_hat, alphas, lambdas) =
         penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, -0.1, false, 0.1, 10)
             .unwrap();
     // println!("##############################");
@@ -66,12 +78,18 @@ pub fn penalise_glmnet(
     Ok((
         b_hat,
         function_name!().to_owned()
-            + "-"
+            + "-alphas_"
+            + &alphas
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("_")
+            + "-lambdas_"
             + &lambdas
                 .iter()
                 .map(|&x| x.to_string())
                 .collect::<Vec<String>>()
-                .join("-"),
+                .join("_"),
     ))
 }
 
@@ -81,7 +99,7 @@ pub fn penalise_lasso_like_with_iterative_proxy_norms(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) =
+    let (b_hat, alphas, lambdas) =
         penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, 1.00, true, 0.1, 10)
             .unwrap();
     // println!("##############################");
@@ -89,12 +107,18 @@ pub fn penalise_lasso_like_with_iterative_proxy_norms(
     Ok((
         b_hat,
         function_name!().to_owned()
-            + "-"
+            + "-alphas_"
+            + &alphas
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("_")
+            + "-lambdas_"
             + &lambdas
                 .iter()
                 .map(|&x| x.to_string())
                 .collect::<Vec<String>>()
-                .join("-"),
+                .join("_"),
     ))
 }
 
@@ -104,7 +128,7 @@ pub fn penalise_ridge_like_with_iterative_proxy_norms(
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
 ) -> io::Result<(Array2<f64>, String)> {
-    let (b_hat, lambdas) =
+    let (b_hat, alphas, lambdas) =
         penalised_lambda_path_with_k_fold_cross_validation(x, y, row_idx, 1.00, true, 0.1, 10)
             .unwrap();
     // println!("##############################");
@@ -112,12 +136,18 @@ pub fn penalise_ridge_like_with_iterative_proxy_norms(
     Ok((
         b_hat,
         function_name!().to_owned()
-            + "-"
+            + "-alphas_"
+            + &alphas
+                .iter()
+                .map(|&x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("_")
+            + "-lambdas_"
             + &lambdas
                 .iter()
                 .map(|&x| x.to_string())
                 .collect::<Vec<String>>()
-                .join("-"),
+                .join("_"),
     ))
 }
 
@@ -273,8 +303,9 @@ fn error_index(
             .fold(0.0, |norm, &x| norm + x.powf(2.0))
             / (max - min).powf(2.0);
         let rmse = mse.sqrt() / (max - min);
-        // error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
-        error_index.push(((1.0 - cor.abs()) + rmse) / 2.0);
+        error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
+        // error_index.push(((1.0 - cor.abs()) + rmse) / 2.0);
+        // error_index.push(rmse);
     }
     Ok(error_index)
 }
@@ -320,7 +351,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     iterative: bool,
     lambda_step_size: f64,
     r: usize,
-) -> io::Result<(Array2<f64>, Vec<f64>)> {
+) -> io::Result<(Array2<f64>, Vec<f64>, Vec<f64>)> {
     let (n, p) = (row_idx.len(), x.ncols());
     let k = y.ncols();
     let max_usize: usize = (1.0 / lambda_step_size).round() as usize;
@@ -331,11 +362,13 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     let l = lambda_path.len();
 
     let (alpha_path, a): (Array2<f64>, usize) = if alpha >= 0.0 {
+        // ridge or lasso optimise for lambda only
         (
             Array2::from_shape_vec((1, l), std::iter::repeat(alpha).take(l).collect()).unwrap(),
             1,
         )
     } else {
+        // glmnet optimise for both alpha and lambda
         (
             Array2::from_shape_vec(
                 (l, l),
@@ -461,7 +494,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
             b_hat_penalised[(i, j)] = b_hat_penalised_2d[(i, j)];
         }
     }
-    Ok((b_hat_penalised, lambdas))
+    Ok((b_hat_penalised, alphas, lambdas))
 }
 
 #[cfg(test)]

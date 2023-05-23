@@ -244,13 +244,6 @@ mod tests {
 
         assert_eq!(y, y_hat_wide);
         assert_eq!(y_hat_wide, y_hat_tall);
-        let outname = plot_scatter_2d(
-            &y.column(0).to_owned(),
-            &y_hat_wide.column(0).to_owned(),
-            "test.svg".to_owned(),
-        )
-        .unwrap();
-        println!("outname={:?}", outname);
 
         let (b_wide_iterative, _) =
             ols_iterative_with_kinship_pca_covariate(&x_wide, &y, &vec![0, 1, 2, 3, 4]).unwrap();

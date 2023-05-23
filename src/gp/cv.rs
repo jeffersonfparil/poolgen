@@ -1,5 +1,6 @@
 use crate::base::*;
 use crate::gwas::*;
+use crate::plot::*;
 use ndarray::{prelude::*, stack};
 use std::io::{self, Error, ErrorKind};
 use std::ops::Sub;
@@ -125,6 +126,9 @@ impl
         let mut mae: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
         let mut mse: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
         let mut rmse: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
+        
+        let mut y_validation_and_predicted: Array4<f64> = Array4::from_elem((r, n, l, m+m), f64::NAN);
+        
         let idx_cols: Vec<usize> = (0..p).collect::<Vec<usize>>();
         for rep in 0..r {
             let (groupings, k, s) = self.k_split(k).unwrap();
@@ -143,8 +147,8 @@ impl
                     .filter(|(_, x)| *x != &fold)
                     .map(|(i, _)| i)
                     .collect();
-                println!("idx_validation={:?}", idx_validation);
-                println!("idx_training={:?}", idx_training);
+                // println!("idx_validation={:?}", idx_validation);
+                // println!("idx_training={:?}", idx_training);
 
                 let y_validation: Array2<f64> = stack(
                     Axis(0),
@@ -181,12 +185,17 @@ impl
                         10,
                     ));
 
-// Try to plot
-if rep == 0 {
-    let fname_svg = "test-".to_owned() + &model_name[..] + "-" + &fold.to_string()[..] + ".svg" ;
-    plot_scatter_2d(&y_validation.column(0).to_owned(), &y_pred.column(0).to_owned(), fname_svg).unwrap();
+//////////////////////////////////////
+// let mut y_validation_and_predicted: Array4<f64> = Array4::from_elem((r, n, l, m+1), f64::NAN);
+for i_ in 0..idx_validation.len() {
+    for j_ in 0..(m+m) {
+        if j_ >= m {
+            y_validation_and_predicted[(rep, idx_validation[i_], i, j_)] = y_validation[(i_, (j_ - m))];
+        } else {
+            y_validation_and_predicted[(rep, idx_validation[i_], i, j_)] = y_pred[(i_, j_)];
+        }
+    }
 }
-
                     for j in 0..m {
                         cor[(rep, fold, i, j)] = metrics[0][j];
                         mbe[(rep, fold, i, j)] = metrics[1][j];
@@ -197,12 +206,25 @@ if rep == 0 {
                 }
             }
         }
+        //////////////////////////////////////
+        // Try to plot
+        let rep = 0;
+        let y_validation: Array1<f64> = y_validation_and_predicted.slice(s![rep, 0..n, 0, m]).to_owned();
+        // println!("y_validation={:?}", y_validation);
+        for model in 0..l {
+            let model_name = &models[model];
+            let y_predicted: Array1<f64> = y_validation_and_predicted.slice(s![rep, 0..n, model, 0]).to_owned();
+            let fname_svg = "test-".to_owned() + &model_name[..] + ".svg" ;
+            plot_scatter_2d(&y_validation, &y_predicted, "Expected", "Predicted", &fname_svg[..]).unwrap();
+        }
+        //////////////////////////////////////
         Ok(PredictionPerformance {
             n: n,
             p: p,
             k: k,
             r: r,
             models: models,
+            y_validation_and_predicted: y_validation_and_predicted,
             b_histogram: b_histogram,
             cor: cor,
             mbe: mbe,
@@ -326,11 +348,11 @@ mod tests {
             fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
         > = vec![
             ols,
-            // penalise_lasso_like,
-            // penalise_ridge_like,
+            penalise_lasso_like,
+            penalise_ridge_like,
             // penalise_lasso_like_with_iterative_proxy_norms,
             // penalise_ridge_like_with_iterative_proxy_norms,
-            penalise_glmnet,
+            // penalise_glmnet,
         ];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
@@ -346,7 +368,7 @@ mod tests {
         println!("p={:?}", f.ncols());
         println!("q={:?}", q);
         // Assertions
-        // assert_eq!(0, 1); // Output dimensions
+        assert_eq!(0, 1); // Output dimensions
         assert_eq!(mean_cor[(1,0)].round(), 1.0);
     }
 }
