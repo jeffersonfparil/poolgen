@@ -3,6 +3,7 @@ use crate::gp::*;
 use crate::gwas::*;
 use ndarray::{prelude::*, Zip};
 use rand::prelude::*;
+use statrs::statistics::Statistics;
 use std::io::{self, Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 
@@ -221,6 +222,7 @@ fn expand_and_contract(
                 added_depenalised += normed[i];
             }
         }
+
         // Account for the absence of available slots to transfer the contracted effects into
         if (subtracted_penalised > 0.0) & (subtracted_depenalised == 0.0) {
             added_penalised -= subtracted_penalised;
@@ -229,14 +231,14 @@ fn expand_and_contract(
             subtracted_penalised -= added_penalised;
             added_penalised = 0.0;
         }
-        if (subtracted_penalised < 0.0)
-            | ((subtracted_depenalised == 0.0) & (added_depenalised == 0.0))
-        {
-            intercept += subtracted_penalised;
-            intercept -= added_penalised;
-            subtracted_penalised = 0.0;
-            added_penalised = 0.0;
-        }
+        // if (subtracted_penalised < 0.0)
+        //     | ((subtracted_depenalised == 0.0) & (added_depenalised == 0.0))
+        // {
+        //     intercept += subtracted_penalised;
+        //     intercept -= added_penalised;
+        //     subtracted_penalised = 0.0;
+        //     added_penalised = 0.0;
+        // }
         // Depenalise: expand
         for i in idx_depenalised.into_iter() {
             if b_hat[(i + 1, j)] >= 0.0 {
@@ -302,10 +304,12 @@ fn error_index(
             .iter()
             .fold(0.0, |norm, &x| norm + x.powf(2.0))
             / (max - min).powf(2.0);
-        let rmse = mse.sqrt() / (max - min);
+        let rmse = mse.sqrt(); // / (max - min);
         error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
+        // error_index.push(((1.0 - cor.abs()) + mae + mse) / 3.0);
         // error_index.push(((1.0 - cor.abs()) + rmse) / 2.0);
         // error_index.push(rmse);
+        // error_index.push(mae);
     }
     Ok(error_index)
 }
@@ -355,7 +359,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     let (n, p) = (row_idx.len(), x.ncols());
     let k = y.ncols();
     let max_usize: usize = (1.0 / lambda_step_size).round() as usize;
-    let lambda_path: Array1<f64> = (0..max_usize)
+    let lambda_path: Array1<f64> = (0..(max_usize+1))
         .into_iter()
         .map(|x| (x as f64) / (max_usize as f64))
         .collect();
@@ -392,6 +396,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
 
     let (_, nfolds, s) = k_split(row_idx, 10).unwrap();
     let mut performances: Array5<f64> = Array5::from_elem((r, nfolds, a, l, k), f64::NAN);
+    let mut effects: Array5<Array1<f64>> = Array5::from_elem((r, nfolds, a, l, k), Array1::from_elem(1, f64::NAN));
     for rep in 0..r {
         let (groupings, _, _) = k_split(row_idx, 10).unwrap();
         for fold in 0..nfolds {
@@ -409,60 +414,98 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
                 .collect();
             let (b_hat, _) = ols(&x, &y, &idx_training).unwrap();
             let mut errors: Array2<Vec<f64>> = Array2::from_elem((a, l), vec![]);
+            let mut b_hats: Array2<Array2<f64>> = Array2::from_elem((a, l), Array2::from_elem((1,1), f64::NAN));
             if iterative == false {
                 Zip::from(&mut errors)
+                    .and(&mut b_hats)
                     .and(&alpha_path)
                     .and(&lambda_path)
-                    .par_for_each(|err, &alfa, &lambda| {
+                    .par_for_each(|err, b, &alfa, &lambda| {
                         let b_hat_new: Array2<f64> =
                             expand_and_contract(&b_hat, &b_hat, alfa, lambda).unwrap();
                         *err = error_index(&b_hat_new, x, y, &idx_validation).unwrap();
+                        *b = b_hat_new;
                     });
             } else {
                 let (b_hat_proxy, _) =
                     ols_iterative_with_kinship_pca_covariate(x, y, row_idx).unwrap();
                 Zip::from(&mut errors)
+                    .and(&mut b_hats)
                     .and(&alpha_path)
                     .and(&lambda_path)
-                    .par_for_each(|err, &alfa, &lambda| {
+                    .par_for_each(|err, b, &alfa, &lambda| {
                         let b_hat_new: Array2<f64> =
                             expand_and_contract(&b_hat, &b_hat_proxy, alfa, lambda).unwrap();
                         *err = error_index(&b_hat_new, x, y, &idx_validation).unwrap();
+                        *b = b_hat_new;
                     });
             }
 
-            // let start = (((rep * nfolds) + fold) * l) + 0;
-            // let end = (((rep * nfolds) + fold) * l) + l;
-            // let idx_performances = (start..end).collect::<Vec<usize>>();
 
-            // for i in 0..l {
-            //     let i_ = idx_performances[i];
-            //     for j in 0..k {
-            //         performances[(rep, fold, i, i_, j)] = errors[i][j];
-            //     }
-            // }
+
             for i0 in 0..a {
                 for i1 in 0..l {
                     for j in 0..k {
                         performances[(rep, fold, i0, i1, j)] = errors[(i0, i1)][j];
+                        effects[(rep, fold, i0, i1, j)] = b_hats[(i0, i1)].column(j).to_owned();
                         // reps x folds x alpha x lambda x traits
                     }
                 }
             }
         }
     }
-    // Find best lambda and estimate effects on the full dataset
 
+// // Estimate a mean beta accounting for their associated errors
+// let min_error = performances.iter().fold(performances[(0,0,0,0,0)], |min, &x| if x<min{x}else{min});
+// let max_error = performances.iter().fold(performances[(0,0,0,0,0)], |max, &x| if x>max{x}else{max});
+// let one_less_scaled_error = performances.iter().map(|&x| 1.00 - (x-min_error)/(max_error-min_error)).collect::<Vec<f64>>();
+// let sum_perf = one_less_scaled_error.iter().fold(0.0, |sum, &x| sum + x);
+
+let mut errors = performances.iter().map(|&x| x).collect::<Vec<f64>>();
+errors.sort_by(|a, b| a.partial_cmp(b).unwrap());
+let e = errors.len();
+let idx = (0.01 * e as f64).ceil() as usize;
+let max_error_threshold = errors[idx];
+let mut b_hat_proxy: Array2<f64> = Array2::from_elem((p,k), 0.0);
+// let mut perf = 0.0;
+// // let nall = performances.len();
+// // let (mut b, _) = ols(x, y, row_idx).unwrap();
+for rep in 0..r {
+    for fold in 0..nfolds {
+        for alfa in 0..a {
+            for lam in 0..l {
+                for phe in 0..k {
+                    if performances[(rep, fold, alfa, lam, phe)] <= max_error_threshold {
+                        for i in 0..p {
+                            b_hat_proxy[(i, phe)] += &effects[(rep, fold, alfa, lam, phe)][i] * (1.00 / (idx as f64 + 1.00));
+                        }
+                    }
+                    // let error = (&performances[(rep, fold, alfa, lam, phe)] - min_error)/(max_error-min_error);
+                    // let weight = (1.00-error) / sum_perf;
+                    // let b_new: Array1<f64> = b.column(phe).to_owned() + (weight * &effects[(rep, fold, alfa, lam, phe)]);
+                    // if (1.00-error) > perf {
+                    //     perf = 1.00 - error;
+                    //     
+                    //     
+                    //     
+                    // }
+                }
+            }
+        }
+    }
+}
+// println!("sum_perf={}, min_error={:?}; max_error={:?}; b={:?}", sum_perf, min_error, max_error, &b);
+
+    // Find best lambda and estimate effects on the full dataset
     let mean_error_across_reps_and_folds: Array3<f64> = performances
         .mean_axis(Axis(0))
         .unwrap()
         .mean_axis(Axis(0))
         .unwrap();
-    let mean_error_lambdas: Array2<f64> =
-        mean_error_across_reps_and_folds.mean_axis(Axis(0)).unwrap();
-    let mean_error_alphas: Array2<f64> =
-        mean_error_across_reps_and_folds.mean_axis(Axis(1)).unwrap();
-
+    // let mean_error_lambdas: Array2<f64> =
+    //     mean_error_across_reps_and_folds.mean_axis(Axis(0)).unwrap();
+    // let mean_error_alphas: Array2<f64> =
+    //     mean_error_across_reps_and_folds.mean_axis(Axis(1)).unwrap();
     let (b_hat, _) = ols(x, y, row_idx).unwrap();
     let mut b_hat_penalised = b_hat.clone();
     let mut alphas = vec![];
@@ -489,12 +532,14 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
         lambdas.push(lambda_path[(idx_0, idx_1)]);
 
         let b_hat_penalised_2d: Array2<f64> =
-            expand_and_contract(&b_hat, &b_hat, alphas[j], lambdas[j]).unwrap();
+            // expand_and_contract(&b_hat, &b_hat, alphas[j], lambdas[j]).unwrap();
+            expand_and_contract(&b_hat, &b_hat_proxy, alphas[j], lambdas[j]).unwrap();
         for i in 0..p {
             b_hat_penalised[(i, j)] = b_hat_penalised_2d[(i, j)];
         }
     }
     Ok((b_hat_penalised, alphas, lambdas))
+    // Ok((b_hat_proxy, vec![0.0], vec![0.0]))
 }
 
 #[cfg(test)]
@@ -506,73 +551,14 @@ mod tests {
         let b: Array2<f64> =
             Array2::from_shape_vec((7, 1), vec![5.0, -0.4, 0.0, 1.0, -0.1, 1.0, 0.0]).unwrap();
         let new_b: Array2<f64> = expand_and_contract(&b, &b, 1.00, 0.5).unwrap();
-        println!("new_b={:?}", new_b);
+        let c: Array2<f64> =
+            Array2::from_shape_vec((7, 1), vec![5.0, 0.4, 0.0, -1.0, 0.1, -1.0, 0.0]).unwrap();
+        let new_c: Array2<f64> = expand_and_contract(&c, &c, 1.00, 0.5).unwrap();
         let expected_output1: Array2<f64> =
-            Array2::from_shape_vec((7, 1), vec![4.5, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0]).unwrap();
+            Array2::from_shape_vec((7, 1), vec![5.0, 0.0, 0.0, 0.75, 0.0, 0.75, 0.0]).unwrap();
+        let expected_output2: Array2<f64> =
+            Array2::from_shape_vec((7, 1), vec![5.0, 0.0, 0.0, -0.75, 0.0, -0.75, 0.0]).unwrap();
         assert_eq!(expected_output1, new_b);
-
-        // let n = 100;
-        // // let p = 50_000;
-        // // let q = 20;
-        // let p = 1_000;
-        // let q = 2;
-        // let h2 = 0.75;
-        // let mut rng = rand::thread_rng();
-        // let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
-        // // Simulate allele frequencies
-        // let mut f: Array2<f64> = Array2::ones((n, p + 1));
-        // for i in 0..n {
-        //     for j in 1..(p + 1) {
-        //         f[(i, j)] = dist_unif.sample(&mut rng);
-        //     }
-        // }
-        // // Simulate effects
-        // let mut b: Array2<f64> = Array2::zeros((p + 1, 1));
-        // let idx_b: Vec<usize> = dist_unif
-        //     .sample_iter(&mut rng)
-        //     .take(q)
-        //     .map(|x| (x * p as f64).floor() as usize)
-        //     .collect::<Vec<usize>>();
-        // for i in idx_b.into_iter() {
-        //     b[(i, 0)] = 1.00;
-        // }
-        // // Simulate phenotype
-        // let xb = multiply_views_xx(
-        //     &f,
-        //     &b,
-        //     &(0..n).collect::<Vec<usize>>(),
-        //     &(0..(p + 1)).collect::<Vec<usize>>(),
-        //     &(0..(p + 1)).collect::<Vec<usize>>(),
-        //     &vec![0 as usize],
-        // )
-        // .unwrap();
-        // let vg = xb.var_axis(Axis(0), 0.0)[0];
-        // let ve = (vg / h2) - vg;
-        // let dist_gaus = statrs::distribution::Normal::new(0.0, ve.sqrt()).unwrap();
-        // let e: Array2<f64> = Array2::from_shape_vec(
-        //     (n, 1),
-        //     dist_gaus
-        //         .sample_iter(&mut rng)
-        //         .take(n)
-        //         .collect::<Vec<f64>>(),
-        // )
-        // .unwrap();
-        // let y = &xb + e;
-
-        // let idx_train = (0..90).collect::<Vec<usize>>();
-        // let (b_ols, _) = ols(&f, &y, &idx_train).unwrap();
-        // println!("b_ols.slice(s![0..10])={:?}", b_ols.slice(s![0..10, ..]));
-        // let (b_ridge_like, _) = penalise_ridge_like(&f, &y, &idx_train).unwrap();
-        // println!(
-        //     "b_ridge_like.slice(s![0..10])={:?}",
-        //     b_ridge_like.slice(s![0..10, ..])
-        // );
-        // let (b_lasso_like, _) = penalise_lasso_like(&f, &y, &idx_train).unwrap();
-        // println!(
-        //     "b_lasso_like.slice(s![0..10])={:?}",
-        //     b_lasso_like.slice(s![0..10, ..])
-        // );
-
-        // assert_eq!(0, 1);
+        assert_eq!(expected_output2, new_c);
     }
 }

@@ -126,9 +126,10 @@ impl
         let mut mae: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
         let mut mse: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
         let mut rmse: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
-        
-        let mut y_validation_and_predicted: Array4<f64> = Array4::from_elem((r, n, l, m+m), f64::NAN);
-        
+
+        let mut y_validation_and_predicted: Array4<f64> =
+            Array4::from_elem((r, n, l, m + m), f64::NAN);
+
         let idx_cols: Vec<usize> = (0..p).collect::<Vec<usize>>();
         for rep in 0..r {
             let (groupings, k, s) = self.k_split(k).unwrap();
@@ -185,17 +186,19 @@ impl
                         10,
                     ));
 
-//////////////////////////////////////
-// let mut y_validation_and_predicted: Array4<f64> = Array4::from_elem((r, n, l, m+1), f64::NAN);
-for i_ in 0..idx_validation.len() {
-    for j_ in 0..(m+m) {
-        if j_ >= m {
-            y_validation_and_predicted[(rep, idx_validation[i_], i, j_)] = y_validation[(i_, (j_ - m))];
-        } else {
-            y_validation_and_predicted[(rep, idx_validation[i_], i, j_)] = y_pred[(i_, j_)];
-        }
-    }
-}
+                    //////////////////////////////////////
+                    // let mut y_validation_and_predicted: Array4<f64> = Array4::from_elem((r, n, l, m+1), f64::NAN);
+                    for i_ in 0..idx_validation.len() {
+                        for j_ in 0..(m + m) {
+                            if j_ >= m {
+                                y_validation_and_predicted[(rep, idx_validation[i_], i, j_)] =
+                                    y_validation[(i_, (j_ - m))];
+                            } else {
+                                y_validation_and_predicted[(rep, idx_validation[i_], i, j_)] =
+                                    y_pred[(i_, j_)];
+                            }
+                        }
+                    }
                     for j in 0..m {
                         cor[(rep, fold, i, j)] = metrics[0][j];
                         mbe[(rep, fold, i, j)] = metrics[1][j];
@@ -206,7 +209,7 @@ for i_ in 0..idx_validation.len() {
                 }
             }
         }
-        //////////////////////////////////////
+        // //////////////////////////////////////
         // Try to plot
         let rep = 0;
         let y_validation: Array1<f64> = y_validation_and_predicted.slice(s![rep, 0..n, 0, m]).to_owned();
@@ -217,7 +220,7 @@ for i_ in 0..idx_validation.len() {
             let fname_svg = "test-".to_owned() + &model_name[..] + ".svg" ;
             plot_scatter_2d(&y_validation, &y_predicted, "Expected", "Predicted", &fname_svg[..]).unwrap();
         }
-        //////////////////////////////////////
+        // //////////////////////////////////////
         Ok(PredictionPerformance {
             n: n,
             p: p,
@@ -276,10 +279,10 @@ mod tests {
 
         // Outputs
         let n = 100;
-        // let p = 50_000;
-        // let q = 10;
-        let p = 1_000;
-        let q = 3;
+        let p = 50_000;
+        let q = 50;
+        // let p = 1_000;
+        // let q = 2;
         let h2 = 0.75;
         let (k, r) = (10, 5);
         let mut rng = rand::thread_rng();
@@ -350,26 +353,34 @@ mod tests {
             ols,
             penalise_lasso_like,
             penalise_ridge_like,
-            // penalise_lasso_like_with_iterative_proxy_norms,
-            // penalise_ridge_like_with_iterative_proxy_norms,
-            // penalise_glmnet,
+            penalise_lasso_like_with_iterative_proxy_norms,
+            penalise_ridge_like_with_iterative_proxy_norms,
+            penalise_glmnet,
         ];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
             .cross_validate(k, r, models)
             .unwrap();
-        let mean_cor = prediction_performance.cor.mean_axis(Axis(0)).unwrap()
-        .mean_axis(Axis(0)).unwrap();
-        let mean_rmse = prediction_performance.rmse.mean_axis(Axis(0)).unwrap()
-        .mean_axis(Axis(0)).unwrap();
+        let mean_cor = prediction_performance
+            .cor
+            .mean_axis(Axis(0))
+            .unwrap()
+            .mean_axis(Axis(0))
+            .unwrap();
+        let mean_rmse = prediction_performance
+            .rmse
+            .mean_axis(Axis(0))
+            .unwrap()
+            .mean_axis(Axis(0))
+            .unwrap();
         println!("cor.column_mean()={:?}", mean_cor);
         println!("rmse.column_mean()={:?}", mean_rmse);
         println!("n={:?}", f.nrows());
         println!("p={:?}", f.ncols());
         println!("q={:?}", q);
         // Assertions
-        // assert_eq!(0, 1); // Output dimensions
-        assert_eq!(mean_cor[(1,0)].round(), 1.0);
+        assert_eq!(0, 1); // Output dimensions
+        assert_eq!(mean_cor[(1, 0)].round(), 1.0);
     }
 }
 

@@ -1,3 +1,3 @@
-pub use self::{plot::*};
+pub use self::plot::*;
 
 mod plot;
