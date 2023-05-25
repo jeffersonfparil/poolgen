@@ -226,6 +226,7 @@ pub trait LoadAll {
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
+        out: &String,
         n_threads: &usize,
     ) -> io::Result<String>;
     fn into_genotypes_and_phenotypes(

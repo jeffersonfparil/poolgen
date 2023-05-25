@@ -212,13 +212,24 @@ impl
         // //////////////////////////////////////
         // Try to plot
         let rep = 0;
-        let y_validation: Array1<f64> = y_validation_and_predicted.slice(s![rep, 0..n, 0, m]).to_owned();
+        let y_validation: Array1<f64> = y_validation_and_predicted
+            .slice(s![rep, 0..n, 0, m])
+            .to_owned();
         // println!("y_validation={:?}", y_validation);
         for model in 0..l {
             let model_name = &models[model];
-            let y_predicted: Array1<f64> = y_validation_and_predicted.slice(s![rep, 0..n, model, 0]).to_owned();
-            let fname_svg = "test-".to_owned() + &model_name[..] + ".svg" ;
-            plot_scatter_2d(&y_validation, &y_predicted, "Expected", "Predicted", &fname_svg[..]).unwrap();
+            let y_predicted: Array1<f64> = y_validation_and_predicted
+                .slice(s![rep, 0..n, model, 0])
+                .to_owned();
+            let fname_svg = "test-".to_owned() + &model_name[..] + ".svg";
+            plot_scatter_2d(
+                &y_validation,
+                &y_predicted,
+                "Expected",
+                "Predicted",
+                &fname_svg[..],
+            )
+            .unwrap();
         }
         // //////////////////////////////////////
         Ok(PredictionPerformance {
@@ -352,10 +363,10 @@ mod tests {
         > = vec![
             ols,
             penalise_lasso_like,
-            penalise_ridge_like,
-            penalise_lasso_like_with_iterative_proxy_norms,
-            penalise_ridge_like_with_iterative_proxy_norms,
-            penalise_glmnet,
+            // penalise_ridge_like,
+            // penalise_lasso_like_with_iterative_proxy_norms,
+            // penalise_ridge_like_with_iterative_proxy_norms,
+            // penalise_glmnet,
         ];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes

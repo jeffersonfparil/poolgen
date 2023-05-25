@@ -256,6 +256,21 @@ pub fn ols_iterate(
     Some(out)
 }
 
+pub fn ols_with_covariate(
+    genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    covariate: &String,
+    fname_output: &String,
+) -> io::Result<String> {
+    // Generate the covariate
+    let g = genotypes_and_phenotypes
+        .intercept_and_allele_frequencies
+        .slice(s![0.., 1..]);
+    let (n, p) = (g.nrows(), g.ncols());
+    let xxt: Array2<f64> = g.dot(&g.t()) / (p as f64);
+    println!("xxt={:?}", xxt);
+    Ok("".to_owned())
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {
@@ -308,6 +323,17 @@ mod tests {
                 .map(|x| x.to_owned())
                 .collect::<Vec<String>>(),
         };
+        let genotypes_and_phenotypes = GenotypesAndPhenotypes {
+            chromosome: vec!["".to_owned()],
+            position: vec![0],
+            allele: vec!["".to_owned()],
+            intercept_and_allele_frequencies: x.clone(),
+            phenotypes: y.clone(),
+            pool_names: vec!["".to_owned()],
+        };
+        let q =
+            ols_with_covariate(&genotypes_and_phenotypes, &"".to_owned(), &"".to_owned()).unwrap();
+        assert_eq!(0, 1);
         // Outputs
         let (beta, var_beta, pval) = ols(&x, &y).unwrap();
         let p1 = beta.nrows();

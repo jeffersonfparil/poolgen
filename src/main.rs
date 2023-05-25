@@ -17,7 +17,7 @@ mod tables;
     long_about = "Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust."
 )]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "sync2syncx", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "mle_iter", "gwalpha", "ridge_iter")
+    /// Analysis to perform (i.e. "pileup2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "mle_iter", "gwalpha", "ridge_iter")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -186,7 +186,7 @@ fn main() {
         } else if args.analysis == String::from("sync2csv") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = file_sync_phen
-                .write_csv(&filter_stats, args.keep_p_minus_1, &args.n_threads)
+                .write_csv(&filter_stats, args.keep_p_minus_1, &args.output, &args.n_threads)
                 .unwrap();
         } else if args.analysis == String::from("test") {
             let output = 0;

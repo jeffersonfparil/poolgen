@@ -1,7 +1,7 @@
 use ndarray::prelude::*;
 use plotlib::page::Page;
-use plotlib::repr::Plot;
-use plotlib::style::{PointMarker, PointStyle};
+use plotlib::repr::{Histogram, HistogramBins, Plot};
+use plotlib::style::PointStyle;
 use plotlib::view::ContinuousView;
 use std::io::{self, Error, ErrorKind};
 
@@ -26,6 +26,24 @@ pub fn plot_scatter_2d(
     Ok(fname_svg.to_owned())
 }
 
+pub fn plot_histogram_1d(
+    x: &Array1<f64>,
+    nbins: usize,
+    lab: &str,
+    fname_svg: &str,
+) -> io::Result<String> {
+    let h = Histogram::from_slice(
+        &x.iter().map(|x| *x).collect::<Vec<f64>>(),
+        HistogramBins::Count(nbins),
+    );
+    let view = ContinuousView::new()
+        .add(h)
+        .x_label(lab)
+        .y_label("Frequency");
+    Page::single(&view).save(fname_svg).unwrap();
+    Ok(fname_svg.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -40,7 +58,11 @@ mod tests {
             Array1::from_shape_vec(n, d.sample_iter(&mut rng).take(n).collect::<Vec<f64>>())
                 .unwrap();
         let y = 2.0 * &x;
-        let fname_svg = plot_scatter_2d(&x, &y, "xlab", "ylab", "test.svg").unwrap();
-        assert_eq!(fname_svg, "test.svg".to_owned());
+        let fname_scatter_plot =
+            plot_scatter_2d(&x, &y, "xlab", "ylab", "test_scatterplot.svg").unwrap();
+        let fname_histogram =
+            plot_histogram_1d(&x, 17, "Some normal variable", "test_histogram.svg").unwrap();
+        assert_eq!(fname_scatter_plot, "test_scatterplot.svg".to_owned());
+        assert_eq!(fname_histogram, "test_histogram.svg".to_owned());
     }
 }

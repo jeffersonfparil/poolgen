@@ -821,29 +821,34 @@ impl LoadAll for FileSyncPhen {
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
+        out: &String,
         n_threads: &usize,
     ) -> io::Result<String> {
         // Output filename
-        let time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs_f64();
-        let bname = self
-            .filename_sync
-            .split(".")
-            .collect::<Vec<&str>>()
-            .into_iter()
-            .map(|a| a.to_owned())
-            .collect::<Vec<String>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<String>>()[1..]
-            .to_owned()
-            .into_iter()
-            .rev()
-            .collect::<Vec<String>>()
-            .join(".");
-        let out = bname.to_owned() + "-" + &time.to_string() + "-allele_frequencies.csv";
+        let out = if *out == "".to_owned() {
+            let time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64();
+            let bname = self
+                .filename_sync
+                .split(".")
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .map(|a| a.to_owned())
+                .collect::<Vec<String>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()[1..]
+                .to_owned()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()
+                .join(".");
+            bname.to_owned() + "-" + &time.to_string() + "-allele_frequencies.csv"
+        } else {
+            out.clone()
+        };
         // Instatiate output file
         let error_writing_file = "Unable to create file: ".to_owned() + &out;
         let mut file_out = OpenOptions::new()

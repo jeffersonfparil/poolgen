@@ -1,7 +1,7 @@
 .vscode/
 target/
 Cargo.lock
+test-*
 tests/test-*
-tests/misc/SRX*
-tests/misc/DGRP*
-tests/misc/Drosophila*
+tests/misc/DGRP/
+tests/misc/weedomics/

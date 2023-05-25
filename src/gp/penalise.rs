@@ -359,7 +359,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     let (n, p) = (row_idx.len(), x.ncols());
     let k = y.ncols();
     let max_usize: usize = (1.0 / lambda_step_size).round() as usize;
-    let lambda_path: Array1<f64> = (0..(max_usize+1))
+    let lambda_path: Array1<f64> = (0..(max_usize + 1))
         .into_iter()
         .map(|x| (x as f64) / (max_usize as f64))
         .collect();
@@ -396,7 +396,8 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
 
     let (_, nfolds, s) = k_split(row_idx, 10).unwrap();
     let mut performances: Array5<f64> = Array5::from_elem((r, nfolds, a, l, k), f64::NAN);
-    let mut effects: Array5<Array1<f64>> = Array5::from_elem((r, nfolds, a, l, k), Array1::from_elem(1, f64::NAN));
+    let mut effects: Array5<Array1<f64>> =
+        Array5::from_elem((r, nfolds, a, l, k), Array1::from_elem(1, f64::NAN));
     for rep in 0..r {
         let (groupings, _, _) = k_split(row_idx, 10).unwrap();
         for fold in 0..nfolds {
@@ -414,7 +415,8 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
                 .collect();
             let (b_hat, _) = ols(&x, &y, &idx_training).unwrap();
             let mut errors: Array2<Vec<f64>> = Array2::from_elem((a, l), vec![]);
-            let mut b_hats: Array2<Array2<f64>> = Array2::from_elem((a, l), Array2::from_elem((1,1), f64::NAN));
+            let mut b_hats: Array2<Array2<f64>> =
+                Array2::from_elem((a, l), Array2::from_elem((1, 1), f64::NAN));
             if iterative == false {
                 Zip::from(&mut errors)
                     .and(&mut b_hats)
@@ -441,8 +443,6 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
                     });
             }
 
-
-
             for i0 in 0..a {
                 for i1 in 0..l {
                     for j in 0..k {
@@ -455,46 +455,47 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
         }
     }
 
-// // Estimate a mean beta accounting for their associated errors
-// let min_error = performances.iter().fold(performances[(0,0,0,0,0)], |min, &x| if x<min{x}else{min});
-// let max_error = performances.iter().fold(performances[(0,0,0,0,0)], |max, &x| if x>max{x}else{max});
-// let one_less_scaled_error = performances.iter().map(|&x| 1.00 - (x-min_error)/(max_error-min_error)).collect::<Vec<f64>>();
-// let sum_perf = one_less_scaled_error.iter().fold(0.0, |sum, &x| sum + x);
+    // // Estimate a mean beta accounting for their associated errors
+    // let min_error = performances.iter().fold(performances[(0,0,0,0,0)], |min, &x| if x<min{x}else{min});
+    // let max_error = performances.iter().fold(performances[(0,0,0,0,0)], |max, &x| if x>max{x}else{max});
+    // let one_less_scaled_error = performances.iter().map(|&x| 1.00 - (x-min_error)/(max_error-min_error)).collect::<Vec<f64>>();
+    // let sum_perf = one_less_scaled_error.iter().fold(0.0, |sum, &x| sum + x);
 
-let mut errors = performances.iter().map(|&x| x).collect::<Vec<f64>>();
-errors.sort_by(|a, b| a.partial_cmp(b).unwrap());
-let e = errors.len();
-let idx = (0.01 * e as f64).ceil() as usize;
-let max_error_threshold = errors[idx];
-let mut b_hat_proxy: Array2<f64> = Array2::from_elem((p,k), 0.0);
-// let mut perf = 0.0;
-// // let nall = performances.len();
-// // let (mut b, _) = ols(x, y, row_idx).unwrap();
-for rep in 0..r {
-    for fold in 0..nfolds {
-        for alfa in 0..a {
-            for lam in 0..l {
-                for phe in 0..k {
-                    if performances[(rep, fold, alfa, lam, phe)] <= max_error_threshold {
-                        for i in 0..p {
-                            b_hat_proxy[(i, phe)] += &effects[(rep, fold, alfa, lam, phe)][i] * (1.00 / (idx as f64 + 1.00));
+    let mut errors = performances.iter().map(|&x| x).collect::<Vec<f64>>();
+    errors.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let e = errors.len();
+    let idx = (0.01 * e as f64).ceil() as usize;
+    let max_error_threshold = errors[idx];
+    let mut b_hat_proxy: Array2<f64> = Array2::from_elem((p, k), 0.0);
+    // let mut perf = 0.0;
+    // // let nall = performances.len();
+    // // let (mut b, _) = ols(x, y, row_idx).unwrap();
+    for rep in 0..r {
+        for fold in 0..nfolds {
+            for alfa in 0..a {
+                for lam in 0..l {
+                    for phe in 0..k {
+                        if performances[(rep, fold, alfa, lam, phe)] <= max_error_threshold {
+                            for i in 0..p {
+                                b_hat_proxy[(i, phe)] += &effects[(rep, fold, alfa, lam, phe)][i]
+                                    * (1.00 / (idx as f64 + 1.00));
+                            }
                         }
+                        // let error = (&performances[(rep, fold, alfa, lam, phe)] - min_error)/(max_error-min_error);
+                        // let weight = (1.00-error) / sum_perf;
+                        // let b_new: Array1<f64> = b.column(phe).to_owned() + (weight * &effects[(rep, fold, alfa, lam, phe)]);
+                        // if (1.00-error) > perf {
+                        //     perf = 1.00 - error;
+                        //
+                        //
+                        //
+                        // }
                     }
-                    // let error = (&performances[(rep, fold, alfa, lam, phe)] - min_error)/(max_error-min_error);
-                    // let weight = (1.00-error) / sum_perf;
-                    // let b_new: Array1<f64> = b.column(phe).to_owned() + (weight * &effects[(rep, fold, alfa, lam, phe)]);
-                    // if (1.00-error) > perf {
-                    //     perf = 1.00 - error;
-                    //     
-                    //     
-                    //     
-                    // }
                 }
             }
         }
     }
-}
-// println!("sum_perf={}, min_error={:?}; max_error={:?}; b={:?}", sum_perf, min_error, max_error, &b);
+    // println!("sum_perf={}, min_error={:?}; max_error={:?}; b={:?}", sum_perf, min_error, max_error, &b);
 
     // Find best lambda and estimate effects on the full dataset
     let mean_error_across_reps_and_folds: Array3<f64> = performances
