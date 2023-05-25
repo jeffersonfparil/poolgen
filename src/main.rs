@@ -186,7 +186,12 @@ fn main() {
         } else if args.analysis == String::from("sync2csv") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = file_sync_phen
-                .write_csv(&filter_stats, args.keep_p_minus_1, &args.output, &args.n_threads)
+                .write_csv(
+                    &filter_stats,
+                    args.keep_p_minus_1,
+                    &args.output,
+                    &args.n_threads,
+                )
                 .unwrap();
         } else if args.analysis == String::from("test") {
             let output = 0;

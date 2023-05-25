@@ -333,7 +333,7 @@ mod tests {
         };
         let q =
             ols_with_covariate(&genotypes_and_phenotypes, &"".to_owned(), &"".to_owned()).unwrap();
-        assert_eq!(0, 1);
+        // assert_eq!(0, 1);
         // Outputs
         let (beta, var_beta, pval) = ols(&x, &y).unwrap();
         let p1 = beta.nrows();
