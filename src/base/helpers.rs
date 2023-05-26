@@ -2,6 +2,7 @@ use crate::base::*;
 use argmin::solver::neldermead::NelderMead;
 use ndarray::{prelude::*, Zip};
 use ndarray_linalg::svd::*;
+use statrs::statistics::Statistics;
 use std;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, SeekFrom};
@@ -84,6 +85,9 @@ pub fn prepare_solver_neldermead(p: f64, h: f64) -> NelderMead<Vec<f64>, f64> {
 }
 
 pub fn histogram(x: Vec<f64>, nbins: usize) -> (Vec<f64>, Vec<f64>, Vec<usize>) {
+    if x.clone().population_variance().is_nan() {
+        return (vec![f64::NAN],vec![f64::NAN], vec![0])
+    }
     let max = x.iter().max_by(|x, y| x.partial_cmp(y).unwrap()).unwrap();
     let min = x.iter().min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap();
     let bin_size = (max - min) / (nbins as f64);

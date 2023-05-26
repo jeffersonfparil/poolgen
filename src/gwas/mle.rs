@@ -416,11 +416,11 @@ pub fn mle_with_covariate(
             .collect::<Vec<String>>()
             .join(".");
         fname_output = bname.to_owned()
-            + "-"
-            + &time.to_string()
             + "-mle_iterative_xxt_"
             + &(n_eigenvecs + 1).to_string()
-            + "_eigens.csv";
+            + "_eigens-"
+            + &time.to_string()
+            + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
@@ -520,13 +520,13 @@ mod tests {
         let mle_iterate_with_covariate = mle_with_covariate(
             &genotypes_and_phenotypes,
             0.5,
-            &"test_iterative_mle_with_xxt_eigens.sync".to_owned(),
-            &"test_iterative_mle_with_xxt_eigens.csv".to_owned(),
+            &"test-iterative_mle_with_xxt_eigens.sync".to_owned(),
+            &"test-iterative_mle_with_xxt_eigens.csv".to_owned(),
         )
         .unwrap();
         assert_eq!(
             mle_iterate_with_covariate,
-            "test_iterative_mle_with_xxt_eigens.csv".to_owned()
+            "test-iterative_mle_with_xxt_eigens.csv".to_owned()
         );
         // Outputs
         println!("x={:?}", x);

@@ -896,10 +896,10 @@ impl LoadAll for FileSyncPhen {
     ) -> io::Result<GenotypesAndPhenotypes> {
         let freqs = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         let n = self.pool_names.len();
-        let mut chromosome: Vec<String> = vec![];
-        let mut position: Vec<u64> = vec![];
-        let mut allele: Vec<String> = vec![];
-        let mut vec: Vec<f64> = Vec::new();
+        let mut chromosome: Vec<String> = vec!["intercept".to_owned()];
+        let mut position: Vec<u64> = vec![0];
+        let mut allele: Vec<String> = vec!["intercept".to_owned()];
+        let mut vec: Vec<f64> = vec![];
         for f in freqs.iter() {
             for i in 0..f.matrix.nrows() {
                 for j in 0..f.matrix.ncols() {
@@ -911,7 +911,15 @@ impl LoadAll for FileSyncPhen {
             }
         }
         let p = vec.len() / n;
-        let mat: Array2<f64> = Array2::from_shape_vec((n, p), vec).unwrap();
+        let mat_: Array2<f64> = Array2::from_shape_vec((n, p), vec).unwrap();
+        // Add the intercept
+        let mut mat: Array2<f64> = Array2::from_elem((n, p+1), 1.00);
+        for i in 0..n {
+            for j in 1..p {
+                mat[(i,j)] = mat_[(i, j-1)];
+            }
+        }
+        println!("mat={:?}", mat.slice(s![0..5, 0..3]));
         Ok(GenotypesAndPhenotypes {
             chromosome: chromosome,
             position: position,
@@ -1107,9 +1115,10 @@ mod tests {
             expected_output6.position,
             frequencies_and_phenotypes.position[1]
         );
+        println!("frequencies_and_phenotypes={:?}", frequencies_and_phenotypes);
         assert_eq!(
             expected_output6.matrix[(0, 0)],
-            frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 0)]
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]
         );
         // assert_eq!(
         //     expected_output6.matrix[(1, 0)],

@@ -2,10 +2,10 @@ use crate::base::*;
 use crate::gwas::*;
 use crate::plot::*;
 use ndarray::{prelude::*, stack};
-use std::io::{self, Error, ErrorKind};
+use std::fs::OpenOptions;
+use std::io::{self, prelude::*, Error, ErrorKind};
 use std::ops::Sub;
-
-// use ndarray::{prelude::*, ArrayView, ArrayView2, arr2};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 impl
     CrossValidation<
@@ -231,7 +231,6 @@ impl
             )
             .unwrap();
         }
-        // //////////////////////////////////////
         Ok(PredictionPerformance {
             n: n,
             p: p,
@@ -246,6 +245,139 @@ impl
             mse: mse,
             rmse: rmse,
         })
+    }
+
+    fn tabulate_predict_and_output(
+        &self,
+        prediction_performance: &PredictionPerformance,
+        functions: Vec<
+            fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
+        >,
+        fname_input: &String,
+        fname_output: &String,
+    ) -> io::Result<(String, Vec<String>)>
+    where
+        fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>:
+            Fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
+    {
+        // Write tabulated performance output
+        let mut fname_output = fname_output.to_owned();
+        if fname_output == "".to_owned() {
+            let time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64();
+            let bname = fname_input
+                .split(".")
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .map(|a| a.to_owned())
+                .collect::<Vec<String>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()[1..]
+                .to_owned()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()
+                .join(".");
+            fname_output = bname.to_owned() + "-cross_validation-" + &time.to_string() + ".csv";
+        }
+        // Instatiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&fname_output)
+            .expect(&error_writing_file);
+        file_out
+            .write_all(("#rep,fold,model,phenotype,pearsons_correlation,mean_bias_error,mean_absolute_error,mean_square_error,root_mean_square_error\n").as_bytes())
+            .unwrap();
+        // Tabulate and write-out
+        let (r, k, l, m) = prediction_performance.cor.dim();
+        for rep in 0..r {
+            for fold in 0..k {
+                for idx_model in 0..l {
+                    for phen in 0..m {
+                        let line = vec![
+                            rep.to_string(),
+                            fold.to_string(),
+                            prediction_performance.models[idx_model].clone(),
+                            phen.to_string(),
+                            prediction_performance.cor[(rep, fold, idx_model, phen)].to_string(),
+                            prediction_performance.mbe[(rep, fold, idx_model, phen)].to_string(),
+                            prediction_performance.mae[(rep, fold, idx_model, phen)].to_string(),
+                            prediction_performance.mse[(rep, fold, idx_model, phen)].to_string(),
+                            prediction_performance.rmse[(rep, fold, idx_model, phen)].to_string(),
+                        ]
+                        .join(",")
+                            + "\n";
+                        file_out.write_all(line.as_bytes()).unwrap();
+                    }
+                }
+            }
+        }
+
+        // Generate the predictors for all the models tested and write-out
+        let (n, p) = self.intercept_and_allele_frequencies.dim();
+        let idx_all = (0..n).collect::<Vec<usize>>();
+        for f in functions.iter() {
+            // Fit
+            let (b_hat, model_name) = f(
+                &self.intercept_and_allele_frequencies,
+                &self.phenotypes,
+                &idx_all,
+            )
+            .unwrap();
+            // Write
+            let time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64();
+            let bname = fname_output
+                .split(".")
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .map(|a| a.to_owned())
+                .collect::<Vec<String>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()[1..]
+                .to_owned()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()
+                .join(".");
+            let model_fit_fname =
+                bname.to_owned() + "genomic_predictors-" + &model_name + &time.to_string() + ".csv";
+            let error_writing_file = "Unable to create file: ".to_owned() + &model_fit_fname;
+            let mut file_out = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .append(false)
+                .open(&model_fit_fname)
+                .expect(&error_writing_file);
+            file_out
+                .write_all(("#chromosome,position,allele,phenotype,predictor\n").as_bytes())
+                .unwrap();
+            for i in 0..p {
+                for j in 0..m {
+                    let line = vec![
+                        self.chromosome[i].clone(),
+                        self.position[i].to_string(),
+                        self.allele[i].clone(),
+                        j.to_string(),
+                        b_hat[(i, j)].to_string(),
+                    ]
+                    .join(",")
+                        + "\n";
+                    file_out.write_all(line.as_bytes()).unwrap();
+                }
+            }
+        }
+
+        Ok(("".to_owned(), vec!["".to_owned()]))
     }
 }
 

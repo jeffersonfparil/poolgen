@@ -264,4 +264,13 @@ pub trait CrossValidation<F> {
     ) -> io::Result<PredictionPerformance>
     where
         F: Fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>;
+    fn tabulate_predict_and_output(
+        &self,
+        prediction_performance: &PredictionPerformance,
+        functions: Vec<F>,
+        fname_input: &String,
+        fname_output: &String,
+    ) -> io::Result<(String, Vec<String>)>
+    where
+        F: Fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>;
 }

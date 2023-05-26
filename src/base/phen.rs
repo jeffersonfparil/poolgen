@@ -52,8 +52,13 @@ impl Parse<Phen> for FilePhen {
                         .expect("T_T Pool sizes column is not a valid number."),
                 );
                 for j in 0..k {
-                    phen_vec.push(vec_line[trait_values_column_ids[j]].parse::<f64>()
-                                                            .expect("T_T Error parsing the phenotype file. The trait values specified cannot be casted into float64."));
+                    if vec_line[trait_values_column_ids[j]] == "".to_string() {
+                        phen_vec.push(f64::NAN)
+                    } else {
+                        phen_vec.push(vec_line[trait_values_column_ids[j]].parse::<f64>()
+                                                            .expect("T_T Error parsing the phenotype file. The trait values specified cannot be casted into float64."))
+                    };
+                    
                 }
             }
             // Make sure that the pool sizes sum up to 1.00

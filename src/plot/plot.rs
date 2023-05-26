@@ -59,10 +59,10 @@ mod tests {
                 .unwrap();
         let y = 2.0 * &x;
         let fname_scatter_plot =
-            plot_scatter_2d(&x, &y, "xlab", "ylab", "test_scatterplot.svg").unwrap();
+            plot_scatter_2d(&x, &y, "xlab", "ylab", "test-scatterplot.svg").unwrap();
         let fname_histogram =
-            plot_histogram_1d(&x, 17, "Some normal variable", "test_histogram.svg").unwrap();
-        assert_eq!(fname_scatter_plot, "test_scatterplot.svg".to_owned());
-        assert_eq!(fname_histogram, "test_histogram.svg".to_owned());
+            plot_histogram_1d(&x, 17, "Some normal variable", "test-histogram.svg").unwrap();
+        assert_eq!(fname_scatter_plot, "test-scatterplot.svg".to_owned());
+        assert_eq!(fname_histogram, "test-histogram.svg".to_owned());
     }
 }

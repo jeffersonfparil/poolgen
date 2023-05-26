@@ -370,11 +370,11 @@ pub fn ols_with_covariate(
             .collect::<Vec<String>>()
             .join(".");
         fname_output = bname.to_owned()
-            + "-"
-            + &time.to_string()
             + "-ols_iterative_xxt_"
             + &(n_eigenvecs + 1).to_string()
-            + "_eigens.csv";
+            + "_eigens-"
+            + &time.to_string()
+            + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
@@ -474,13 +474,13 @@ mod tests {
         let ols_iterate_with_covariate = ols_with_covariate(
             &genotypes_and_phenotypes,
             0.5,
-            &"test_iterative_ols_with_xxt_eigens.sync".to_owned(),
-            &"test_iterative_ols_with_xxt_eigens.csv".to_owned(),
+            &"test-iterative_ols_with_xxt_eigens.sync".to_owned(),
+            &"test-iterative_ols_with_xxt_eigens.csv".to_owned(),
         )
         .unwrap();
         assert_eq!(
             ols_iterate_with_covariate,
-            "test_iterative_ols_with_xxt_eigens.csv".to_owned()
+            "test-iterative_ols_with_xxt_eigens.csv".to_owned()
         );
         // Outputs
         let (beta, var_beta, pval) = ols(&x, &y, true).unwrap();
