@@ -76,65 +76,81 @@ vec_herbicides = names(Y)[3:(ncol(Y)-2)]
 ## 1. What is the distribution of hericide resistances in southeast (SE) Australia?
 
 ```julia
-herbicide = vec_herbicides[1]
+xlim = (minimum(Y.COORDINATE_E[.!ismissing.(Y.COORDINATE_E)]), maximum(Y.COORDINATE_E[.!ismissing.(Y.COORDINATE_E)]))
+ylim = (minimum(Y.COORDINATE_N[.!ismissing.(Y.COORDINATE_N)]), maximum(Y.COORDINATE_N[.!ismissing.(Y.COORDINATE_N)]))
+for herbicide in vec_herbicides
+    # herbicide = vec_herbicides[1]
+    # Subset
+    jdx = names(Y).== herbicide
+    jdx[end-1:end] .= true ### include the coordinates
+    p = Y[:, jdx]
+    idx = .!ismissing.(p[:,1])
+    p = p[idx, :]
+    y = convert(Array{Float64}, p[:,1])
+    coordinate_north = convert(Array{Float64}, p[:,2])
+    coordinate_east = convert(Array{Float64}, p[:,3])
+    n = length(coordinate_north)
 
-# Subset
-jdx = names(Y).== herbicide
-jdx[end-1:end] .= true ### include the coordinates
-p = Y[:, jdx]
-idx = .!ismissing.(p[:,1])
-p = p[idx, :]
-y = convert(Array{Float64}, p[:,1])
-coordinate_north = convert(Array{Float64}, p[:,2])
-coordinate_east = convert(Array{Float64}, p[:,3])
-n = length(coordinate_north)
+    # Metrics
+    X = hcat(ones(n), coordinate_east, coordinate_north, coordinate_east .* coordinate_north)
+    inv_XTX = pinv(X' * X)
+    B = inv_XTX * X' * y
+    y_hat = X * B
+    epsilon = y - y_hat
+    ss_total = sum((y .- mean(y)).^2)
+    ss_error = sum(epsilon.^2)
+    ms_error = ss_error / (n-size(inv_XTX, 1))
+    sd_betas = Float64[]
+    for i in 1:size(inv_XTX, 1)
+        push!(sd_betas, sqrt(ms_error*inv_XTX[i,i]))
+    end
+    min_y = minimum(y)
+    max_y = maximum(y)
+    mean_y = mean(y)
+    median_y = median(y)
+    var_y = var(y)
+    Tdist = Distributions.TDist(n-size(inv_XTX, 1))
+    significance_of_effect_from_west_to_east = Distributions.pdf(Tdist, B[2]/sd_betas[3])
+    significance_of_effect_from_south_to_north = Distributions.pdf(Tdist, B[3]/sd_betas[2])
+    significance_of_effect_of_specific_position = Distributions.pdf(Tdist, B[4]/sd_betas[4])
+    code_lon = significance_of_effect_from_west_to_east<0.001 ? "***" : significance_of_effect_from_west_to_east<0.01 ? "**" : significance_of_effect_from_west_to_east<0.05 ? "*" : "ns"
+    code_lat = significance_of_effect_from_south_to_north<0.001 ? "***" : significance_of_effect_from_south_to_north<0.01 ? "**" : significance_of_effect_from_south_to_north<0.05 ? "*" : "ns"
+    code_lonxlat = significance_of_effect_of_specific_position<0.001 ? "***" : significance_of_effect_of_specific_position<0.01 ? "**" : significance_of_effect_of_specific_position<0.05 ? "*" : "ns"
+    R2 = (1 - (ss_error/ss_total)) * 100
 
-# Metrics
-X = hcat(ones(n), coordinate_east, coordinate_north, coordinate_east .* coordinate_north)
-inv_XTX = pinv(X' * X)
-B = inv_XTX * X' * y
-y_hat = X * B
-epsilon = y - y_hat
-ss_total = sum((y .- mean(y)).^2)
-ss_error = sum(epsilon.^2)
-ms_error = ss_error / (n-size(inv_XTX, 1))
-sd_betas = Float64[]
-for i in 1:size(inv_XTX, 1)
-    push!(sd_betas, sqrt(ms_error*inv_XTX[i,i]))
+    # Plot
+    plot_3d = Plots.scatter(coordinate_east,
+                            coordinate_north,
+                            y,
+                            zcolor = y,
+                            c = cgrad(:Set1_3, n, rev=true),
+                            camera = (20, 60),
+                            legend = false,
+                            colorbar = true,
+                            xlims = xlim,
+                            ylims = ylim,
+                            title = string(herbicide,
+                                    " Resistance (R2=", round(R2, digits=2), "%) \n(Effects",
+                                    ": lon=", round(B[2], digits=2), code_lon,
+                                    "; lat=", round(B[3], digits=2), code_lat, 
+                                    "; lon x lat=", round(B[4], digits=2), code_lonxlat),
+                            titlefontsize = 10,
+                            xlab="°East", ylab="°North", zlab=string(herbicide, "\nResistance (%)"));
+    Plots.savefig(string(herbicide, "_scatterplot3d.svg"))
 end
-min_y = minimum(y)
-max_y = maximum(y)
-mean_y = mean(y)
-median_y = median(y)
-var_y = var(y)
-Tdist = Distributions.TDist(n-size(inv_XTX, 1))
-significance_of_effect_from_west_to_east = Distributions.pdf(Tdist, B[2]/sd_betas[3])
-significance_of_effect_from_south_to_north = Distributions.pdf(Tdist, B[3]/sd_betas[2])
-significance_of_effect_of_specific_position = Distributions.pdf(Tdist, B[4]/sd_betas[4])
-R2 = (1 - (ss_error/ss_total)) * 100
-
-# Plot
-plot_3d = Plots.scatter(coordinate_east,
-                        coordinate_north,
-                        y,
-                        zcolor = y,
-                        c = cgrad(:Set1_3, n, rev=true),
-                        camera = (20, 60),
-                        title = string(herbicide,
-                                " Resistance\n(Effects: lon=", round(B[2], digits=2),
-                                "; lat=", round(B[3], digits=2),
-                                "; lon x lat=", round(B[4], digits=2)),
-                        xlab="°East", ylab="°North", zlab=string(herbicide, "\nResistance (%)"));
-Plots.savefig(string(herbicide, "_scatterplot3d.svg"))
-
-
-
 ```
 
 ![test_plot](./../tests/misc/weedomics/Glyphosate_scatterplot3d.svg)
+![test_plot](./../tests/misc/weedomics/Clethodim_scatterplot3d.svg)
+![test_plot](./../tests/misc/weedomics/Intercept_scatterplot3d.svg)
+![test_plot](./../tests/misc/weedomics/Atrazine_scatterplot3d.svg)
+![test_plot](./../tests/misc/weedomics/Paraquat_scatterplot3d.svg)
+![test_plot](./../tests/misc/weedomics/Sulfometuron_scatterplot3d.svg)
+![test_plot](./../tests/misc/weedomics/Terbuthylazine_scatterplot3d.svg)
 
+Most herbicide resistances (except paraquat and intercept) have significant north-to-south gradient, i.e. more resistance in the north for glyphosate, clethodim, and sulfometuron; while vice-versa for atrazine and terbuthylazine.
 
-There is not much gradient in the the distribution of herbicide resistances across SE Australia. Resistances seem to be just scattered throughout the landscape with little north-to-south gradient.
+Can we say there is more historical application of the glyphosate, clethodim and sulfometuron in the north; while more application of post-emergence photosynthesis inhibitors in the south? Is it fair to associate the higher rainfall hence more weeds in the south to the need to use faster acting photosynthesis-inhibiting herbicides?
 
 ## 2. How are the populations genetically related - is there significant population structure across SE Australia?
 
