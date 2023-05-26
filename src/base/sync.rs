@@ -707,7 +707,7 @@ impl LoadAll for FileSyncPhen {
         start: &u64,
         end: &u64,
         filter_stats: &FilterStats,
-        keep_n_minus_1: bool,
+        keep_p_minus_1: bool,
     ) -> io::Result<Vec<LocusFrequencies>> {
         // Input syn file
         let fname = self.filename_sync.clone();
@@ -759,7 +759,7 @@ impl LoadAll for FileSyncPhen {
                 Err(_) => continue,
             };
             // Remove minimum allele
-            if keep_n_minus_1 {
+            if keep_p_minus_1 {
                 locus_frequencies.sort_by_allele_freq(true).unwrap();
                 locus_frequencies.matrix.remove_index(Axis(1), 0);
                 locus_frequencies.alleles_vector.remove(0);
@@ -772,7 +772,7 @@ impl LoadAll for FileSyncPhen {
     fn load(
         &self,
         filter_stats: &FilterStats,
-        keep_n_minus_1: bool,
+        keep_p_minus_1: bool,
         n_threads: &usize,
     ) -> io::Result<Vec<LocusFrequencies>> {
         let fname = self.filename_sync.clone();
@@ -794,7 +794,7 @@ impl LoadAll for FileSyncPhen {
             let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
                 let mut freqs = self_clone
-                    .per_chunk_load(&start, &end, &filter_stats, keep_n_minus_1)
+                    .per_chunk_load(&start, &end, &filter_stats, keep_p_minus_1)
                     .unwrap();
                 thread_ouputs_clone.lock().unwrap().append(&mut freqs);
             });
@@ -820,7 +820,7 @@ impl LoadAll for FileSyncPhen {
     fn write_csv(
         &self,
         filter_stats: &FilterStats,
-        keep_n_minus_1: bool,
+        keep_p_minus_1: bool,
         out: &String,
         n_threads: &usize,
     ) -> io::Result<String> {
@@ -863,7 +863,7 @@ impl LoadAll for FileSyncPhen {
             )
             .unwrap();
         // Load the full sync file in parallel and sort
-        let freqs = self.load(filter_stats, keep_n_minus_1, n_threads).unwrap();
+        let freqs = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         for f in freqs.iter() {
             for i in 0..f.alleles_vector.len() {
                 let freqs_per_pool = f
@@ -891,22 +891,21 @@ impl LoadAll for FileSyncPhen {
     fn into_genotypes_and_phenotypes(
         &self,
         filter_stats: &FilterStats,
-        keep_n_minus_1: bool,
+        keep_p_minus_1: bool,
         n_threads: &usize,
     ) -> io::Result<GenotypesAndPhenotypes> {
-        let freqs = self.load(filter_stats, keep_n_minus_1, n_threads).unwrap();
+        let freqs = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         let n = self.pool_names.len();
-        let mut chromosome: Vec<String> = vec!["Intercept".to_owned()];
-        let mut position: Vec<u64> = vec![0];
-        let mut allele: Vec<String> = vec!["Intercept".to_owned()];
+        let mut chromosome: Vec<String> = vec![];
+        let mut position: Vec<u64> = vec![];
+        let mut allele: Vec<String> = vec![];
         let mut vec: Vec<f64> = Vec::new();
         for f in freqs.iter() {
             for i in 0..f.matrix.nrows() {
                 for j in 0..f.matrix.ncols() {
-                    if i == 0 {
-                        chromosome.push(f.chromosome.to_owned());
-                        position.push(f.position);
-                    }
+                    chromosome.push(f.chromosome.to_owned());
+                    position.push(f.position);
+                    allele.push(f.alleles_vector[j].clone());
                     vec.push(f.matrix[(i, j)]);
                 }
             }

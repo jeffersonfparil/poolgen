@@ -4,7 +4,7 @@ use ndarray::{prelude::*, Zip};
 use ndarray_linalg::*;
 use ndarray_linalg::{solve::Determinant, Inverse};
 use statrs::distribution::{ContinuousCDF, StudentsT};
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{self, prelude::*, Error, ErrorKind};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -152,6 +152,7 @@ impl Regression for UnivariateOrdinaryLeastSquares {
 fn ols(
     x_matrix: &Array2<f64>,
     y_matrix: &Array2<f64>,
+    remove_collinearities: bool,
 ) -> io::Result<(Array2<f64>, Array2<f64>, Array2<f64>)> {
     let n = x_matrix.nrows();
     let mut p = x_matrix.ncols();
@@ -167,8 +168,9 @@ fn ols(
         let mut ols_regression = UnivariateOrdinaryLeastSquares::new();
         ols_regression.x = x_matrix.clone();
         ols_regression.y = y_matrix.column(j).to_owned();
-        if p <= 6 {
+        if remove_collinearities {
             // Remove collinearities if we're performing iterative regression
+            // Note: does not account for the identities of the removed columns - alleles or covariates
             ols_regression.remove_collinearities_in_x();
         }
         match ols_regression.estimate_significance() {
@@ -229,10 +231,11 @@ pub fn ols_iterate(
     }
     let y_matrix = locus_counts_and_phenotypes.phenotypes.clone();
     // OLS and compute the p-values associated with each estimate
-    let (beta, _var_beta, pval) = match ols(&x_matrix, &y_matrix) {
-        Ok(x) => x,
-        Err(_) => return None,
-    };
+    let (beta, _var_beta, pval): (Array2<f64>, Array2<f64>, Array2<f64>) =
+        match ols(&x_matrix, &y_matrix, true) {
+            Ok(x) => x,
+            Err(_) => return None,
+        };
     // Iterate across alleles
     let first_2_col = vec![
         locus_frequencies.chromosome.clone(),
@@ -259,7 +262,7 @@ pub fn ols_iterate(
 
 pub fn ols_with_covariate(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
-    eigen_xxt_variance_explained: f64,
+    xxt_eigen_variance_explained: f64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
@@ -279,7 +282,7 @@ pub fn ols_with_covariate(
     for i in 1..cummulative_variance_explained.len() {
         cummulative_variance_explained[i] =
             cummulative_variance_explained[i - 1] + cummulative_variance_explained[i];
-        if (cummulative_variance_explained[i - 1] >= eigen_xxt_variance_explained)
+        if (cummulative_variance_explained[i - 1] >= xxt_eigen_variance_explained)
             & (i - 1 < n_eigenvecs)
         {
             n_eigenvecs = i - 1;
@@ -312,8 +315,6 @@ pub fn ols_with_covariate(
     )
     .unwrap();
 
-    println!("allele_idx={:?}", allele_idx);
-    println!("phenotype_idx={:?}", phenotype_idx);
     // Parallel OLS
     Zip::from(&mut beta)
         .and(&mut varb)
@@ -333,23 +334,19 @@ pub fn ols_with_covariate(
                 y.column(j).iter().map(|x| x.clone()).collect::<Vec<f64>>(),
             )
             .unwrap();
-            let (beta_, var_beta_, pval_) = match ols(&x_matrix, &y_matrix) {
-                Ok(x) => x,
-                Err(_) => (
-                    Array2::from_elem((1, 1), f64::NAN),
-                    Array2::from_elem((1, 1), f64::NAN),
-                    Array2::from_elem((1, 1), f64::NAN),
-                ),
-            };
+            let (beta_, var_beta_, pval_): (Array2<f64>, Array2<f64>, Array2<f64>) =
+                match ols(&x_matrix, &y_matrix, false) {
+                    Ok(x) => x,
+                    Err(_) => (
+                        Array2::from_elem((p, 1), f64::NAN),
+                        Array2::from_elem((p, 1), f64::NAN),
+                        Array2::from_elem((p, 1), f64::NAN),
+                    ),
+                };
             *effect = beta_[(n_eigenvecs + 1, 0)];
             *variance = var_beta_[(n_eigenvecs + 1, 0)];
             *significance = pval_[(n_eigenvecs + 1, 0)];
         });
-
-    println!("y={:?}", y);
-    println!("g={:?}", g);
-    println!("beta={:?}", beta);
-    println!("pval={:?}", pval);
 
     // Write output
     let mut fname_output = fname_output.to_owned();
@@ -376,7 +373,7 @@ pub fn ols_with_covariate(
             + "-"
             + &time.to_string()
             + "-ols_iterative_xxt_"
-            + &n_eigenvecs.to_string()
+            + &(n_eigenvecs + 1).to_string()
             + "_eigens.csv";
     }
     // Instatiate output file
@@ -406,7 +403,7 @@ pub fn ols_with_covariate(
         }
     }
 
-    Ok("".to_owned())
+    Ok(fname_output)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -464,7 +461,7 @@ mod tests {
         let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
             chromosome: vec!["X".to_owned(), "Y".to_owned()],
             position: vec![123, 987],
-            allele: vec!["a".to_string(),"g".to_string()],
+            allele: vec!["a".to_string(), "g".to_string()],
             intercept_and_allele_frequencies: x.clone(),
             phenotypes: y.clone(),
             pool_names: vec!["".to_owned()],
@@ -474,16 +471,19 @@ mod tests {
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(2, 2)] = 5.0;
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(3, 2)] = 2.0;
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(4, 2)] = 1.0;
-        let q = ols_with_covariate(
+        let ols_iterate_with_covariate = ols_with_covariate(
             &genotypes_and_phenotypes,
             0.5,
             &"test_iterative_ols_with_xxt_eigens.sync".to_owned(),
-            &"".to_owned(),
+            &"test_iterative_ols_with_xxt_eigens.csv".to_owned(),
         )
         .unwrap();
-        // assert_eq!(0, 1);
+        assert_eq!(
+            ols_iterate_with_covariate,
+            "test_iterative_ols_with_xxt_eigens.csv".to_owned()
+        );
         // Outputs
-        let (beta, var_beta, pval) = ols(&x, &y).unwrap();
+        let (beta, var_beta, pval) = ols(&x, &y, true).unwrap();
         let p1 = beta.nrows();
         let k1 = beta.ncols();
         let p2 = var_beta.nrows();

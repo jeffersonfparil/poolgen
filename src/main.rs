@@ -3,6 +3,7 @@
 use clap::Parser;
 mod base;
 use base::{ChunkyReadAnalyseWrite, LoadAll, Parse};
+use gwas::{mle_with_covariate, ols_with_covariate};
 mod gp;
 mod gwas;
 mod plot;
@@ -63,6 +64,9 @@ struct Args {
     ////////////////////////////////////////////////////
     ////// Additional parameters
     //////////////////////////////////////////////////////
+    /// GWAS iterative OLS using some of the kinship matrix's PCs as covariate
+    #[clap(short, long, default_value_t = 0.75)]
+    xxt_eigen_variance_explained: f64,
     /// GWAlpha inference method to use: "LS" for least squares or "ML" for maximum likelihood estimation
     #[clap(long, default_value = "ML")]
     gwalpha_method: String,
@@ -120,7 +124,7 @@ fn main() {
     } else {
         // SYNC INPUT
         let file_sync = base::FileSync {
-            filename: args.fname,
+            filename: args.fname.clone(),
             test: args.analysis.clone(),
         };
         if args.analysis == String::from("fisher_exact_test") {
@@ -151,6 +155,18 @@ fn main() {
                     gwas::ols_iterate,
                 )
                 .unwrap();
+        } else if args.analysis == String::from("ols_iter_with_kinship") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            let genotypes_and_phenotypes = file_sync_phen
+                .into_genotypes_and_phenotypes(&filter_stats, args.keep_p_minus_1, &args.n_threads)
+                .unwrap();
+            output = ols_with_covariate(
+                &genotypes_and_phenotypes,
+                args.xxt_eigen_variance_explained,
+                &args.fname.clone(),
+                &args.output,
+            )
+            .unwrap();
         } else if args.analysis == String::from("mle_iter") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = file_sync_phen
@@ -161,6 +177,18 @@ fn main() {
                     gwas::mle_iterate,
                 )
                 .unwrap();
+        } else if args.analysis == String::from("mle_iter_with_kinship") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            let genotypes_and_phenotypes = file_sync_phen
+                .into_genotypes_and_phenotypes(&filter_stats, args.keep_p_minus_1, &args.n_threads)
+                .unwrap();
+            output = mle_with_covariate(
+                &genotypes_and_phenotypes,
+                args.xxt_eigen_variance_explained,
+                &args.fname.clone(),
+                &args.output,
+            )
+            .unwrap();
         } else if args.analysis == String::from("gwalpha") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             if args.gwalpha_method == "LS".to_owned() {

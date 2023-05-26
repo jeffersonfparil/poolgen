@@ -1,12 +1,14 @@
 use crate::base::*;
 use crate::gwas::*;
 use argmin::core::{self, CostFunction, Executor};
-use ndarray::prelude::*;
-use ndarray_linalg::solve::Determinant;
-use ndarray_linalg::Inverse;
+use ndarray::{prelude::*, Zip};
+use ndarray_linalg::*;
+use ndarray_linalg::{solve::Determinant, Inverse};
 use statrs::distribution::{ContinuousCDF, StudentsT};
 use std::f64::consts::PI;
-use std::io::{self, Error, ErrorKind};
+use std::fs::OpenOptions;
+use std::io::{self, prelude::*, Error, ErrorKind};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn negative_likelihood_normal_distribution_sigma_and_beta(
     params: &Vec<f64>,
@@ -188,6 +190,7 @@ impl Regression for UnivariateMaximumLikelihoodEstimation {
 fn mle(
     x_matrix: &Array2<f64>,
     y_matrix: &Array2<f64>,
+    remove_collinearities: bool,
 ) -> io::Result<(Array2<f64>, Array2<f64>, Array2<f64>)> {
     let n = x_matrix.nrows();
     let mut p = x_matrix.ncols();
@@ -203,8 +206,9 @@ fn mle(
         let mut mle_regression = UnivariateMaximumLikelihoodEstimation::new();
         mle_regression.x = x_matrix.clone();
         mle_regression.y = y_matrix.column(j).to_owned();
-        if p <= 6 {
+        if remove_collinearities {
             // Remove collinearities if we're performing iterative regression
+            // Note: does not account for the identities of the removed columns - alleles or covariates
             mle_regression.remove_collinearities_in_x();
         }
         match mle_regression.estimate_significance() {
@@ -265,10 +269,11 @@ pub fn mle_iterate(
     }
     let y_matrix = locus_counts_and_phenotypes.phenotypes.clone();
     // OLS and compute the p-values associated with each estimate
-    let (beta, _var_beta, pval) = match mle(&x_matrix, &y_matrix) {
-        Ok(x) => x,
-        Err(_) => return None,
-    };
+    let (beta, _var_beta, pval): (Array2<f64>, Array2<f64>, Array2<f64>) =
+        match mle(&x_matrix, &y_matrix, true) {
+            Ok(x) => x,
+            Err(_) => return None,
+        };
     // Iterate across alleles
     let first_2_col = vec![
         locus_frequencies.chromosome.clone(),
@@ -293,12 +298,166 @@ pub fn mle_iterate(
     Some(out)
 }
 
+pub fn mle_with_covariate(
+    genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    xxt_eigen_variance_explained: f64,
+    fname_input: &String,
+    fname_output: &String,
+) -> io::Result<String> {
+    // Generate the covariate
+    let g = genotypes_and_phenotypes
+        .intercept_and_allele_frequencies
+        .slice(s![0.., 1..]);
+    let (n, p) = (g.nrows(), g.ncols());
+    let kinship: Array2<f64> = g.dot(&g.t()) / (p as f64);
+    let (eigvals, eigvecs) = kinship.eig().unwrap(); // eigenvalues are sorted from high to low
+    let sum_eigs = eigvals.iter().map(|&x| x.re).fold(0.0, |sum, x| sum + x);
+    let mut n_eigenvecs: usize = n;
+    let mut cummulative_variance_explained = eigvals
+        .iter()
+        .map(|x| x.re / sum_eigs)
+        .collect::<Vec<f64>>();
+    for i in 1..cummulative_variance_explained.len() {
+        cummulative_variance_explained[i] =
+            cummulative_variance_explained[i - 1] + cummulative_variance_explained[i];
+        if (cummulative_variance_explained[i - 1] >= xxt_eigen_variance_explained)
+            & (i - 1 < n_eigenvecs)
+        {
+            n_eigenvecs = i - 1;
+        }
+    }
+    let covariate: Array2<f64> = eigvecs
+        .map(|x| x.re)
+        .slice(s![.., 0..n_eigenvecs])
+        .to_owned();
+    // Phenotype
+    let y: Array2<f64> = genotypes_and_phenotypes.phenotypes.to_owned();
+    let k = y.ncols();
+    // Prepare arrays for parallel computations
+    let mut beta: Array2<f64> = Array2::from_elem((p, k), f64::NAN);
+    let mut varb: Array2<f64> = Array2::from_elem((p, k), f64::NAN);
+    let mut pval: Array2<f64> = Array2::from_elem((p, k), f64::NAN);
+    let allele_idx: Array2<usize> = Array2::from_shape_vec(
+        (p, k),
+        (0..p)
+            .flat_map(|x| std::iter::repeat(x).take(k))
+            .collect::<Vec<usize>>(),
+    )
+    .unwrap();
+    let phenotype_idx: Array2<usize> = Array2::from_shape_vec(
+        (p, k),
+        std::iter::repeat((0..k).collect::<Vec<usize>>())
+            .take(p)
+            .flat_map(|x| x)
+            .collect(),
+    )
+    .unwrap();
+
+    println!("allele_idx={:?}", allele_idx);
+    println!("phenotype_idx={:?}", phenotype_idx);
+    println!("covariate={:?}", covariate);
+    // Parallel OLS
+    Zip::from(&mut beta)
+        .and(&mut varb)
+        .and(&mut pval)
+        .and(&allele_idx)
+        .and(&phenotype_idx)
+        .par_for_each(|effect, variance, significance, &i, &j| {
+            let mut x_matrix: Array2<f64> = Array2::ones((n, 2 + n_eigenvecs));
+            for i_ in 0..n {
+                for j_ in 1..(n_eigenvecs + 1) {
+                    x_matrix[(i_, j_)] = covariate[(i_, j_ - 1)];
+                }
+                x_matrix[(i_, n_eigenvecs + 1)] = g[(i_, i)];
+            }
+            let y_matrix: Array2<f64> = Array2::from_shape_vec(
+                (n, 1),
+                y.column(j).iter().map(|x| x.clone()).collect::<Vec<f64>>(),
+            )
+            .unwrap();
+            let (beta_, var_beta_, pval_): (Array2<f64>, Array2<f64>, Array2<f64>) =
+                match mle(&x_matrix, &y_matrix, false) {
+                    Ok(x) => x,
+                    Err(_) => (
+                        Array2::from_elem((p, 1), f64::NAN),
+                        Array2::from_elem((p, 1), f64::NAN),
+                        Array2::from_elem((p, 1), f64::NAN),
+                    ),
+                };
+            *effect = beta_[(n_eigenvecs + 1, 0)];
+            *variance = var_beta_[(n_eigenvecs + 1, 0)];
+            *significance = pval_[(n_eigenvecs + 1, 0)];
+        });
+
+    println!("y={:?}", y);
+    println!("g={:?}", g);
+    println!("beta={:?}", beta);
+    println!("pval={:?}", pval);
+
+    // Write output
+    let mut fname_output = fname_output.to_owned();
+    if fname_output == "".to_owned() {
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        let bname = fname_input
+            .split(".")
+            .collect::<Vec<&str>>()
+            .into_iter()
+            .map(|a| a.to_owned())
+            .collect::<Vec<String>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()[1..]
+            .to_owned()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()
+            .join(".");
+        fname_output = bname.to_owned()
+            + "-"
+            + &time.to_string()
+            + "-mle_iterative_xxt_"
+            + &(n_eigenvecs + 1).to_string()
+            + "_eigens.csv";
+    }
+    // Instatiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
+    let mut file_out = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .append(false)
+        .open(&fname_output)
+        .expect(&error_writing_file);
+    file_out
+        .write_all(("#chr,pos,alleles,phenotype,statistic,pvalue\n").as_bytes())
+        .unwrap();
+    for j in 0..k {
+        for i in 0..p {
+            let line = vec![
+                genotypes_and_phenotypes.chromosome[i].to_string(),
+                genotypes_and_phenotypes.position[i].to_string(),
+                genotypes_and_phenotypes.allele[i].clone(),
+                j.to_string(),
+                beta[(i, j)].to_string(),
+                pval[(i, j)].to_string(),
+            ]
+            .join(",")
+                + "\n";
+            file_out.write_all(line.as_bytes()).unwrap();
+        }
+    }
+
+    Ok(fname_output)
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn test_ols() {
+    fn test_mle() {
         // Expected
         let expected_output1: Array1<f64> = Array1::from_vec(vec![-0.73, 5.53, 6.42]);
         let expected_output2: Array1<f64> = Array1::from_vec(vec![0.61, 8.59, 3.99]);
@@ -345,10 +504,34 @@ mod tests {
                 .map(|x| x.to_owned())
                 .collect::<Vec<String>>(),
         };
+        let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
+            chromosome: vec!["X".to_owned(), "Y".to_owned()],
+            position: vec![123, 987],
+            allele: vec!["a".to_string(), "g".to_string()],
+            intercept_and_allele_frequencies: x.clone(),
+            phenotypes: y.clone(),
+            pool_names: vec!["".to_owned()],
+        };
+        genotypes_and_phenotypes.intercept_and_allele_frequencies[(0, 2)] = 10.0;
+        genotypes_and_phenotypes.intercept_and_allele_frequencies[(1, 2)] = 8.0;
+        genotypes_and_phenotypes.intercept_and_allele_frequencies[(2, 2)] = 5.0;
+        genotypes_and_phenotypes.intercept_and_allele_frequencies[(3, 2)] = 2.0;
+        genotypes_and_phenotypes.intercept_and_allele_frequencies[(4, 2)] = 1.0;
+        let mle_iterate_with_covariate = mle_with_covariate(
+            &genotypes_and_phenotypes,
+            0.5,
+            &"test_iterative_mle_with_xxt_eigens.sync".to_owned(),
+            &"test_iterative_mle_with_xxt_eigens.csv".to_owned(),
+        )
+        .unwrap();
+        assert_eq!(
+            mle_iterate_with_covariate,
+            "test_iterative_mle_with_xxt_eigens.csv".to_owned()
+        );
         // Outputs
         println!("x={:?}", x);
         println!("y={:?}", y);
-        let (beta, var_beta, pval) = mle(&x, &y).unwrap();
+        let (beta, var_beta, pval) = mle(&x, &y, true).unwrap();
         println!("beta={:?}", beta);
         let p1 = beta.nrows();
         let k1 = beta.ncols();
