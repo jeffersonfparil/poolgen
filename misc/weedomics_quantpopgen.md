@@ -19,7 +19,7 @@
 
 Setup our working directory and download Julia 1.9
 
-```{shell}
+```shell
 ### Set working directory
 DIR=/data-weedomics-1/poolgen/tests/misc/weedomics
 cd $DIR
@@ -41,7 +41,7 @@ sudo ln -s ${DIR}/julia-1.9.0/bin/julia /usr/bin/julia1.9
 
 Install linear algebra, statistics, progress meter, and plotting libraries in Julia 1.9
 
-```{julia}
+```julia
 using Pkg
 Pkg.add("DataFrames")
 Pkg.add("CSV")
@@ -53,7 +53,7 @@ Pkg.add("Plots")
 
 Load the libraries we need and our dataset
 
-```{julia}
+```julia
 using DataFrames
 using CSV
 using LinearAlgebra
@@ -61,8 +61,11 @@ using Statistics
 using Distributions
 using ProgressMeter
 using Plots
-using UnicodePlots
+using Colors
+# using Unitful
+# using UnicodePlots
 
+cd("/data-weedomics-1/poolgen/tests/misc/weedomics")
 G = CSV.read("Lolium_SEAU_allele_frequencies.csv", DataFrames.DataFrame; header=true)
 Y = CSV.read("Lolium_SEAU.csv", DataFrames.DataFrame; header=true)
 
@@ -72,9 +75,10 @@ vec_herbicides = names(Y)[3:(ncol(Y)-2)]
 
 ## 1. What is the distribution of hericide resistances in southeast (SE) Australia?
 
-```{julia}
+```julia
 herbicide = vec_herbicides[1]
 
+# Subset
 jdx = names(Y).== herbicide
 jdx[end-1:end] .= true ### include the coordinates
 p = Y[:, jdx]
@@ -85,47 +89,50 @@ coordinate_north = convert(Array{Float64}, p[:,2])
 coordinate_east = convert(Array{Float64}, p[:,3])
 n = length(coordinate_north)
 
-plt_hist = UnicodePlots.histogram(y)
-plt_scat = UnicodePlots.scatterplot(coordinate_east, coordinate_north)
-plt_line = UnicodePlots.lineplot(coordinate_east, coordinate_north)
-plt_dens = UnicodePlots.densityplot(coordinate_east, coordinate_north)
-
-coor_n = Float64[]
-coor_e = Float64[]
-for i in 1:n
-    append!(coor_n, repeat([coordinate_north[i]], convert(Int, round(y[i]))))
-    append!(coor_e, repeat([coordinate_east[i]], convert(Int, round(y[i]))))
-end
-plt_resi = UnicodePlots.densityplot(coor_e, coor_n)
-
-x = hcat(ones(n), coordinate_north, coordinate_east, (coordinate_north .* coordinate_east))
-inv_XTX = pinv(x' * x)
-B = inv_XTX * x' * y
-y_hat = x * B
-y .- y_hat
-UnicodePlots.scatterplot(y, y_hat)
-
 # Metrics
-error = y - y_hat
+X = hcat(ones(n), coordinate_east, coordinate_north, coordinate_east .* coordinate_north)
+inv_XTX = pinv(X' * X)
+B = inv_XTX * X' * y
+y_hat = X * B
+epsilon = y - y_hat
 ss_total = sum((y .- mean(y)).^2)
-ss_error = sum(error.^2)
+ss_error = sum(epsilon.^2)
 ms_error = ss_error / (n-size(inv_XTX, 1))
 sd_betas = Float64[]
 for i in 1:size(inv_XTX, 1)
     push!(sd_betas, sqrt(ms_error*inv_XTX[i,i]))
 end
-
 min_y = minimum(y)
 max_y = maximum(y)
 mean_y = mean(y)
 median_y = median(y)
 var_y = var(y)
 Tdist = Distributions.TDist(n-size(inv_XTX, 1))
-significance_of_effect_from_south_to_north = Distributions.pdf(Tdist, B[2]/sd_betas[2])
-significance_of_effect_from_west_to_east = Distributions.pdf(Tdist, B[3]/sd_betas[3])
+significance_of_effect_from_west_to_east = Distributions.pdf(Tdist, B[2]/sd_betas[3])
+significance_of_effect_from_south_to_north = Distributions.pdf(Tdist, B[3]/sd_betas[2])
 significance_of_effect_of_specific_position = Distributions.pdf(Tdist, B[4]/sd_betas[4])
 R2 = (1 - (ss_error/ss_total)) * 100
+
+# Plot
+plot_3d = Plots.scatter(coordinate_east,
+                        coordinate_north,
+                        y,
+                        zcolor = y,
+                        c = cgrad(:Set1_3, n, rev=true),
+                        camera = (20, 60),
+                        title = string(herbicide,
+                                " Resistance\n(Effects: lon=", round(B[2], digits=2),
+                                "; lat=", round(B[3], digits=2),
+                                "; lon x lat=", round(B[4], digits=2)),
+                        xlab="°East", ylab="°North", zlab=string(herbicide, "\nResistance (%)"));
+Plots.savefig(string(herbicide, "_scatterplot3d.svg"))
+
+
+
 ```
+
+![test_plot](./../tests/misc/weedomics/Glyphosate_scatterplot3d.svg)
+
 
 There is not much gradient in the the distribution of herbicide resistances across SE Australia. Resistances seem to be just scattered throughout the landscape with little north-to-south gradient.
 
