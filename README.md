@@ -21,12 +21,7 @@ git clone https://github.com/jeffersonfparil/poolgen.git
 ```shell
 cd poolgen/
 cargo build --release
-
-cargo run -- sync2syncx \
-                -f ./tests/test-pileup2sync_default.sync \
-                -o ./tests/test-pileup2sync_default_sync2syncx.syncx \
-                --min-cov 2 \
-                --n-threads 2
+./target/release/poolgen -h
 ```
 
 ## File formats
