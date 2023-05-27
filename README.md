@@ -93,33 +93,19 @@ GWAlpha ([Fournier-Level, et al, 2016](https://doi.org/10.1093/bioinformatics/bt
 
 ### Linear mixed models
 
-The linear mixed model is defined by [Henderson in 1975](https://doi.org/10.2307/2529430) is $y = X\beta + Zu + \epsilon$, where:
-- $y$ isthe vector of phenotype values;
-- $X\beta$ are the fixed effects, where in:
-  + **GBLUP** (genomic best linear unbiased prediction): $X$ consists of a column of ones and allele frequencies matrix or vector, and $\beta$ is the vector of **intercept and allele effects**, and in
-  + **ABLUP** (additive genetic effects best linear unbiased prediction) and **RRBLUP** (ridge regression best linear unbiased prediction): $X$ consists of a column of ones and non-genomic covariates, if available e.g. kinship/pool relationship matrix, testing environments, time, and blocks, and $\beta$ is the vector of **intercept and covariate effects**, if available;
-- $Zu$ are the random effects, where in:
-  + **GBLUP**: $Z$ is an identity matrix, and $u$ are the effects of each pool, where:
-    - $u \sim N(0, G=\sigma^{2}_{g}K)$, and
-    - $\sigma^{2}_{g}K$ relationship matrix between pools; and in
-  + **ABLUP** and **RRBLUP**: $Z$ is the allele frequencies matrix, and $u$ is the vector of allele effects, where:
-    - $u \sim N(0, G=\sigma^{2}_{a}I)$, and 
-    - $\sigma^{2}_{a}I$ is the additive variance-covarince matrix showing identicaly and independently distributed allele effects;
-- $\epsilon$ is the identically and independently distributed residual effects vector, i.e. $\epsilon \sim N(0, R=\sigma^{2}I)$
-- variance components ($\sigma^{2}$, and $\sigma^{2}_{g}$ in GBLUP, or $\sigma^{2}_{a}$ in ABLUP and RRBLUP) are estimated via maximum likelihood (ML) or restricted maximum likelihood (REML);
-- let $n$ be the number of pools, $m$ be the number if fixed effects to estimate, $p$ be the number of random effects to estmate, and $V = (Z G Z^{T}) + R$;
-- fixed effects are estimated by solving:
-  + $\hat{\beta} = (X^{T} V^{-1} X)^{-1} (X^{T} V^{-1} y)$, if $n > m$, while
-  + $\hat{\beta} = (X^{T} V^{-1}) (X X^{T} V^{-1})^{-1} y$, if $n << m$ which is the default as most pool sequencing experiments have this dimensionality problem; and finally
-- random effects are estimated by solving:
-  + **GBLUP** and **ABLUP**: $\hat{\mu} = (G Z^{T} V^{-1}) (y - X\hat{\beta})$, or
-  + **RRBLUP**: $\hat{\mu} = (Z^{T}Z + \lambda I)^{-1} (Z^{T}y)$, where $\lambda = \sigma^{2}/\sigma^{2}_{a}$.
-
 ### Elastic-net regression using glmnet
 
 Elastic net performs penalised maximum likelihood and is implemented on the glmnet package ([Friedman et al, 2010](https://doi.org/10.18637/jss.v033.i01)), where ridge regression is implemented if $\alpha = 0$, and lasso if $\alpha = 1$. For details see: Friedman, Jerome, Trevor Hastie, and Robert Tibshirani. 2010. “Regularization Paths for Generalized Linear Models via Coordinate Descent.” Journal of Statistical Software, Articles 33 (1): 1–22. [https://doi.org/10.18637/jss.v033.i01](https://doi.org/10.18637/jss.v033.i01).
 
-### Imputation details
+### TODO
+
+- [] Fst and Tajima's D estimation
+
+- [] Improve genomic prediction cross-validation's use of PredictionPerformance fields, i.e. output the predictions and predictor distributions
+
+- [] Simulation of genotype and phenotype data
+
+- [] Imputation
 
 Performs OLS or elastic-net regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
 
@@ -141,38 +127,3 @@ where:
 - $X_{m}$ is the matrix of allele counts of pools without missing data at the loci with missing data in the other pools (dimensions: mₘ non-missing loci × 7 alleles, nₚ pools without missing loci).
 
 Finally, the imputed allele counts are averaged across the windows sliding one locus at a time.
-
-## Acknowledgements
-
-- [Benjamin Camm](https://adaptive-evolution.biosciences.unimelb.edu.au/people/bencamm.html)
-- [Adaptive Evolution lab](https://adaptive-evolution.biosciences.unimelb.edu.au)
-- [Grains Research & Development Corporation](https://grdc.com.au/)
-
-## To do list
-- [X] Types: pileup line
-- [ ] Types: syncx line
-- [ ] Types: phenotype line
-- [ ] Types: locus
-- [ ] Types: window
-- [ ] Types: phenotype
-- [ ] pileup I/O
-- [ ] syncx I/O
-- [ ] pileup filtering: pileup to pileup and pileup to syncx
-- [ ] syncx filtering
-- [ ] imputation pileup to syncx
-- [ ] simple genotype and phenotype simulation framework (with LD)
-- [ ] OLS
-- [ ] Elastic-net
-- [ ] LMM: gBLUP
-- [ ] LMM: rrBLUP
-- [ ] GP cross-validation and plotting
-- [ ] GWAlpha
-- [ ] iterative OLS
-- [ ] iterative elastic-net
-- [ ] iterative LMM: gBLUP
-- [ ] iterative LMM: rrBLUP
-- [ ] Empirical p-values via bootstrapping
-- [ ] Empirical p-values via maximum likelihood
-- [ ] GWAS plotting
-- [ ] Machine-learning: random forest
-- [ ] Machine-learning: multilayer perceptron
