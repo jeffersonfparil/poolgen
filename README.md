@@ -1,4 +1,5 @@
 # poolgen
+
 Quantitative and population genetics analyses using pool sequencing data
 
 |**Build Status**|**License**|
@@ -10,14 +11,16 @@ Quantitative and population genetics analyses using pool sequencing data
 1. Install rustup from [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).
 
 2. Download this repository
+
 ```shell
 git clone https://github.com/jeffersonfparil/poolgen.git
 ```
-
 3. Compile and run
+
 ```shell
 cd poolgen/
-cargo run -- -h
+cargo build --release
+
 cargo run -- sync2syncx \
                 -f ./tests/test-pileup2sync_default.sync \
                 -o ./tests/test-pileup2sync_default_sync2syncx.syncx \
@@ -41,7 +44,7 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 
 ### Sync
 
-[popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format with optional header/s prefixed by '#':
+[popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format. A header line showing the names of each column including the names of the pools is prepended by '#'. Additional header line/s and comments prepended with '#' may be added anywhere within the file.
 
 - *Header line/s*:  optional header line/s including the names of the pools, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
 - *Column 1*:       chromosome or scaffold name
@@ -51,7 +54,7 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 
 ### Phenotypes
 
-1. A simple delimited file, e.g. "csv" and "tsv" with a column for the individual IDs, and at least one column for the phenotypic values
+1. A simple delimited file, e.g. "csv" and "tsv" with a column for the individual IDs, and at least one column for the phenotypic values. Header line/s and comments should be prepended by '#'.
 
 2. GWAlpha-compatible text file (i.e. "py"):
 
@@ -66,7 +69,12 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 
 ### Ordinary least squares regression
 
-The simplest regression model implemented is the ordinary least squares (OLS), where the allele effects are estimated as $\hat{\beta} = (X^{T}X)^{-1} X^{T} y$, where: $X$ consists of a vector of ones and a vector or matrix of allele frequences, and $y$ is the vector of phenotype values.
+The simplest regression model implemented is the ordinary least squares (OLS), where the allele effects are estimated as:
+
+- if $n >= p$, then $\hat{\beta} = (X^{T}X)^{-1} X^{T} y$
+- if $n < p$, then $\hat{\beta} = X^{T} (XX^{T})^{-1} y$
+
+where: $n$ is the number of observations, $p$ is the number of predictors, $X$ is an $n \times p$ matrix consisting of a vector of ones and a vector or matrix of allele frequences, and $y$ is the vector of phenotype values.
 
 ### GWAlpha: genome-wide estimation of additive effects based on quantile distributions from pool-sequencing experiments
 
