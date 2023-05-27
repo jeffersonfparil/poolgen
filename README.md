@@ -79,23 +79,32 @@ where: $n$ is the number of observations, $p$ is the number of predictors, $X$ i
 ### GWAlpha: genome-wide estimation of additive effects based on quantile distributions from pool-sequencing experiments
 
 GWAlpha ([Fournier-Level, et al, 2016](https://doi.org/10.1093/bioinformatics/btw805)) iteratively estimates for each locus the effect of each allele on the phenotypic ranking of each pool. This allele effect is defined as $\hat{\alpha} = W {{(\hat{\mu}_{0} - \hat{\mu}_{1})} \over {\sigma_{y}}}$, where:
+
 - let $a$ be the allele in question, and $q$ be the frequency of $a$, then
+
 - $W = 2 \sqrt{q*(1-q)}$ is the penalisation for low allele frequency,
+
 - $\mu_{0}$ is the mean of the beta distribution representing $a$ across pools,
+
 - $\mu_{1}$ is the mean of the beta distribution representing $1-a$ (i.e. additive inverse of $a$) across pools,
+
 - $\sigma_{y}$ is the standard deviation of the phenotype,
+
 - $\beta(\Theta=\{\theta_{1}, \theta_{2}\})$ is used to model the distributions of $a$ and $1-a$ across pools, where:
-  + $\Theta$ is estimated via maximum likelihood, i.e. $L(\Theta \mid Q) \sim \Pi^{k}_{i=1} \beta_{pdf}(q_{i} \mid \Theta)$ for the $i^{th}$ pool,
-  + $Q = \{q_{1},...,q_{k}\}$ is the cumulative sum of allele frequencies across increasing-phenotypic-value-sorted pools where $k$ is the number of pools, and
-  + $\beta_{pdf}(q_{i} \mid \Theta)$ is the probability density function for the $\beta$ distribution.
-  + $q_{i} = \beta_{cdf}(y^{\prime}_{i},\Theta) - \beta_{cdf}(y^{\prime}_{i-1},\Theta)$, where $y^{\prime}_{i} \in Y^{\prime}$
- + $Y'$ is the inverse quantile-normalized into phenotype data such that $Y^{\prime} \in [0,1]$.
 
-### Linear mixed models
+  - $\Theta$ is estimated via maximum likelihood, i.e. $L(\Theta \mid Q) \sim \Pi^{k}_{i=1} \beta_{pdf}(q_{i} \mid \Theta)$ for the $i^{th}$ pool,
 
-### Elastic-net regression using glmnet
+  - $Q = \{q_{1},...,q_{k}\}$ is the cumulative sum of allele frequencies across increasing-phenotypic-value-sorted pools where $k$ is the number of pools, and
 
-Elastic net performs penalised maximum likelihood and is implemented on the glmnet package ([Friedman et al, 2010](https://doi.org/10.18637/jss.v033.i01)), where ridge regression is implemented if $\alpha = 0$, and lasso if $\alpha = 1$. For details see: Friedman, Jerome, Trevor Hastie, and Robert Tibshirani. 2010. “Regularization Paths for Generalized Linear Models via Coordinate Descent.” Journal of Statistical Software, Articles 33 (1): 1–22. [https://doi.org/10.18637/jss.v033.i01](https://doi.org/10.18637/jss.v033.i01).
+  - $\beta_{pdf}(q_{i} \mid \Theta)$ is the probability density function for the $\beta$ distribution.
+
+  - $q_{i} = \beta_{cdf}(y^{\prime}_{i},\Theta) - \beta_{cdf}(y^{\prime}_{i-1},\Theta)$, where $y^{\prime}_{i} \in Y^{\prime}$
+
+  - $Y'$ is the inverse quantile-normalized into phenotype data such that $Y^{\prime} \in [0,1]$.
+
+### Penalised linear regression
+
+I have attempted to create a penalisation algorithm similar to elastic-net or glmnet package ([Friedman et al, 2010](https://doi.org/10.18637/jss.v033.i01)), where ridge regression is implemented if $\alpha = 0$, and lasso if $\alpha = 1$. My implementation is a simplistic contraction of the OLS estimates based on the scaled norms of multiple or univariate OLS, i.e. if the scaled norm is below a $\lambda$ threshold, followed by the expansion of OLS estimates above the threshold. The consequence of this is that while elastic-net uses coordinate descent - an iterative optimisation, my algorithm is parallelisable which means it can potentially outperform glmnet in terms of speed. However, comparisons in terms of accuracy or model fit performance is still to be determined.
 
 ### TODO
 
