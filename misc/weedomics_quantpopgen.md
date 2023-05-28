@@ -157,7 +157,7 @@ Can we say there is more historical application of the glyphosate, clethodim and
 First, we will use the R package: `poolfstat`, then implement the same population genetics calculations in `poolgen`. So let's start with R.
 
 ```R
-install.packages("poolfstat")
+# install.packages("poolfstat")
 library(poolfstat)
 
 setwd("/data-weedomics-1/poolgen/tests/misc/weedomics")
