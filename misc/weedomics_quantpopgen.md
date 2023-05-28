@@ -154,6 +154,30 @@ Can we say there is more historical application of the glyphosate, clethodim and
 
 ## 2. How are the populations genetically related - is there significant population structure across SE Australia?
 
+First, we will use the R package: `poolfstat`, then implement the same population genetics calculations in `poolgen`. So let's start with R.
+
+```R
+install.packages("poolfstat")
+library(poolfstat)
+
+setwd("/data-weedomics-1/poolgen/tests/misc/weedomics")
+phenotypes = read.csv("Lolium_SEAU.csv")
+genotypes = popsync2pooldata(sync.file="Lolium_SEAU_headerless.sync", 
+                             poolsize=rep(42, times=nrow(phenotypes)),
+                             poolnames=phenotypes$X.POP,
+                             min.cov.per.pool=1,
+                             max.cov.per.pool=1e9,
+                             noindel=FALSE,
+                             min.maf=0.001,
+                             nthreads=32)
+fst = computeFST(genotypes)
+print(fst$FST)
+fst_pairwise = compute.pairwiseFST(genotypes)
+print(fst_pairwise@PairwiseFSTmatrix[1:10, 1:10])
+max(fst_pairwise@PairwiseFSTmatrix, na.rm=TRUE)
+```
+
+
 ## 3. Can we associate the two pieces of information above to dissect the genetic bases of herbicide resistance traits?
 
 ## 4. Assuming we identify genes putatvely associated with herbicide resistance traits/s, how did these come about - did they evolve from standing genetic variation or de novo mutations, and how much is migration to blame to their distribution in the landscape?

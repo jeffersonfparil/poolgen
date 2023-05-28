@@ -58,7 +58,6 @@ impl Parse<Phen> for FilePhen {
                         phen_vec.push(vec_line[trait_values_column_ids[j]].parse::<f64>()
                                                             .expect("T_T Error parsing the phenotype file. The trait values specified cannot be casted into float64."))
                     };
-                    
                 }
             }
             // Make sure that the pool sizes sum up to 1.00

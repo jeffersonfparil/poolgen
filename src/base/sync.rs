@@ -913,10 +913,10 @@ impl LoadAll for FileSyncPhen {
         let p = vec.len() / n;
         let mat_: Array2<f64> = Array2::from_shape_vec((n, p), vec).unwrap();
         // Add the intercept
-        let mut mat: Array2<f64> = Array2::from_elem((n, p+1), 1.00);
+        let mut mat: Array2<f64> = Array2::from_elem((n, p + 1), 1.00);
         for i in 0..n {
             for j in 1..p {
-                mat[(i,j)] = mat_[(i, j-1)];
+                mat[(i, j)] = mat_[(i, j - 1)];
             }
         }
         println!("mat={:?}", mat.slice(s![0..5, 0..3]));
@@ -1115,7 +1115,10 @@ mod tests {
             expected_output6.position,
             frequencies_and_phenotypes.position[1]
         );
-        println!("frequencies_and_phenotypes={:?}", frequencies_and_phenotypes);
+        println!(
+            "frequencies_and_phenotypes={:?}",
+            frequencies_and_phenotypes
+        );
         assert_eq!(
             expected_output6.matrix[(0, 0)],
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]

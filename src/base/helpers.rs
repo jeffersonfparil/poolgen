@@ -86,7 +86,7 @@ pub fn prepare_solver_neldermead(p: f64, h: f64) -> NelderMead<Vec<f64>, f64> {
 
 pub fn histogram(x: Vec<f64>, nbins: usize) -> (Vec<f64>, Vec<f64>, Vec<usize>) {
     if x.clone().population_variance().is_nan() {
-        return (vec![f64::NAN],vec![f64::NAN], vec![0])
+        return (vec![f64::NAN], vec![f64::NAN], vec![0]);
     }
     let max = x.iter().max_by(|x, y| x.partial_cmp(y).unwrap()).unwrap();
     let min = x.iter().min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap();

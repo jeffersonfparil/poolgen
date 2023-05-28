@@ -40,7 +40,7 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 
 ### Sync
 
-[popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format. A header line showing the names of each column including the names of the pools is prepended by '#'. Additional header line/s and comments prepended with '#' may be added anywhere within the file.
+An extension of [popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format, which includes a header line prepended by '#' showing the names of each column including the names of each pool. Additional header line/s and comments prepended with '#' may be added anywhere within the file.
 
 - *Header line/s*:  optional header line/s including the names of the pools, e.g. `# chr pos ref pool1 pool2 pool3 pool4 pool5`
 - *Column 1*:       chromosome or scaffold name
@@ -70,7 +70,7 @@ The simplest regression model implemented is the ordinary least squares (OLS), w
 - if $n >= p$, then $\hat{\beta} = (X^{T}X)^{-1} X^{T} y$
 - if $n < p$, then $\hat{\beta} = X^{T} (XX^{T})^{-1} y$
 
-where: $n$ is the number of observations, $p$ is the number of predictors, $X$ is an $n \times p$ matrix consisting of a vector of ones and a vector or matrix of allele frequences, and $y$ is the vector of phenotype values.
+where: $n$ is the number of observations, $p$ is the number of predictors, $X$ is an $n \times p$ matrix consisting of a vector of ones and a vector or matrix of allele frequences, and $y$ is the vector of phenotype values. The inverses are calculated as the [Moore-Penrose pseudoinverse via singular value decomposition](https://en.wikipedia.org/wiki/Moore%E2%80%93Penrose_inverse#Singular_value_decomposition_(SVD)), where the tolerance value uses the machine epsilon (`f64::EPSILON`).
 
 ### GWAlpha: genome-wide estimation of additive effects based on quantile distributions from pool-sequencing experiments
 
