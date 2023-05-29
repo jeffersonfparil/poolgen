@@ -4,4 +4,5 @@ Cargo.lock
 test-*
 tests/test-*
 tests/misc/DGRP/
-tests/misc/weedomics/
+tests/misc/weedomics/julia*/
+tests/misc/weedomics/Lolium_*
