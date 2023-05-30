@@ -55,7 +55,7 @@ mod tests {
     fn test_chisq() {
         // Expected
         let expected_line = "Chromosome1,12345,AT,4,0.7797774084757156\n".to_owned(); // where df=7, then the pvalue is calculated as the lower tail because if chi2 < df
-                                                                                      // Inputs
+        // Inputs
         let mut locus_counts = LocusCounts {
             chromosome: "Chromosome1".to_owned(),
             position: 12345,

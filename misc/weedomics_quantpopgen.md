@@ -28,7 +28,7 @@ phenotypes = phenotypes[!is.na(phenotypes$COORDINATE_N), ]
 x_limit = range(phenotypes$COORDINATE_E)
 y_limit = range(phenotypes$COORDINATE_N)
 vec_herbicides = colnames(phenotypes)[5:ncol(phenotypes)-2]
-for herbi in vec_herbicides {
+for (herbi in vec_herbicides) {
     # herbi = vec_herbicides[1]
     trait = eval(parse(text=paste0("phenotypes$", herbi)))
     idx = !is.na(trait)
@@ -37,16 +37,30 @@ for herbi in vec_herbicides {
     coor_north = phenotypes$COORDINATE_N[idx]
     df = data.frame(trait=trait, coor_east=coor_east, coor_north=coor_north)
     mod = lm(trait ~ coor_east*coor_north, data=df)
-    anova = as.data.frame(anova(mod))
     coef_summary = as.data.frame(summary(mod)$coefficients)
-
-# orig_par = par(no.readonly=TRUE)
-svg("test.svg", width=18, height=15)
+    sig = c()
+    for (i in 1:(nrow(anova)-1)){
+        if (coef_summary[[4]][i] < 0.001) {
+            sig = c(sig, "***")
+        } else if (coef_summary[[4]][i] < 0.01) {
+            sig = c(sig, "**")
+        } else if (coef_summary[[4]][i] < 0.05) {
+            sig = c(sig, "*")
+        } else {
+            sig = c(sig, "ns")
+        }
+    }
+    sig_labels = paste(paste(c("E", "N", "ExN"), sig, sep="-"), collapse=", ")
+    ### PLot
+    # orig_par = par(no.readonly=TRUE)
+    svg(paste0(herbi, "_scatterplot.svg"), width=18, height=15)
     # par(orig_par)
-    layout(matrix(c(rep(1,5),2),nrow=1))
+    layout(matrix(c(rep(1,6),2),nrow=1))
+    par(mar=c(5,5,5,0))
     par(cex=2)
     plot(0, xlim=x_limit, ylim=y_limit, asp=1, type="n", xlab="Longitude", ylab="Latitdue",
-        main=paste0(herbi, " Resistance\n()"), xaxt="n", yaxt="n")
+        main=paste0(herbi, " Resistance\n(", sig_labels, ")"), xaxt="n", yaxt="n")
+    grid()
     outline = maps::map("world", plot=FALSE)
     xrange = range(outline$x, na.rm=TRUE)
     yrange = range(outline$y, na.rm=TRUE)
@@ -56,7 +70,13 @@ svg("test.svg", width=18, height=15)
     polypath(c(outline$x, NA, c(xbox, rev(xbox))),
            c(outline$y, NA, rep(ybox, each=2)),
            col="light blue", rule="evenodd")
-    
+    ### name the ticks with degree signs ("\U00B0")
+    xaxis = round(seq(xrange[1], xrange[2]), 2)
+    yaxis = round(seq(yrange[1], yrange[2]), 2)
+    axis(side=1, at=xaxis, labels=paste0(xaxis, "\U00B0"))
+    axis(side=2, at=yaxis, labels=paste0(yaxis, "\U00B0"),las=2)
+    ### add a grid 'cause it looks noice
+    grid(col="darkgray")
     ### plot populations coloured by their resistances
     par(new=TRUE)
     plot(0, xlim=x_limit, ylim=y_limit, asp=1, type="n", xlab="", ylab="", main="", xaxt="n", yaxt="n") #empty
@@ -70,48 +90,39 @@ svg("test.svg", width=18, height=15)
         z = round(df$trait[i])
         points(x, y, col=color_gradient[z], pch=19, cex=3)
     }
-
     ### plot heat map legend
-    legend_x=seq(from=0,to=1, length=length(color_gradient))
-    legend_y=seq(from=0, to=1, length=length(color_gradient))
+    legend_x=seq(from=0,to=100, length=length(color_gradient))
+    legend_y=seq(from=0, to=100, length=length(color_gradient))
     legend_z = matrix(rep(legend_x, times=length(color_gradient)), byrow=TRUE, nrow=length(color_gradient))
-    plot(x=c(0,1), y=c(0,1), type="n", xlab="", ylab="", xaxt="n", yaxt="n", main="")
+    par(mar=c(5,3,5,1))
+    plot(x=c(0,100), y=c(0,100), type="n", xlab="", ylab="", xaxt="n", yaxt="n", main="")
     par(new=TRUE)
     image(x=legend_x, y=legend_y, z=legend_z, col=color_gradient, xlab="", ylab="", main="", xaxt="n", las=2)
     mtext("Completely\nResistant", side=3, line=0.5, at=0.5, cex=2)
     mtext("Completely\nSusceptible", side=1, line=1.5, at=0.5, cex=2)
     ### inset histogram of resistance
+    par(mar=c(5,5,5,1))
     par(fig=c(0,1,0,1))
     par(fig=c(0.01, 0.4, 0.08, 0.5), cex=1, new=TRUE)
     nclass=10
     hist(trait, ylab= "", xlab="", yaxt="n", main="", nclass=nclass, 
     col=colorRampPalette(color_gradient[round(min(trait)):round(max(trait))])(nclass), bord=FALSE)
     # col=colorRampPalette(color_gradient[round(min(z_orig)*ncolors):round(max(z_orig)*ncolors)])(nclass), bord=FALSE)
-
-
-dev.off()
-
-
+    dev.off()
 }
 
 
 ```
 
-![test_plot](./../tests/misc/weedomics/test.svg)
+![scatterplot_Glyphosate](./../tests/misc/weedomics/Glyphosate_scatterplot.svg)
+![scatterplot_Clethodim](./../tests/misc/weedomics/Clethodim_scatterplot.svg)
+![scatterplot_Intercept](./../tests/misc/weedomics/Intercept_scatterplot.svg)
+![scatterplot_Atrazine](./../tests/misc/weedomics/Atrazine_scatterplot.svg)
+![scatterplot_Paraquat](./../tests/misc/weedomics/Paraquat_scatterplot.svg)
+![scatterplot_Sulfometuron](./../tests/misc/weedomics/Sulfometuron_scatterplot.svg)
+![scatterplot_Terbuthylazine](./../tests/misc/weedomics/Terbuthylazine_scatterplot.svg)
 
-![scatterplot_Glyphosate](./../tests/misc/weedomics/Glyphosate_scatterplot3d.svg)
-![scatterplot_Clethodim](./../tests/misc/weedomics/Clethodim_scatterplot3d.svg)
-![scatterplot_Intercept](./../tests/misc/weedomics/Intercept_scatterplot3d.svg)
-![scatterplot_Atrazine](./../tests/misc/weedomics/Atrazine_scatterplot3d.svg)
-![scatterplot_Paraquat](./../tests/misc/weedomics/Paraquat_scatterplot3d.svg)
-![scatterplot_Sulfometuron](./../tests/misc/weedomics/Sulfometuron_scatterplot3d.svg)
-![scatterplot_Terbuthylazine](./../tests/misc/weedomics/Terbuthylazine_scatterplot3d.svg)
-
-Most herbicide resistances (except paraquat and intercept) have significant north-to-south gradient, i.e. more resistance in the north for glyphosate, clethodim, and sulfometuron; while vice-versa for atrazine and terbuthylazine.
-
-Can we say there is more historical application of the glyphosate, clethodim and sulfometuron in the north; while more application of post-emergence photosynthesis inhibitors in the south? Is it fair to associate the higher rainfall hence more weeds in the south to the need to use faster acting photosynthesis-inhibiting herbicides?
-
-But wait, let's try a mixed modelling approach to achieve more power. We will be using R this time
+There is no clear/sifginificant geographic gradient to the distribution of herbicide resistances across SE Australia. This probably means that herbicide resisitances are evolving from either standing genetic variation (as affected by founder effects) and de novo mutation (as affected by population size).
 
 
 ## 2. How are the populations genetically related? Is there significant population structure across SE Australia?

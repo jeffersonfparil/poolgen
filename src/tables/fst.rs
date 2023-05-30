@@ -16,38 +16,33 @@ pub fn fst(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Option
     // Using Gautier et al, 2021 estimates (https://doi.org/10.1111/1755-0998.13557)
     println!("locus_frequencies={:?}", locus_frequencies);
 
-    // Let's start with pairwise Fst
-    let i_a: usize = 0; // pool a
-    let i_b: usize = 1; // pool b
-    let j: usize = 0; // allele 0
-    let q1_a = locus_frequencies.matrix[(i_a, j)]; // probability of sampling two genes (or alleles) identical in state (IIS) within population a
-    let q1_b = locus_frequencies.matrix[(i_b, j)]; // probability of sampling two genes (or alleles) IIS within population b
-    let q1 = 0.5 * (q1_a + q1_b);
-    let q2_ab = q1_a * q1_b; // probability of sampling two IIS genes from a and b
-    let fst_ab = (q1 - q2_ab) / (1.00 - q2_ab);
+    let counts_per_pool_per_allele: Array2<f64> = locus_counts.matrix.map(|&y| y as f64);
+    let total_counts_per_pool: Array1<f64> = counts_per_pool_per_allele.sum_axis(Axis(1));
+    let (n, p) = counts_per_pool_per_allele.dim();
 
-    /// Apparently unbiasedestimates of q1 and q2
-    let r: Array2<f64> = locus_counts.matrix.map(|&x| x as f64);
-    let c: Array1<f64> = r.sum_axis(Axis(0));
+    let i = 213; // locus index
+    let a = 0; // arbitrary reference allele index
+    let j = 0; // pool i index
+    let k = 1; // pool k index
 
-    let p1 = 0; // population 1 index
-    let p2 = 1; // population 2 index
-    let a = 0; // allele index
-    let q1 = 1.00
-        - 2.00
-            * ((c[a] / 2.00) / (c[a] / 2.00 - 1.00))
-            * (r[(p1, a)] / c[a])
-            * ((c[a] - r[(p1, a)]) / (c[a] - 1.00));
+    let q_1i_j = 1.00 - (2.00 * 
+        (counts_per_pool_per_allele[(j,a)]/total_counts_per_pool[j]) * 
+        ((total_counts_per_pool[j]-counts_per_pool_per_allele[(j,a)]) / (total_counts_per_pool[j] - 1.00))
+    );
     
-    let q2 = (r[(p1,a)]*r[(p2,a)] + (c[a]-r[(p1,a)]) * (c[a]-r[(p2,a)])) / (c[a]*c[a]);
+    let q_1i_k = 1.00 - (2.00 * 
+        (counts_per_pool_per_allele[(k,a)]/total_counts_per_pool[k]) * 
+        ((total_counts_per_pool[k]-counts_per_pool_per_allele[(k,a)]) / (total_counts_per_pool[k] - 1.00))
+    );
 
-    let r_ij: Array2<f64> = locus_counts.matrix.map(|&x| x as f64);
-    let c_ij: Array1<f64> = r_ij.sum_axis(Axis(1));
-    let n_j = r_ij.sum();
+    let q_2i_j = (1.00 / (total_counts_per_pool[j]*total_counts_per_pool[k])) * 
+    ( counts_per_pool_per_allele[(j,a)]*counts_per_pool_per_allele[(k,a)] + 
+        (total_counts_per_pool[j]-counts_per_pool_per_allele[(j,a)]) 
+            * (total_counts_per_pool[k]-counts_per_pool_per_allele[(k,a)])
+    );
 
-    println!("r_ij={:?}", r_ij);
-    println!("c_ij={:?}", c_ij);
-    println!("fst_ab={:?}", fst_ab);
+    let fst_i_jk = ((0.5*(q_1i_j+q_1i_k)) - q_2i_j) / (1.00 + q_2i_j);
+    println!("fst_i_jk = {:?}", fst_i_jk);
 
     // Output line
     // let out = vec![
@@ -60,7 +55,7 @@ pub fn fst(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Option
     // .join(",")
     //     + "\n";
     // Some(out)
-    Some("".to_owned())
+    Some(fst_i_jk.to_string())
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +77,7 @@ mod tests {
                 .map(|x| x.to_owned())
                 .collect::<Vec<String>>(),
             // matrix: Array2::from_shape_vec((4, 2), vec![0, 20, 20, 0, 0, 20, 20, 0]).unwrap(),
-            matrix: Array2::from_shape_vec((2, 4), vec![0, 1, 10, 0, 0, 10, 1, 0]).unwrap(),
+            matrix: Array2::from_shape_vec((2, 4), vec![0, 0, 10, 0, 0, 10, 0, 0]).unwrap(),
         };
         let filter_stats = FilterStats {
             remove_ns: true,
@@ -95,6 +90,6 @@ mod tests {
         // Outputs
         let out = fst(&mut locus_counts, &filter_stats).unwrap();
         // Assertions
-        assert_eq!("0".to_owned(), out);
+        assert_eq!("1".to_owned(), out);
     }
 }
