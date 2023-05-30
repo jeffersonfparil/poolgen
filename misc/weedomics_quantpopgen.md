@@ -188,11 +188,30 @@ D = dist(X)
 svg("cluster_genotypes.svg", width=20, height=10)
 plot(hclust(D, method="complete"), hang=-1)
 dev.off()
-
 ```
 
 ![test_plot](./../tests/misc/weedomics/cluster_genotypes.svg)
 
+
+Let's also try and cluster these populations and see if there's any geographic correlation.
+
+```R
+setwd("/data-weedomics-1/poolgen/tests/misc/weedomics")
+G = read.csv("Lolium_SEAU_allele_frequencies.csv")
+X = t(G[, 4:ncol(G)])
+vec_k = c(1:50)
+vec_clusters = c()
+vec_totss = c()
+vec_tot.winthinss = c()
+for (k in vec_k) {
+    K = kmeans(X, centers=k)
+    vec_clusters = c(vec_clusters, K$cluster)
+    vec_totss = c(vec_totss, K$totss)
+    vec_tot.winthinss = c(vec_tot.winthinss, K$tot.withinss)
+}
+
+
+```
 
 
 
