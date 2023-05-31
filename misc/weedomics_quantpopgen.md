@@ -39,7 +39,7 @@ for (herbi in vec_herbicides) {
     mod = lm(trait ~ coor_east*coor_north, data=df)
     coef_summary = as.data.frame(summary(mod)$coefficients)
     sig = c()
-    for (i in 1:(nrow(anova)-1)){
+    for (i in 2:nrow(coef_summary)){
         if (coef_summary[[4]][i] < 0.001) {
             sig = c(sig, "***")
         } else if (coef_summary[[4]][i] < 0.01) {
@@ -58,8 +58,9 @@ for (herbi in vec_herbicides) {
     layout(matrix(c(rep(1,6),2),nrow=1))
     par(mar=c(5,5,5,0))
     par(cex=2)
-    plot(0, xlim=x_limit, ylim=y_limit, asp=1, type="n", xlab="Longitude", ylab="Latitdue",
+    plot(0, xlim=x_limit, ylim=y_limit, asp=1, type="n", xlab="Longitude", ylab="",
         main=paste0(herbi, " Resistance\n(", sig_labels, ")"), xaxt="n", yaxt="n")
+    mtext("Latitdue", side=2, padj=-6.5, cex=2) ### Fix overlapping tick labels and axis label
     grid()
     outline = maps::map("world", plot=FALSE)
     xrange = range(outline$x, na.rm=TRUE)
@@ -81,14 +82,14 @@ for (herbi in vec_herbicides) {
     par(new=TRUE)
     plot(0, xlim=x_limit, ylim=y_limit, asp=1, type="n", xlab="", ylab="", main="", xaxt="n", yaxt="n") #empty
     # ncolors = 25 ### 25 is a nice number to see dicrete contour lines across the landscape methinks...
-    ncolors = 100
+    ncolors = 101
     color_gradient = rev(colorRampPalette(c("#A50026","#D73027","#F46D43","#FDAE61","#FEE08B","#FFFFBF","#D9EF8B","#A6D96A","#66BD63","#1A9850","#006837"))(ncolors))
     for (i in 1:nrow(df)){
         # i = 1
         x = df$coor_east[i]
         y = df$coor_north[i]
-        z = round(df$trait[i])
-        points(x, y, col=color_gradient[z], pch=19, cex=3)
+        z = round(df$trait[i])+1
+        points(x, y, col=color_gradient[z], pch=19, cex=1.5)
     }
     ### plot heat map legend
     legend_x=seq(from=0,to=100, length=length(color_gradient))
@@ -101,14 +102,25 @@ for (herbi in vec_herbicides) {
     mtext("Completely\nResistant", side=3, line=0.5, at=0.5, cex=2)
     mtext("Completely\nSusceptible", side=1, line=1.5, at=0.5, cex=2)
     ### inset histogram of resistance
-    par(mar=c(5,5,5,1))
+    par(mar=c(5,7,5,1))
     par(fig=c(0,1,0,1))
     par(fig=c(0.01, 0.4, 0.08, 0.5), cex=1, new=TRUE)
     nclass=10
-    hist(trait, ylab= "", xlab="", yaxt="n", main="", nclass=nclass, 
-    col=colorRampPalette(color_gradient[round(min(trait)):round(max(trait))])(nclass), bord=FALSE)
-    # col=colorRampPalette(color_gradient[round(min(z_orig)*ncolors):round(max(z_orig)*ncolors)])(nclass), bord=FALSE)
+    h = hist(trait, ylab= "", xlab="", xaxt="n", las=1, main="", nclass=nclass, 
+             col=colorRampPalette(color_gradient[round(min(trait)):round(max(trait))])(nclass),
+             bord=FALSE)
+    xrange = round(seq(h$breaks[1], h$breaks[length(h$breaks)], len=5), 2)
+    axis(side=1, at=xrange, labels=xrange, padj=-2.5)
+    mtext("Resistance (%)", side=1, padj=2.5)
     dev.off()
+
+    X = cbind(coor_east, coor_north, coor_east*coor_north)
+    mod_poly = lm(trait ~ polym(X, degree=3), data=df)
+    new_coor_east = seq(min(coor_east), max(coor_east), length=100)
+    new_coor_north = seq(min(coor_north), max(coor_north), length=100)
+    new_X = expand.grid(coor_east=new_coor_east, coor_north=new_coor_north)
+    new_X = cbind(new_X, new_X[,1]*new_X[,2])
+
 }
 
 
@@ -122,8 +134,9 @@ for (herbi in vec_herbicides) {
 ![scatterplot_Sulfometuron](./../tests/misc/weedomics/Sulfometuron_scatterplot.svg)
 ![scatterplot_Terbuthylazine](./../tests/misc/weedomics/Terbuthylazine_scatterplot.svg)
 
-There is no clear/sifginificant geographic gradient to the distribution of herbicide resistances across SE Australia. This probably means that herbicide resisitances are evolving from either standing genetic variation (as affected by founder effects) and de novo mutation (as affected by population size).
+There is no clear/sifginificant geographic gradient to the distribution of herbicide resistances across SE Australia. This probably means that herbicide resisitances are evolving from either standing genetic variation (as affected by founder effects) and *de novo* mutation (as affected by population size).
 
+Furthermore, let' try to model landscape-wide resistance distribution just to visualise
 
 ## 2. How are the populations genetically related? Is there significant population structure across SE Australia?
 
@@ -196,22 +209,67 @@ dev.off()
 Let's also try and cluster these populations and see if there's any geographic correlation.
 
 ```R
+library(parallel)
+t = detectCores() - 1
 setwd("/data-weedomics-1/poolgen/tests/misc/weedomics")
+phenotypes = read.csv("Lolium_SEAU.csv")
 G = read.csv("Lolium_SEAU_allele_frequencies.csv")
 X = t(G[, 4:ncol(G)])
-vec_k = c(1:50)
+n = nrow(X)
+p = ncol(X)
+vec_k = c(1:n)
+K = mclapply(vec_k, function(k) {
+       kmeans(X, centers=k)
+   }, mc.cores=t)
+
 vec_clusters = c()
 vec_totss = c()
-vec_tot.winthinss = c()
-for (k in vec_k) {
-    K = kmeans(X, centers=k)
-    vec_clusters = c(vec_clusters, K$cluster)
-    vec_totss = c(vec_totss, K$totss)
-    vec_tot.winthinss = c(vec_tot.winthinss, K$tot.withinss)
+vec_tot_winthinss = c()
+vec_betweenss = c()
+for (i in vec_k) {
+    vec_clusters = c(vec_clusters, tryCatch(K[[i]]$cluster
+                    , error = function(e) {NA}))
+    vec_totss = c(vec_totss, tryCatch(K[[i]]$totss
+                    , error = function(e) {NA}))
+    vec_tot_winthinss = c(vec_tot_winthinss, tryCatch(K[[i]]$tot.withinss
+                    , error = function(e) {NA}))
+    vec_betweenss = c(vec_betweenss, tryCatch(K[[i]]$betweenss
+                    , error = function(e) {NA}))
 }
+
+vec_within_over_between = vec_tot_winthinss/vec_betweenss
+idx = order(abs(vec_within_over_between-1), decreasing=FALSE) # NAs at the end
+k_optimal = vec_k[idx][1]
+
+svg("kmeans_clustering_finding_the_best_k.svg", width=15, height=9)
+plot(x=vec_k[2:n], y=vec_tot_winthinss[2:n]/vec_betweenss[2:n], type="b", pch=19)
+grid()
+abline(h=1.0, col="red", type=2, lwd=2)
+dev.off()
+
+clusters = data.frame(X.POP=names(K[[k_optimal]]$cluster), cluster=K[[k_optimal]]$cluster)
+phenotypes = merge(phenotypes, clusters, by="X.POP")
+cluster_colours = rainbow(k_optimal)
+
+svg("kmeans_clusters.svg", width=10, height=10)
+plot(x=phenotypes$COORDINATE_E, y=phenotypes$COORDINATE_N,
+     col=cluster_colours, pch=19, cex=2)
+dev.off()
+
+### Draw ellipses per group
+g = 27
+df = phenotypes[phenotypes$cluster==g, ]
+
+svg("test.svg", width=10, height=10)
+plot(df$COORDINATE_E, df$COORDINATE_N)
+dev.off()
 
 
 ```
+
+![test_plot](./../test/../tests/misc/weedomics/test.svg)
+![test_plot](./../test/../tests/misc/weedomics/kmeans_clustering_finding_the_best_k.svg)
+![test_plot](./../test/../tests/misc/weedomics/kmeans_clusters.svg)
 
 
 
