@@ -104,13 +104,13 @@ I have attempted to create a penalisation algorithm similar to elastic-net or gl
 
 ### TODO
 
-[] Fst and Tajima's D estimation
+[ ] Fst and Tajima's D estimation
 
-[] Improve genomic prediction cross-validation's use of PredictionPerformance fields, i.e. output the predictions and predictor distributions
+[ ] Improve genomic prediction cross-validation's use of PredictionPerformance fields, i.e. output the predictions and predictor distributions
 
-[] Simulation of genotype and phenotype data
+[ ] Simulation of genotype and phenotype data
 
-[] Imputation
+[ ] Imputation
 
 Performs OLS or elastic-net regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
 

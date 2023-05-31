@@ -1,0 +1,116 @@
+poly                   package:stats                   R Documentation
+
+_C_o_m_p_u_t_e _O_r_t_h_o_g_o_n_a_l _P_o_l_y_n_o_m_i_a_l_s
+
+_D_e_s_c_r_i_p_t_i_o_n:
+
+     Returns or evaluates orthogonal polynomials of degree 1 to
+     ‘degree’ over the specified set of points ‘x’: these are all
+     orthogonal to the constant polynomial of degree 0.  Alternatively,
+     evaluate raw polynomials.
+
+_U_s_a_g_e:
+
+     poly(x, ..., degree = 1, coefs = NULL, raw = FALSE, simple = FALSE)
+     polym  (..., degree = 1, coefs = NULL, raw = FALSE)
+     
+     ## S3 method for class 'poly'
+     predict(object, newdata, ...)
+     
+_A_r_g_u_m_e_n_t_s:
+
+x, newdata: a numeric vector at which to evaluate the polynomial. ‘x’
+          can also be a matrix.  Missing values are not allowed in ‘x’.
+
+  degree: the degree of the polynomial.  Must be less than the number
+          of unique points when ‘raw’ is false, as by default.
+
+   coefs: for prediction, coefficients from a previous fit.
+
+     raw: if true, use raw and not orthogonal polynomials.
+
+  simple: logical indicating if a simple matrix (with no further
+          ‘attributes’ but ‘dimnames’) should be returned.  For speedup
+          only.
+
+  object: an object inheriting from class ‘"poly"’, normally the result
+          of a call to ‘poly’ with a single vector argument.
+
+     ...: ‘poly’, ‘polym’: further vectors.
+          ‘predict.poly’: arguments to be passed to or from other
+          methods.
+
+_D_e_t_a_i_l_s:
+
+     Although formally ‘degree’ should be named (as it follows ‘...’),
+     an unnamed second argument of length 1 will be interpreted as the
+     degree, such that ‘poly(x, 3)’ can be used in formulas.
+
+     The orthogonal polynomial is summarized by the coefficients, which
+     can be used to evaluate it via the three-term recursion given in
+     Kennedy & Gentle (1980, pp. 343-4), and used in the ‘predict’ part
+     of the code.
+
+     ‘poly’ using ‘...’ is just a convenience wrapper for ‘polym’:
+     ‘coef’ is ignored.  Conversely, if ‘polym’ is called with a single
+     argument in ‘...’ it is a wrapper for ‘poly’.
+
+_V_a_l_u_e:
+
+     For ‘poly’ and ‘polym()’ (when ‘simple=FALSE’ and ‘coefs=NULL’ as
+     per default):
+     A matrix with rows corresponding to points in ‘x’ and columns
+     corresponding to the degree, with attributes ‘"degree"’ specifying
+     the degrees of the columns and (unless ‘raw = TRUE’) ‘"coefs"’
+     which contains the centering and normalization constants used in
+     constructing the orthogonal polynomials and class ‘c("poly",
+     "matrix")’.
+
+     For ‘poly(*, simple=TRUE)’, ‘polym(*, coefs=<non-NULL>)’, and
+     ‘predict.poly()’: a matrix.
+
+_N_o_t_e:
+
+     This routine is intended for statistical purposes such as
+     ‘contr.poly’: it does not attempt to orthogonalize to machine
+     accuracy.
+
+_A_u_t_h_o_r(_s):
+
+     R Core Team.  Keith Jewell (Campden BRI Group, UK) contributed
+     improvements for correct prediction on subsets.
+
+_R_e_f_e_r_e_n_c_e_s:
+
+     Chambers, J. M. and Hastie, T. J. (1992) _Statistical Models in
+     S_.  Wadsworth & Brooks/Cole.
+
+     Kennedy, W. J. Jr and Gentle, J. E. (1980) _Statistical Computing_
+     Marcel Dekker.
+
+_S_e_e _A_l_s_o:
+
+     ‘contr.poly’.
+
+     ‘cars’ for an example of polynomial regression.
+
+_E_x_a_m_p_l_e_s:
+
+     od <- options(digits = 3) # avoid too much visual clutter
+     (z <- poly(1:10, 3))
+     predict(z, seq(2, 4, 0.5))
+     zapsmall(poly(seq(4, 6, 0.5), 3, coefs = attr(z, "coefs")))
+     
+      zm <- zapsmall(polym (    1:4, c(1, 4:6),  degree = 3)) # or just poly():
+     (z1 <- zapsmall(poly(cbind(1:4, c(1, 4:6)), degree = 3)))
+     ## they are the same :
+     stopifnot(all.equal(zm, z1, tolerance = 1e-15))
+     
+     ## poly(<matrix>, df) --- used to fail till July 14 (vive la France!), 2017:
+     m2 <- cbind(1:4, c(1, 4:6))
+     pm2 <- zapsmall(poly(m2, 3)) # "unnamed degree = 3"
+     stopifnot(all.equal(pm2, zm, tolerance = 1e-15))
+     
+     options(od)
+     
+
