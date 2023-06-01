@@ -20,7 +20,6 @@
 
 ```R
 library(maps)
-
 setwd("/data-weedomics-1/poolgen/tests/misc/weedomics")
 phenotypes = read.csv("Lolium_SEAU.csv")
 phenotypes = phenotypes[!is.na(phenotypes$COORDINATE_E), ]
@@ -113,17 +112,7 @@ for (herbi in vec_herbicides) {
     axis(side=1, at=xrange, labels=xrange, padj=-2.5)
     mtext("Resistance (%)", side=1, padj=2.5)
     dev.off()
-
-    X = cbind(coor_east, coor_north, coor_east*coor_north)
-    mod_poly = lm(trait ~ polym(X, degree=3), data=df)
-    new_coor_east = seq(min(coor_east), max(coor_east), length=100)
-    new_coor_north = seq(min(coor_north), max(coor_north), length=100)
-    new_X = expand.grid(coor_east=new_coor_east, coor_north=new_coor_north)
-    new_X = cbind(new_X, new_X[,1]*new_X[,2])
-
 }
-
-
 ```
 
 ![scatterplot_Glyphosate](./../tests/misc/weedomics/Glyphosate_scatterplot.svg)
@@ -137,6 +126,41 @@ for (herbi in vec_herbicides) {
 There is no clear/sifginificant geographic gradient to the distribution of herbicide resistances across SE Australia. This probably means that herbicide resisitances are evolving from either standing genetic variation (as affected by founder effects) and *de novo* mutation (as affected by population size).
 
 Furthermore, let' try to model landscape-wide resistance distribution just to visualise
+
+```R
+library(sp)
+library(automap)
+# install.packages("remotes")
+# remotes::install_github("inbo/inborutils")
+library(inborutils)
+
+setwd("/data-weedomics-1/poolgen/tests/misc/weedomics")
+phenotypes = read.csv("Lolium_SEAU.csv")
+phenotypes = phenotypes[!is.na(phenotypes$COORDINATE_E), ]
+phenotypes = phenotypes[!is.na(phenotypes$COORDINATE_N), ]
+x_limit = range(phenotypes$COORDINATE_E)
+y_limit = range(phenotypes$COORDINATE_N)
+vec_herbicides = colnames(phenotypes)[5:ncol(phenotypes)-2]
+
+for (herbi in vec_herbicides) {
+    # herbi = vec_herbicides[1]
+    x = phenotypes$COORDINATE_E
+    y = phenotypes$COORDINATE_N
+    z = eval(parse(text=paste0("phenotypes$", herbi)))
+    idx = !is.na(z)
+    x = x[idx]
+    y = y[idx]
+    z = z[idx]
+    df_data = data.frame(x, y, z)
+    df_data = df_data[!is.na(z), ]
+    df_data = aggregate(z ~ x + y, data=df_data, FUN=mean)
+    sp::coordinates(df_data) = ~ x + y ### Transform data.frame into and sp::SpatialPointsDataFrame
+
+}
+```
+
+![test_plot](./../tests/misc/weedomics/test_gradient_model.png)
+
 
 ## 2. How are the populations genetically related? Is there significant population structure across SE Australia?
 

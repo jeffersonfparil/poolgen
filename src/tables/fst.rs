@@ -1,78 +1,57 @@
-use std::io;
 use crate::base::*;
 use ndarray::prelude::*;
 use statrs::distribution::{ChiSquared, ContinuousCDF};
+use std::io;
 
-
-pub fn ols_with_covariate(
+pub fn fst(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
-    xxt_eigen_variance_explained: f64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
-    // View the genotype matrix
-    let g = genotypes_and_phenotypes
+    let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
-        .slice(s![0.., 1..]);
-    let (n, p) = (g.nrows(), g.ncols());
+        .dim();
 
-    // Count the number of loci
-    let mut loci: Vec<String> = vec![];
-    for i in 0..p {
-        let locus = genotypes_and_phenotypes.chromosome[i].clone() + &genotypes_and_phenotypes.position[i].to_string();
-        if loci.len() > 0 {
-            if locus != loci[loci.len()-1] {
-                loci.push(locus);
-            }
-        } else {
-            loci.push(locus);
+    // Count the number of loci (Note: assumes the loci are sorted)
+    let mut loci_idx: Vec<usize> = vec![];
+    for i in 1..p {
+        // start with the first allele jumping over the intercept
+        if (genotypes_and_phenotypes.chromosome[i - 1] != genotypes_and_phenotypes.chromosome[i])
+            | (genotypes_and_phenotypes.position[i - 1] != genotypes_and_phenotypes.position[i])
+        {
+            loci_idx.push(i);
         }
     }
+    loci_idx.push(p - 1); // last allele of the last locus
+    let l = loci_idx.len();
 
+    // A probably not so unbiased and multi-allelic version of Gautier et al, 2019 (assumes biallelic loci)
+    let mut fst: Array3<f64> = Array3::from_elem((l-1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    for i in 1..l {
+        // start at 1 so we can extract the number of alleles per locus
+        let idx_start = loci_idx[i - 1];
+        let idx_end = loci_idx[i] + 1;
+        let g = genotypes_and_phenotypes
+            .intercept_and_allele_frequencies
+            .slice(s![.., idx_start..idx_end]);
+        for j in 0..n {
+            let q1_j = g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0));
+            for k in 0..n {
+                if k < j {
+                    continue;
+                }
+                let q1_k = g.slice(s![k, ..]).map(|&x| x.powf(2.0)).sum();
+                let q2_jk = g
+                    .slice(s![j, ..])
+                    .iter()
+                    .zip(&g.slice(s![k, ..]))
+                    .fold(0.0, |sum, (&x, &y)| sum + (x * y));
+                fst[(i, j, k)] = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk);
+            }
+        }
+    }
+    println!("fst={:?}", fst);
 
-
-    // println!("locus_counts={:?}", locus_counts);
-    // let locus_counts = match locus_counts.filter(filter_stats) {
-    //     Ok(x) => x,
-    //     Err(_) => return None,
-    // };
-    // let locus_frequencies = match locus_counts.to_frequencies() {
-    //     Ok(x) => x,
-    //     Err(_) => return None,
-    // };
-
-    // // Using Gautier et al, 2021 estimates (https://doi.org/10.1111/1755-0998.13557)
-    // println!("locus_frequencies={:?}", locus_frequencies);
-
-    // let counts_per_pool_per_allele: Array2<f64> = locus_counts.matrix.map(|&y| y as f64);
-    // let total_counts_per_pool: Array1<f64> = counts_per_pool_per_allele.sum_axis(Axis(1));
-    // let (n, p) = counts_per_pool_per_allele.dim();
-
-    // let i = 213; // locus index
-    // let a = 0; // arbitrary reference allele index
-    // let j = 0; // pool i index
-    // let k = 1; // pool k index
-
-    // let q_1i_j = 1.00 - (2.00 * 
-    //     (counts_per_pool_per_allele[(j,a)]/total_counts_per_pool[j]) * 
-    //     ((total_counts_per_pool[j]-counts_per_pool_per_allele[(j,a)]) / (total_counts_per_pool[j] - 1.00))
-    // );
-    
-    // let q_1i_k = 1.00 - (2.00 * 
-    //     (counts_per_pool_per_allele[(k,a)]/total_counts_per_pool[k]) * 
-    //     ((total_counts_per_pool[k]-counts_per_pool_per_allele[(k,a)]) / (total_counts_per_pool[k] - 1.00))
-    // );
-
-    // let q_2i_j = (1.00 / (total_counts_per_pool[j]*total_counts_per_pool[k])) * 
-    // ( counts_per_pool_per_allele[(j,a)]*counts_per_pool_per_allele[(k,a)] + 
-    //     (total_counts_per_pool[j]-counts_per_pool_per_allele[(j,a)]) 
-    //         * (total_counts_per_pool[k]-counts_per_pool_per_allele[(k,a)])
-    // );
-
-    // let fst_i_jk = ((0.5*(q_1i_j+q_1i_k)) - q_2i_j) / (1.00 + q_2i_j);
-    // println!("fst_i_jk = {:?}", fst_i_jk);
-
-    // Some(fst_i_jk.to_string())
     Ok("0".to_string())
 }
 
@@ -105,9 +84,73 @@ mod tests {
             // pool_sizes: vec![0.2, 0.2, 0.2, 0.2],
             pool_sizes: vec![0.5, 0.5],
         };
+
+        let x: Array2<f64> = Array2::from_shape_vec(
+            (5, 4),
+            vec![
+                1.0, 0.4, 0.5, 0.1,
+                1.0, 1.0, 0.0, 0.0,
+                1.0, 0.6, 0.4, 0.0,
+                1.0, 0.4, 0.5, 0.1,
+                1.0, 0.0, 0.0, 1.0,
+            ],
+        )
+        .unwrap();
+        let y: Array2<f64> = Array2::from_shape_vec(
+            (5, 2),
+            vec![2.0, 0.5,1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
+        )
+        .unwrap();
+        let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
+            chromosome: vec![
+                "Intercept".to_owned(),
+                "X".to_owned(),
+                "X".to_owned(),
+                "X".to_owned(),
+            ],
+            position: vec![0, 123, 123, 123],
+            allele: vec![
+                "Intercept".to_owned(),
+                "a".to_string(),
+                "g".to_string(),
+                "d".to_string(),
+            ],
+            intercept_and_allele_frequencies: x.clone(),
+            phenotypes: y.clone(),
+            pool_names: vec!["".to_owned()],
+        };
         // // Outputs
-        // let out = fst(&mut locus_counts, &filter_stats).unwrap();
+        let out = fst(&genotypes_and_phenotypes, &"".to_owned(), &"".to_owned()).unwrap();
+
+        ///////////////////////////// BIALLELIC TEST
+        let x: Array2<f64> = Array2::from_shape_vec(
+            (5, 3),
+            vec![
+                1.0, 0.4, 0.6,
+                1.0, 1.0, 0.0,
+                1.0, 0.0, 1.0,
+                1.0, 0.6, 0.4,
+                1.0, 0.5, 0.5,
+            ],
+        )
+        .unwrap();
+        let y: Array2<f64> = Array2::from_shape_vec(
+            (5, 2),
+            vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
+        )
+        .unwrap();
+        let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
+            chromosome: vec!["Intercept".to_owned(), "X".to_owned(), "X".to_owned()],
+            position: vec![0, 123, 123],
+            allele: vec!["Intercept".to_owned(), "a".to_string(), "g".to_string()],
+            intercept_and_allele_frequencies: x.clone(),
+            phenotypes: y.clone(),
+            pool_names: vec!["".to_owned()],
+        };
+        // // Outputs
+        let out = fst(&genotypes_and_phenotypes, &"".to_owned(), &"".to_owned()).unwrap();
+
         // // Assertions
-        // assert_eq!("1".to_owned(), out);
+        assert_eq!("0".to_owned(), out);
     }
 }
