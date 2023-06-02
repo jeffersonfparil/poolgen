@@ -181,9 +181,8 @@ for (herbi in vec_herbicides) {
     vec_colours = rev(colorRampPalette(c("#A50026","#D73027","#F46D43","#FDAE61","#FEE08B","#FFFFBF","#D9EF8B","#A6D96A","#66BD63","#1A9850","#006837"))(n_colours))
     svg(paste0(herbi, "_autokrige.svg"), width=10.5, height=6.5)
     ### Plot the map
-    plot(0, xlim=x_limit, ylim=y_limit, asp=1, type="n", xlab="Longitude", ylab="",
+    plot(0, xlim=x_limit, ylim=y_limit, asp=1, type="n", xlab="Longitude", ylab="Latitude",
         main=paste0(herbi, " Resistance"))
-    mtext("Latitdue", side=2, padj=-6.5, cex=2) ### Fix overlapping tick labels and axis label
     grid()
     outline = maps::map("world", plot=FALSE)
     xrange = range(outline$x, na.rm=TRUE)
@@ -205,6 +204,8 @@ for (herbi in vec_herbicides) {
         idx = ceiling(z[i]) + 1
         points(x[i], y[i], col="gray", bg=vec_colours[idx], pch=21)
     }
+    ### Append the best-fit Kriging model
+    text(x=x_limit[1], y=y_limit[1], paste0("Kriging model: ", model), pos=4)
     ### Heatmap legend
     # par(fig=c(0.01, 0.4, 0.1, 0.5), cex=1, new=TRUE)
     par(fig=c(0.77,0.97,0.3,0.5), new=TRUE)
