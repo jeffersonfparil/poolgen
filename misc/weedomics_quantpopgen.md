@@ -128,13 +128,11 @@ There is no clear/sifginificant geographic gradient to the distribution of herbi
 Furthermore, let' try to model landscape-wide resistance distribution just to visualise
 
 ```R
+library(sf)
 library(sp)
 library(automap)
-# install.packages("remotes")
-# remotes::install_github("inbo/inborutils")
-library(inborutils)
-
 setwd("/data-weedomics-1/poolgen/tests/misc/weedomics")
+landscape = sf::st_read("Lolium_landscape_SEAU.kml")
 phenotypes = read.csv("Lolium_SEAU.csv")
 phenotypes = phenotypes[!is.na(phenotypes$COORDINATE_E), ]
 phenotypes = phenotypes[!is.na(phenotypes$COORDINATE_N), ]
@@ -155,11 +153,90 @@ for (herbi in vec_herbicides) {
     df_data = df_data[!is.na(z), ]
     df_data = aggregate(z ~ x + y, data=df_data, FUN=mean)
     sp::coordinates(df_data) = ~ x + y ### Transform data.frame into and sp::SpatialPointsDataFrame
-
+    ### Prepare the new_data to fit the kriging model built using the above training data
+    df_region = as.data.frame(as.matrix(landscape$geometry[[1]]))
+    colnames(df_region) = c("x", "y", "z")
+    sp::coordinates(df_region) = ~ x + y ### Transform data.frame into and sp::SpatialPointsDataFrame
+    ### Prepare the new_data to fit the kriging model built using the above training data
+    A = sp::Polygon(df_region) ### Transform into a polygon
+    B = sp::spsample(A, n=5000, type="regular") ### Sample regular intervals across the polygon to approximate its area and shape
+    vec_models = c("Exp", "Sph", "Mat", "Ste") ### removing Gaus as it results in a weir interpolation of Sakura
+    K1 = tryCatch(autoKrige.cv(z ~ 1, model=vec_models[1], df_data), error=function(e){autoKrige.cv(z ~ 1, df_data)})
+    K2 = tryCatch(autoKrige.cv(z ~ 1, model=vec_models[2], df_data), error=function(e){autoKrige.cv(z ~ 1, df_data)})
+    K3 = tryCatch(autoKrige.cv(z ~ 1, model=vec_models[3], df_data), error=function(e){autoKrige.cv(z ~ 1, df_data)})
+    K4 = tryCatch(autoKrige.cv(z ~ 1, model=vec_models[4], df_data), error=function(e){autoKrige.cv(z ~ 1, df_data)})
+    # K5 = tryCatch(autoKrige.cv(z ~ 1, model=vec_models[5], df_data), error=function(e){autoKrige.cv(z ~ 1, df_data)})
+    K_compare = compare.cv(K1, K2, K3, K4)
+    rmse = unlist(K_compare[rownames(K_compare)=="RMSE", ])
+    idx = which(rmse == min(rmse))[1]
+    model = vec_models[idx]
+    K = tryCatch(automap::autoKrige(z ~ 1, df_data, model=model, new_data=B),
+                 error=function(e) {automap::autoKrige(z ~ 1, df_data, new_data=B)}
+    )
+    ### Prepare the kriging output for plotting
+    P = cbind(K$krige_output@coords, K$krige_output@data)
+    colnames(P) = c("x", "y", "z", "var", "sd") ### coordinates from the sampled points inside the paddock polygon and the krigng-predicted weed density, z
+    ### Prepare the colours corresponding to the herbicide resistance levels
+    n_colours = 101
+    vec_colours = rev(colorRampPalette(c("#A50026","#D73027","#F46D43","#FDAE61","#FEE08B","#FFFFBF","#D9EF8B","#A6D96A","#66BD63","#1A9850","#006837"))(n_colours))
+    svg(paste0(herbi, "_autokrige.svg"), width=10.5, height=6.5)
+    ### Plot the map
+    plot(0, xlim=x_limit, ylim=y_limit, asp=1, type="n", xlab="Longitude", ylab="",
+        main=paste0(herbi, " Resistance"))
+    mtext("Latitdue", side=2, padj=-6.5, cex=2) ### Fix overlapping tick labels and axis label
+    grid()
+    outline = maps::map("world", plot=FALSE)
+    xrange = range(outline$x, na.rm=TRUE)
+    yrange = range(outline$y, na.rm=TRUE)
+    xbox = xrange + c(-2, 2)
+    ybox = yrange + c(-2, 2)
+    ### draw the outline of the map and color the water blue
+    polypath(c(outline$x, NA, c(xbox, rev(xbox))),
+           c(outline$y, NA, rep(ybox, each=2)),
+           col="light blue", rule="evenodd")
+    ### Plot kriging-predicted weed densities across the paddock
+    for (k in 1:nrow(P)){
+        # k = 1
+        idx = ceiling(P$z[k]) + 1
+        points(P$x[k], P$y[k], pch=15, col=vec_colours[idx])
+    }
+    ### Plot populations and their resistance levels
+    for (i in 1:length(x)) {
+        idx = ceiling(z[i]) + 1
+        points(x[i], y[i], col="gray", bg=vec_colours[idx], pch=21)
+    }
+    ### Heatmap legend
+    # par(fig=c(0.01, 0.4, 0.1, 0.5), cex=1, new=TRUE)
+    par(fig=c(0.77,0.97,0.3,0.5), new=TRUE)
+    par(mar=c(0,1,1,1))
+    nclass=10
+    plot(0, ylab= "", xlab="", xaxt="n", yaxt="n", type="n")
+    par(new=TRUE)
+    df_table = data.frame(bins=seq(0, 100, length=11), counts=rep(0, times=11))
+    for (i in 2:nrow(df_table)) {
+        # i = 2
+        df_table[i, 2] = sum((z >= df_table[i-1, 1]) & (z < df_table[i, 1]))
+    }
+    barplot(df_table$counts[2:nrow(df_table)], col=vec_colours[seq(1, n_colours, length=nclass)], bord=FALSE, las=1)
+    par(fig=c(0.77,0.97,0.27,0.29), new=TRUE)
+    par(mar=c(0,1,0,1))
+    h = hist(seq(0,100, length=10), ylab= "", xlab="", xaxt="n", yaxt="n", las=1, main="", nclass=nclass, 
+             col=vec_colours[seq(1, n_colours, length=10)],
+             bord=FALSE)
+    xrange = round(seq(h$breaks[1], h$breaks[length(h$breaks)], len=5), 2)
+    axis(side=1, at=xrange, labels=xrange, padj=-1)
+    mtext("Resistance (%)", side=1, padj=2.5)
+    dev.off()
 }
 ```
 
-![test_plot](./../tests/misc/weedomics/test_gradient_model.png)
+![scatterplot_Glyphosate](./../tests/misc/weedomics/Glyphosate_autokrige.svg)
+![scatterplot_Clethodim](./../tests/misc/weedomics/Clethodim_autokrige.svg)
+![scatterplot_Intercept](./../tests/misc/weedomics/Intercept_autokrige.svg)
+![scatterplot_Atrazine](./../tests/misc/weedomics/Atrazine_autokrige.svg)
+![scatterplot_Paraquat](./../tests/misc/weedomics/Paraquat_autokrige.svg)
+![scatterplot_Sulfometuron](./../tests/misc/weedomics/Sulfometuron_autokrige.svg)
+![scatterplot_Terbuthylazine](./../tests/misc/weedomics/Terbuthylazine_autokrige.svg)
 
 
 ## 2. How are the populations genetically related? Is there significant population structure across SE Australia?

@@ -92,7 +92,6 @@ pub fn fst(
     // println!("pop2={:?}", pop2);
     // println!("fst={:?}", fst);
     // println!("fst.mean_axis(Axis(0))={:?}", fst.mean_axis(Axis(0)));
-
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -213,10 +212,35 @@ mod tests {
         };
         // Outputs
         let out = fst(&genotypes_and_phenotypes, &"test.something".to_owned(), &"".to_owned()).unwrap();
-
-
-
+        let file = std::fs::File::open(&out).unwrap();
+        let reader = std::io::BufReader::new(file);
+        let mut header: Vec<String> = vec![];
+        let mut pop: Vec<String> = vec![];
+        let mut fst: Vec<f64> = vec![];
+        for line in reader.lines() {
+            let split = line.unwrap().split(",").map(|x| x.to_owned()).collect::<Vec<String>>();
+            if header.len() == 0 {
+                header = split;
+            } else {
+                pop.push(split[0].clone());
+                for f in split[1..].iter().map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>() {
+                    fst.push(f);
+                }
+            }
+        }
+        let fst: Array2<f64> = Array2::from_shape_vec((pop.len(), pop.len()), fst).unwrap();
+        let diag: Array1<f64> = fst.diag().to_owned(); // itself, i.e. fst=0.0
+        let pop1_4 = fst[(0,3)]; // the same populations, i.e. fst=0.0
+        let pop4_1 = fst[(3,0)]; // the same populations, i.e. fst=0.0
+        let pop2_5 = fst[(1,4)]; // totally different populations, i.e. fst=1.0
+        let pop5_2 = fst[(4,1)]; // totally different populations, i.e. fst=1.0
+        println!("pop={:?}", pop);
+        println!("fst={:?}", fst);
         // Assertions
-        // assert_eq!("1".to_owned(), out);
+        assert_eq!(diag, Array1::from_elem(pop.len(), 0.0));
+        assert_eq!(pop1_4, 0.0);
+        assert_eq!(pop4_1, 0.0);
+        assert_eq!(pop2_5, 1.0);
+        assert_eq!(pop5_2, 1.0);
     }
 }
