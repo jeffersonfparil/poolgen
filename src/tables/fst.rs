@@ -12,6 +12,7 @@ pub fn fst(
     let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
+    println!("genotypes_and_phenotypes.intercept_and_allele_frequencies={:?}", genotypes_and_phenotypes.intercept_and_allele_frequencies);
     // Count the number of loci (Note: assumes the loci are sorted)
     let mut loci_idx: Vec<usize> = vec![];
     for i in 1..p {
@@ -82,16 +83,22 @@ pub fn fst(
                     .iter()
                     .zip(&g.slice(s![k, ..]))
                     .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-                *f = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk);
+                // *f = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk);
+                *f = if (1.00 - q2_jk) >= f64::EPSILON {
+                    (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk)
+                } else {
+                    // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
+                    (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - (q2_jk - f64::EPSILON))
+                };
             } else {
                 *f = 0.0;
             }
         });
-    // println!("loci={:?}", loci);
-    // println!("pop1={:?}", pop1);
-    // println!("pop2={:?}", pop2);
-    // println!("fst={:?}", fst);
-    // println!("fst.mean_axis(Axis(0))={:?}", fst.mean_axis(Axis(0)));
+    println!("loci={:?}", loci);
+    println!("pop1={:?}", pop1);
+    println!("pop2={:?}", pop2);
+    println!("fst={:?}", fst);
+    println!("fst.mean_axis(Axis(0))={:?}", fst.mean_axis(Axis(0)));
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -179,7 +186,7 @@ mod tests {
                 1.0, 1.0, 0.0, 0.0, 1.0, 0.0,
                 1.0, 0.6, 0.4, 0.0, 0.9, 0.1,
                 1.0, 0.4, 0.5, 0.1, 0.6, 0.4,
-                1.0, 0.0, 0.0, 1.0, 0.0, 1.0,
+                1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
             ],
         )
         .unwrap();
@@ -232,15 +239,15 @@ mod tests {
         let diag: Array1<f64> = fst.diag().to_owned(); // itself, i.e. fst=0.0
         let pop1_4 = fst[(0,3)]; // the same populations, i.e. fst=0.0
         let pop4_1 = fst[(3,0)]; // the same populations, i.e. fst=0.0
-        let pop2_5 = fst[(1,4)]; // totally different populations, i.e. fst=1.0
-        let pop5_2 = fst[(4,1)]; // totally different populations, i.e. fst=1.0
+        let pop2_5 = fst[(1,4)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
+        let pop5_2 = fst[(4,1)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
         println!("pop={:?}", pop);
         println!("fst={:?}", fst);
         // Assertions
         assert_eq!(diag, Array1::from_elem(pop.len(), 0.0));
         assert_eq!(pop1_4, 0.0);
         assert_eq!(pop4_1, 0.0);
-        assert_eq!(pop2_5, 1.0);
-        assert_eq!(pop5_2, 1.0);
+        assert_eq!(pop2_5, 0.5);
+        assert_eq!(pop5_2, 0.5);
     }
 }

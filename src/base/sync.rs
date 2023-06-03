@@ -896,30 +896,42 @@ impl LoadAll for FileSyncPhen {
     ) -> io::Result<GenotypesAndPhenotypes> {
         let freqs = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         let n = self.pool_names.len();
-        let mut chromosome: Vec<String> = vec!["intercept".to_owned()];
-        let mut position: Vec<u64> = vec![0];
-        let mut allele: Vec<String> = vec!["intercept".to_owned()];
-        let mut vec: Vec<f64> = vec![];
+        // Find the total number of alleles across all loci
+        let mut p = 1; // start with the intercept
         for f in freqs.iter() {
-            for i in 0..f.matrix.nrows() {
-                for j in 0..f.matrix.ncols() {
-                    chromosome.push(f.chromosome.to_owned());
-                    position.push(f.position);
-                    allele.push(f.alleles_vector[j].clone());
-                    vec.push(f.matrix[(i, j)]);
+            p += f.matrix.ncols();
+        }
+        // println!("p={}", p);
+        let mut chromosome: Vec<String> = Vec::with_capacity(p);
+        chromosome.push("intercept".to_owned());
+        let mut position: Vec<u64> = Vec::with_capacity(p);
+        position.push(0);
+        let mut allele: Vec<String> = Vec::with_capacity(p);
+        allele.push("intercept".to_owned());
+        let mut mat: Array2<f64> = Array2::from_elem((n,p), 1.0);
+        let mut j: usize = 1; // start after the intercept
+        for f in freqs.iter() {
+            for j_ in 0..f.matrix.ncols() {
+                chromosome.push(f.chromosome.clone());
+                position.push(f.position);
+                allele.push(f.alleles_vector[j_].clone());
+                let mut i = 0;
+                for i_ in 0..f.matrix.nrows() {
+                    mat[(i, j)] = f.matrix[(i_, j_)];
+                    i += 1;
                 }
+                j += 1; // next allele
             }
         }
-        let p = vec.len() / n;
-        let mat_: Array2<f64> = Array2::from_shape_vec((n, p), vec).unwrap();
-        // Add the intercept
-        let mut mat: Array2<f64> = Array2::from_elem((n, p + 1), 1.00);
-        for i in 0..n {
-            for j in 1..p {
-                mat[(i, j)] = mat_[(i, j - 1)];
-            }
-        }
-        println!("mat={:?}", mat.slice(s![0..5, 0..3]));
+        // println!("mat={:?}", mat.slice(s![0..5, 0..4]));
+        // println!("chromosome[0]={:?}", chromosome[0]);
+        // println!("chromosome[1]={:?}", chromosome[1]);
+        // println!("chromosome[2]={:?}", chromosome[2]);
+        // println!("chromosome[3]={:?}", chromosome[3]);
+        // println!("position[0]={:?}", position[0]);
+        // println!("position[1]={:?}", position[1]);
+        // println!("position[2]={:?}", position[2]);
+        // println!("position[3]={:?}", position[3]);
         Ok(GenotypesAndPhenotypes {
             chromosome: chromosome,
             position: position,
