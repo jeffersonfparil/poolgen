@@ -140,6 +140,7 @@ x_limit = range(phenotypes$COORDINATE_E)
 y_limit = range(phenotypes$COORDINATE_N)
 vec_herbicides = colnames(phenotypes)[5:ncol(phenotypes)-2]
 
+R = c() ### Miscellaneous: resistances matrix to make a sf object
 for (herbi in vec_herbicides) {
     # herbi = vec_herbicides[1]
     x = phenotypes$COORDINATE_E
@@ -174,8 +175,22 @@ for (herbi in vec_herbicides) {
                  error=function(e) {automap::autoKrige(z ~ 1, df_data, new_data=B)}
     )
     ### Prepare the kriging output for plotting
-    P = cbind(K$krige_output@coords, K$krige_output@data)
-    colnames(P) = c("x", "y", "z", "var", "sd") ### coordinates from the sampled points inside the paddock polygon and the krigng-predicted weed density, z
+    P = cbind(K$krige_output@coords, K$krige_output@data)[, 1:3]
+    ### Set predicted resistances lesst than 0 to 0, and greater than 100 to 100
+    P[P[,3] <   0, 3] = 0
+    P[P[,3] > 100, 3] = 100
+    colnames(P) = c("x", "y", herbi) ### coordinates from the sampled points inside the paddock polygon and the krigng-predicted weed density, z
+    if (length(R) == 0) {
+        R = P[, 1:3]
+    } else {
+        if (nrow(P) > nrow(R)) {
+            R_old = R
+            R = P
+            R = merge(R, R_old, by=c("x", "y"), all=TRUE)
+        } else {
+            R = merge(R, P, by=c("x", "y"), all=TRUE)
+        }
+    }
     ### Prepare the colours corresponding to the herbicide resistance levels
     n_colours = 101
     vec_colours = rev(colorRampPalette(c("#A50026","#D73027","#F46D43","#FDAE61","#FEE08B","#FFFFBF","#D9EF8B","#A6D96A","#66BD63","#1A9850","#006837"))(n_colours))
@@ -196,7 +211,7 @@ for (herbi in vec_herbicides) {
     ### Plot kriging-predicted weed densities across the paddock
     for (k in 1:nrow(P)){
         # k = 1
-        idx = ceiling(P$z[k]) + 1
+        idx = ceiling(P[k, 3]) + 1
         points(P$x[k], P$y[k], pch=15, col=vec_colours[idx])
     }
     ### Plot populations and their resistance levels
@@ -229,6 +244,26 @@ for (herbi in vec_herbicides) {
     mtext("Resistance (%)", side=1, padj=2.5)
     dev.off()
 }
+
+### Miscellaneous: create an sf object
+### Find the distances between sampled points
+dx = mean(diff(sort(unique(R$x))))
+dy = mean(diff(sort(unique(R$y))))
+### Create qadrilaterals (squares in this case since we sampled in regular intervals from the A, i.e. the landscape)
+Q = lapply(1:nrow(R), function(i){
+  M = matrix(c(R$x[i],    R$y[i],
+               R$x[i],    R$y[i]+dy,
+               R$x[i]+dx, R$y[i]+dy,
+               R$x[i]+dx, R$y[i],
+               R$x[i],    R$y[i])
+         , ncol =2, byrow = T
+  )
+  st_polygon(list(M))
+})
+
+header_herbicides = colnames(R)[3:ncol(R)]
+eval(parse(text=paste0("SF_OBJECT = st_sf(", paste(paste0(header_herbicides, "= R$", header_herbicides), collapse=", "), ", st_sfc(Q))")))
+SF_OBJECT ### Can be saved into shapefile but the herbicide names will be trucated because of the inherent restrictions in the file format
 ```
 
 ![scatterplot_Glyphosate](./../tests/misc/weedomics/Glyphosate_autokrige.svg)
