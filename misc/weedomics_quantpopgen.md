@@ -384,27 +384,22 @@ grid()
 abline(h=1.0, col="red", type=2, lwd=2)
 dev.off()
 
+# # test k=3
+# k_optimal = 3
+
 clusters = data.frame(X.POP=names(K[[k_optimal]]$cluster), cluster=K[[k_optimal]]$cluster)
 phenotypes = merge(phenotypes, clusters, by="X.POP")
 cluster_colours = rainbow(k_optimal)
 
 svg("kmeans_clusters.svg", width=10, height=10)
 plot(x=phenotypes$COORDINATE_E, y=phenotypes$COORDINATE_N,
-     col=cluster_colours, pch=19, cex=2)
+     col=cluster_colours[phenotypes$cluster], pch=19, cex=2)
 dev.off()
 
-### Draw ellipses per group
-g = 27
-df = phenotypes[phenotypes$cluster==g, ]
-
-svg("test.svg", width=10, height=10)
-plot(df$COORDINATE_E, df$COORDINATE_N)
-dev.off()
 
 
 ```
 
-![test_plot](./../test/../tests/misc/weedomics/test.svg)
 ![test_plot](./../test/../tests/misc/weedomics/kmeans_clustering_finding_the_best_k.svg)
 ![test_plot](./../test/../tests/misc/weedomics/kmeans_clusters.svg)
 
