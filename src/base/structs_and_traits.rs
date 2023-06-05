@@ -150,6 +150,7 @@ pub struct GenotypesAndPhenotypes {
     pub intercept_and_allele_frequencies: Array2<f64>, // n pools x 1 + p alleles across loci
     pub phenotypes: Array2<f64>,                       // n pools x k traits
     pub pool_names: Vec<String>,                       // n
+    pub coverages: Array2<f64>,                        // n pools x f(p) loci
 }
 
 #[derive(Debug, Clone)]
@@ -215,13 +216,13 @@ pub trait LoadAll {
         end: &u64,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
-    ) -> io::Result<Vec<LocusFrequencies>>;
+    ) -> io::Result<(Vec<LocusFrequencies>, Vec<LocusCounts>)>; // Allele frequencies and counts across pools and alleles per locus
     fn load(
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
         n_threads: &usize,
-    ) -> io::Result<Vec<LocusFrequencies>>;
+    ) -> io::Result<(Vec<LocusFrequencies>, Vec<LocusCounts>)>; // Allele frequencies and counts across pools and alleles per locus
     fn write_csv(
         &self,
         filter_stats: &FilterStats,

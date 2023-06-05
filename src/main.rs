@@ -6,10 +6,10 @@ use gp::{
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
 use gwas::{mle_with_covariate, ols_with_covariate};
-use tables::fst;
 use ndarray::prelude::*;
 #[allow(warnings)]
 use std::io;
+use tables::fst;
 
 use crate::base::CrossValidation;
 mod base;

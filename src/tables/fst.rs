@@ -1,8 +1,8 @@
 use crate::base::*;
 use ndarray::{prelude::*, Zip};
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*, Error, ErrorKind};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn fst(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
@@ -12,11 +12,14 @@ pub fn fst(
     let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
-    println!("genotypes_and_phenotypes.intercept_and_allele_frequencies={:?}", genotypes_and_phenotypes.intercept_and_allele_frequencies);
+    println!(
+        "genotypes_and_phenotypes.intercept_and_allele_frequencies={:?}",
+        genotypes_and_phenotypes.intercept_and_allele_frequencies
+    );
     // Count the number of loci (Note: assumes the loci are sorted)
     let mut loci_idx: Vec<usize> = vec![];
     for i in 1..p {
-        // start with the first allele jumping over the intercept
+        // includes the intercept
         if (genotypes_and_phenotypes.chromosome[i - 1] != genotypes_and_phenotypes.chromosome[i])
             | (genotypes_and_phenotypes.position[i - 1] != genotypes_and_phenotypes.position[i])
         {
@@ -25,6 +28,8 @@ pub fn fst(
     }
     loci_idx.push(p); // last allele of the last locus
     let l = loci_idx.len();
+    assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols());
+    println!("genotypes_and_phenotypes.coverages={:?}", genotypes_and_phenotypes.coverages);
     // println!(
     //     "genotypes_and_phenotypes.intercept_and_allele_frequencies={:?}",
     //     genotypes_and_phenotypes.intercept_and_allele_frequencies
@@ -76,18 +81,30 @@ pub fn fst(
                 let g = genotypes_and_phenotypes
                     .intercept_and_allele_frequencies
                     .slice(s![.., idx_start..idx_end]);
-                let q1_j = g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0));
-                let q1_k = g.slice(s![k, ..]).map(|&x| x.powf(2.0)).sum();
+                let nj = genotypes_and_phenotypes.coverages[(j, i)];
+                let nk = genotypes_and_phenotypes.coverages[(k, i)];
+                let q1_j = g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0)); // DOES NOT ALIGN WITH EXPECTATIONS OF WHEN LOCUS IS FIXED: * (nj/(nj-1.00)); // with a n/(n-1) factor to make it unbiased
+                let q1_k = g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0)); // DOES NOT ALIGN WITH EXPECTATIONS OF WHEN LOCUS IS FIXED: * (nk/(nk-1.00));
                 let q2_jk = g
                     .slice(s![j, ..])
                     .iter()
                     .zip(&g.slice(s![k, ..]))
                     .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-                // *f = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk);
+                // NOTE trying to use unbiased estimators: DOES NOT ALIGN WITH EXPECTATIONS OF WHEN LOCUS IS FIXED
+                    // * ((nj*nk)/((nj-1.00)*(nk-1.00)));
+                // let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk);
+                // *f = if f_unbiased < 0.0 {
+                //     0.0
+                // } else if f_unbiased > 1.0 {
+                //     1.0
+                // } else {
+                //     f_unbiased
+                // };
                 *f = if (1.00 - q2_jk) >= f64::EPSILON {
                     (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk)
                 } else {
                     // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
+                    // Adding machine epsilon (f64::EPSILON) sort of makes this esimate unbiased I think ...
                     (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - (q2_jk - f64::EPSILON))
                 };
             } else {
@@ -120,10 +137,7 @@ pub fn fst(
             .rev()
             .collect::<Vec<String>>()
             .join(".");
-        fname_output = bname.to_owned()
-            + "-fst-"
-            + &time.to_string()
-            + ".csv";
+        fname_output = bname.to_owned() + "-fst-" + &time.to_string() + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
@@ -143,7 +157,15 @@ pub fn fst(
     // Write the mean Fst across loci
     let fst_means: Array2<f64> = fst.mean_axis(Axis(0)).unwrap();
     for i in 0..n {
-        let line = genotypes_and_phenotypes.pool_names[i].to_owned() + "," + &fst_means.row(i).iter().map(|x| parse_f64_roundup_and_own(*x, 4)).collect::<Vec<String>>().join(",") + "\n";
+        let line = genotypes_and_phenotypes.pool_names[i].to_owned()
+            + ","
+            + &fst_means
+                .row(i)
+                .iter()
+                .map(|x| parse_f64_roundup_and_own(*x, 4))
+                .collect::<Vec<String>>()
+                .join(",")
+            + "\n";
         file_out.write_all(line.as_bytes()).unwrap();
     }
     Ok(fname_output)
@@ -156,33 +178,10 @@ mod tests {
     use super::*;
     #[test]
     fn test_fst() {
-        // Expected
-        let expected_line = "Chromosome1,12345,AT,4,0.7797774084757156\n".to_owned(); // where df=7, then the pvalue is calculated as the lower tail because if chi2 < df
-                                                                                      // Inputs
-        let mut locus_counts = LocusCounts {
-            chromosome: "Chromosome1".to_owned(),
-            position: 12345,
-            // alleles_vector: vec!["A", "T"]
-            alleles_vector: vec!["A", "T", "C", "D"]
-                .into_iter()
-                .map(|x| x.to_owned())
-                .collect::<Vec<String>>(),
-            // matrix: Array2::from_shape_vec((4, 2), vec![0, 20, 20, 0, 0, 20, 20, 0]).unwrap(),
-            matrix: Array2::from_shape_vec((2, 4), vec![0, 0, 10, 0, 0, 10, 0, 0]).unwrap(),
-        };
-        let filter_stats = FilterStats {
-            remove_ns: true,
-            min_quality: 0.01,
-            min_coverage: 1,
-            min_allele_frequency: 0.005,
-            // pool_sizes: vec![0.2, 0.2, 0.2, 0.2],
-            pool_sizes: vec![0.5, 0.5],
-        };
-
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4,
                 1.0, 1.0, 0.0, 0.0, 1.0, 0.0,
                 1.0, 0.6, 0.4, 0.0, 0.9, 0.1,
                 1.0, 0.4, 0.5, 0.1, 0.6, 0.4,
@@ -195,7 +194,7 @@ mod tests {
             vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
         )
         .unwrap();
-        let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
+        let genotypes_and_phenotypes = GenotypesAndPhenotypes {
             chromosome: vec![
                 "Intercept".to_owned(),
                 "X".to_owned(),
@@ -215,32 +214,52 @@ mod tests {
             ],
             intercept_and_allele_frequencies: x.clone(),
             phenotypes: y.clone(),
-            pool_names: vec!["Pop1".to_owned(), "Pop2".to_owned(), "Pop3".to_owned(), "Pop4".to_owned(), "Pop5".to_owned()],
+            pool_names: vec![
+                "Pop1".to_owned(),
+                "Pop2".to_owned(),
+                "Pop3".to_owned(),
+                "Pop4".to_owned(),
+                "Pop5".to_owned(),
+            ],
+            coverages: Array2::from_shape_vec((5,2), vec![100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]).unwrap()
         };
         // Outputs
-        let out = fst(&genotypes_and_phenotypes, &"test.something".to_owned(), &"".to_owned()).unwrap();
+        let out = fst(
+            &genotypes_and_phenotypes,
+            &"test.something".to_owned(),
+            &"".to_owned(),
+        )
+        .unwrap();
         let file = std::fs::File::open(&out).unwrap();
         let reader = std::io::BufReader::new(file);
         let mut header: Vec<String> = vec![];
         let mut pop: Vec<String> = vec![];
         let mut fst: Vec<f64> = vec![];
         for line in reader.lines() {
-            let split = line.unwrap().split(",").map(|x| x.to_owned()).collect::<Vec<String>>();
+            let split = line
+                .unwrap()
+                .split(",")
+                .map(|x| x.to_owned())
+                .collect::<Vec<String>>();
             if header.len() == 0 {
                 header = split;
             } else {
                 pop.push(split[0].clone());
-                for f in split[1..].iter().map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>() {
+                for f in split[1..]
+                    .iter()
+                    .map(|x| x.parse::<f64>().unwrap())
+                    .collect::<Vec<f64>>()
+                {
                     fst.push(f);
                 }
             }
         }
         let fst: Array2<f64> = Array2::from_shape_vec((pop.len(), pop.len()), fst).unwrap();
         let diag: Array1<f64> = fst.diag().to_owned(); // itself, i.e. fst=0.0
-        let pop1_4 = fst[(0,3)]; // the same populations, i.e. fst=0.0
-        let pop4_1 = fst[(3,0)]; // the same populations, i.e. fst=0.0
-        let pop2_5 = fst[(1,4)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
-        let pop5_2 = fst[(4,1)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
+        let pop1_4 = fst[(0, 3)]; // the same populations, i.e. fst=0.0
+        let pop4_1 = fst[(3, 0)]; // the same populations, i.e. fst=0.0
+        let pop2_5 = fst[(1, 4)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
+        let pop5_2 = fst[(4, 1)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
         println!("pop={:?}", pop);
         println!("fst={:?}", fst);
         // Assertions
@@ -249,5 +268,6 @@ mod tests {
         assert_eq!(pop4_1, 0.0);
         assert_eq!(pop2_5, 0.5);
         assert_eq!(pop5_2, 0.5);
+        // assert_eq!(0, 1);
     }
 }

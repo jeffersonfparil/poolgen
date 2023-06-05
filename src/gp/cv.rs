@@ -476,6 +476,7 @@ mod tests {
             intercept_and_allele_frequencies: f.clone(),
             phenotypes: y,
             pool_names: vec!["".to_owned()],
+            coverages: Array2::from_elem((1,1), f64::NAN)
         };
         println!(
             "frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]={:?}",

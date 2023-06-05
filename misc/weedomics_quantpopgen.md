@@ -408,13 +408,10 @@ dev.off()
 ![test_plot](./../test/../tests/misc/weedomics/kmeans_clustering_finding_the_best_k.svg)
 ![test_plot](./../test/../tests/misc/weedomics/kmeans_clusters.svg)
 
+## 3. What are the genetic architectures of herbicide resistances? How does environmental variation affect the distribution of herbicide resistances? Can we resasonably predict herbicide resistances across SE Australia using genotype and/or location data in the form of pool sequencing genomic data, edaphic, and atmospheric information?
 
-
-## 3. Can we associate the two pieces of information above to dissect the genetic bases of herbicide resistance traits?
-
-## 4. Assuming we identify genes putatvely associated with herbicide resistance traits/s, how did these come about - did they evolve from standing genetic variation or de novo mutations, and how much is migration to blame to their distribution in the landscape?
+## 4. Assuming we identify genes putatvely associated with herbicide resistances, how did these come about - did they evolve from standing genetic variation or de novo mutations, and how much is migration to blame to their distribution in the landscape?
 
 ## 5. Can we use these data for genomic prediction and how well can we build these genomic prediction models?
 
 ## 6. Can we predict future trajectories of herbicide resistance evolution, i.e. draw herbicide resistance distribution across SE Australia given some level of migration, and adaptaive evolution rate?
-

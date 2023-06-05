@@ -708,12 +708,13 @@ impl LoadAll for FileSyncPhen {
         end: &u64,
         filter_stats: &FilterStats,
         keep_p_minus_1: bool,
-    ) -> io::Result<Vec<LocusFrequencies>> {
+    ) -> io::Result<(Vec<LocusFrequencies>, Vec<LocusCounts>)> {
         // Input syn file
         let fname = self.filename_sync.clone();
 
-        // Prepare output vector
-        let mut out: Vec<LocusFrequencies> = Vec::new();
+        // Prepare output vectors
+        let mut freq: Vec<LocusFrequencies> = Vec::new();
+        let mut cnts: Vec<LocusCounts> = Vec::new();
         // Input file chunk
         let file = File::open(fname.clone()).unwrap();
         let mut reader = BufReader::new(file);
@@ -736,7 +737,7 @@ impl LoadAll for FileSyncPhen {
                 }
             }
             // Parse the pileup line
-            let locus_counts: LocusCounts = match line.lparse() {
+            let mut locus_counts: LocusCounts = match line.lparse() {
                 Ok(x) => *x,
                 Err(x) => match x.kind() {
                     ErrorKind::Other => continue,
@@ -752,21 +753,27 @@ impl LoadAll for FileSyncPhen {
                     }
                 },
             };
-            let mut locus_frequencies = *locus_counts.to_frequencies().unwrap();
-            // println!("locus_frequencies={:?}", locus_frequencies);
-            match locus_frequencies.filter(filter_stats) {
+            match locus_counts.filter(filter_stats) {
                 Ok(x) => x,
                 Err(_) => continue,
             };
+            let mut locus_frequencies = *locus_counts.to_frequencies().unwrap();
+            // let mut locus_frequencies = *locus_counts.to_frequencies().unwrap();
+            // // println!("locus_frequencies={:?}", locus_frequencies);
+            // match locus_frequencies.filter(filter_stats) {
+            //     Ok(x) => x,
+            //     Err(_) => continue,
+            // };
             // Remove minimum allele
             if keep_p_minus_1 {
                 locus_frequencies.sort_by_allele_freq(true).unwrap();
                 locus_frequencies.matrix.remove_index(Axis(1), 0);
                 locus_frequencies.alleles_vector.remove(0);
             }
-            out.push(locus_frequencies);
+            freq.push(locus_frequencies);
+            cnts.push(locus_counts);
         }
-        Ok(out)
+        Ok((freq, cnts))
     }
 
     fn load(
@@ -774,7 +781,7 @@ impl LoadAll for FileSyncPhen {
         filter_stats: &FilterStats,
         keep_p_minus_1: bool,
         n_threads: &usize,
-    ) -> io::Result<Vec<LocusFrequencies>> {
+    ) -> io::Result<(Vec<LocusFrequencies>, Vec<LocusCounts>)> {
         let fname = self.filename_sync.clone();
         // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
@@ -783,7 +790,8 @@ impl LoadAll for FileSyncPhen {
         // Instantiate thread object for parallel execution
         let mut thread_objects = Vec::new();
         // Vector holding all returns from pileup2sync_chunk()
-        let thread_ouputs: Arc<Mutex<Vec<LocusFrequencies>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
+        let thread_ouputs_freq: Arc<Mutex<Vec<LocusFrequencies>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
+        let thread_ouputs_cnts: Arc<Mutex<Vec<LocusCounts>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
                                                                                                  // Making four separate threads calling the `search_for_word` function
         for i in 0..*n_threads {
             // Clone pileup2sync_chunk parameters
@@ -791,12 +799,14 @@ impl LoadAll for FileSyncPhen {
             let start = chunks[i].clone();
             let end = chunks[i + 1].clone();
             let filter_stats = filter_stats.clone();
-            let thread_ouputs_clone = thread_ouputs.clone(); // Mutated within the current thread worker
+            let thread_ouputs_freq_clone = thread_ouputs_freq.clone(); // Mutated within the current thread worker
+            let thread_ouputs_cnts_clone = thread_ouputs_cnts.clone(); // Mutated within the current thread worker
             let thread = std::thread::spawn(move || {
-                let mut freqs = self_clone
+                let (mut freq, mut cnts) = self_clone
                     .per_chunk_load(&start, &end, &filter_stats, keep_p_minus_1)
                     .unwrap();
-                thread_ouputs_clone.lock().unwrap().append(&mut freqs);
+                thread_ouputs_freq_clone.lock().unwrap().append(&mut freq);
+                thread_ouputs_cnts_clone.lock().unwrap().append(&mut cnts);
             });
             thread_objects.push(thread);
         }
@@ -805,16 +815,27 @@ impl LoadAll for FileSyncPhen {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
         // Extract output filenames from each thread into a vector and sort them
-        let mut out: Vec<LocusFrequencies> = Vec::new();
-        for x in thread_ouputs.lock().unwrap().iter() {
-            out.push(x.clone());
+        let mut freq: Vec<LocusFrequencies> = Vec::new();
+        let mut cnts: Vec<LocusCounts> = Vec::new();
+        for x in thread_ouputs_freq.lock().unwrap().iter() {
+            freq.push(x.clone());
         }
-        out.sort_by(|a, b| {
+        for x in thread_ouputs_cnts.lock().unwrap().iter() {
+            cnts.push(x.clone());
+        }
+        freq.sort_by(|a, b| {
             a.chromosome
                 .cmp(&b.chromosome)
                 .then(a.position.cmp(&b.position))
         });
-        Ok(out)
+        cnts.sort_by(|a, b| {
+            a.chromosome
+                .cmp(&b.chromosome)
+                .then(a.position.cmp(&b.position))
+        });
+
+
+        Ok((freq, cnts))
     }
 
     fn write_csv(
@@ -863,7 +884,7 @@ impl LoadAll for FileSyncPhen {
             )
             .unwrap();
         // Load the full sync file in parallel and sort
-        let freqs = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
+        let (freqs, _cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         for f in freqs.iter() {
             for i in 0..f.alleles_vector.len() {
                 let freqs_per_pool = f
@@ -894,8 +915,9 @@ impl LoadAll for FileSyncPhen {
         keep_p_minus_1: bool,
         n_threads: &usize,
     ) -> io::Result<GenotypesAndPhenotypes> {
-        let freqs = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
+        let (freqs, cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         let n = self.pool_names.len();
+        let m = freqs.len(); // total number of loci
         // Find the total number of alleles across all loci
         let mut p = 1; // start with the intercept
         for f in freqs.iter() {
@@ -908,20 +930,27 @@ impl LoadAll for FileSyncPhen {
         position.push(0);
         let mut allele: Vec<String> = Vec::with_capacity(p);
         allele.push("intercept".to_owned());
+        let mut coverages: Array2<f64> = Array2::from_elem((n,m), f64::NAN);
+        let mut l: usize = 0; // locus index
         let mut mat: Array2<f64> = Array2::from_elem((n,p), 1.0);
-        let mut j: usize = 1; // start after the intercept
+        let mut j: usize = 1; // SNP index across loci, start after the intercept
         for f in freqs.iter() {
+            // Allele frequencies
             for j_ in 0..f.matrix.ncols() {
                 chromosome.push(f.chromosome.clone());
                 position.push(f.position);
                 allele.push(f.alleles_vector[j_].clone());
-                let mut i = 0;
-                for i_ in 0..f.matrix.nrows() {
-                    mat[(i, j)] = f.matrix[(i_, j_)];
-                    i += 1;
+                for i in 0..f.matrix.nrows() {
+                    mat[(i, j)] = f.matrix[(i, j_)];
                 }
                 j += 1; // next allele
             }
+            // Coverages
+            let cov: Array1<f64> = f.matrix.sum_axis(Axis(0));
+            for l_ in 0..cov.len() {
+                coverages[(l_, l)] = cov[l_];
+            }
+            l += 1; // next locus
         }
         // println!("mat={:?}", mat.slice(s![0..5, 0..4]));
         // println!("chromosome[0]={:?}", chromosome[0]);
@@ -939,6 +968,7 @@ impl LoadAll for FileSyncPhen {
             intercept_and_allele_frequencies: mat,
             phenotypes: self.phen_matrix.clone(),
             pool_names: self.pool_names.clone(),
+            coverages: coverages,
         })
     }
 }
@@ -1104,7 +1134,7 @@ mod tests {
             .sort_by_allele_freq(true)
             .unwrap();
         let n_threads = 2;
-        let loaded_freqs = file_sync_phen
+        let (loaded_freqs, loaded_counts) = file_sync_phen
             .load(&filter_stats, true, &n_threads)
             .unwrap();
         let frequencies_and_phenotypes = file_sync_phen
