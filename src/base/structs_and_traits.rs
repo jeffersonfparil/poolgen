@@ -150,7 +150,7 @@ pub struct GenotypesAndPhenotypes {
     pub intercept_and_allele_frequencies: Array2<f64>, // n pools x 1 + p alleles across loci
     pub phenotypes: Array2<f64>,                       // n pools x k traits
     pub pool_names: Vec<String>,                       // n
-    pub coverages: Array2<f64>,                        // n pools x f(p) loci
+    pub coverages: Array2<f64>,                        // n pools x F(p alleles) loci
 }
 
 #[derive(Debug, Clone)]
