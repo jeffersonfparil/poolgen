@@ -301,6 +301,10 @@ fst_matrix = fst_pairwise@PairwiseFSTmatrix
 mean_fst = colMeans(fst_matrix, na.rm=TRUE)
 h = hist(mean_fst, plot=FALSE)
 
+#### Sort the Fst matrix by population names
+idx = order(colnames(fst_matrix))
+fst_matrix = fst_matrix[idx, idx]
+
 svg("Fst_heatmap_unfiltered.svg", width=10, height=10)
 heatmap(fst_matrix, main="Fst (unfiltered)", revC=TRUE, Rowv=NA, symm=TRUE)
 dev.off()
@@ -313,10 +317,7 @@ phenotypes = droplevels(phenotypes[idx1, ])
 #### New Fst matrix
 idx2 = !(colnames(fst_matrix) %in% outlier_pops)
 fst_matrix = fst_matrix[idx2, idx2]
-#### Sort the Fst matrix by population names
-idx3 = order(colnames(fst_matrix))
-idx4 = order(rownames(fst_matrix))
-fst_matrix = fst_matrix[idx3, idx4]
+
 
 svg("Fst_heatmap.svg", width=10, height=10)
 heatmap(fst_matrix, main="Fst (ACC021 and ACC115 excluded)", revC=TRUE, Rowv=NA, symm=TRUE)

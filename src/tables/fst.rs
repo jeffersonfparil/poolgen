@@ -12,10 +12,6 @@ pub fn fst(
     let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
-    println!(
-        "genotypes_and_phenotypes.intercept_and_allele_frequencies={:?}",
-        genotypes_and_phenotypes.intercept_and_allele_frequencies
-    );
     // Count the number of loci (Note: assumes the loci are sorted)
     let mut loci_idx: Vec<usize> = vec![];
     for i in 1..p {
@@ -29,12 +25,6 @@ pub fn fst(
     loci_idx.push(p); // last allele of the last locus
     let l = loci_idx.len();
     assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols());
-    println!("genotypes_and_phenotypes.coverages={:?}", genotypes_and_phenotypes.coverages);
-    // println!(
-    //     "genotypes_and_phenotypes.intercept_and_allele_frequencies={:?}",
-    //     genotypes_and_phenotypes.intercept_and_allele_frequencies
-    // );
-    // println!("loci_idx={:?}", loci_idx);
     // A probably not so unbiased and multi-allelic version of Gautier et al, 2019 (assumes biallelic loci)
     let mut fst: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     let loci: Array3<usize> = Array3::from_shape_vec(
@@ -83,39 +73,30 @@ pub fn fst(
                     .slice(s![.., idx_start..idx_end]);
                 let nj = genotypes_and_phenotypes.coverages[(j, i)];
                 let nk = genotypes_and_phenotypes.coverages[(k, i)];
-                let q1_j = g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0)); // DOES NOT ALIGN WITH EXPECTATIONS OF WHEN LOCUS IS FIXED: * (nj/(nj-1.00)); // with a n/(n-1) factor to make it unbiased
-                let q1_k = g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0)); // DOES NOT ALIGN WITH EXPECTATIONS OF WHEN LOCUS IS FIXED: * (nk/(nk-1.00));
+                let q1_j = ( g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0)) * (nj/(nj-1.00)) ) + ( 1.00 - (nj/(nj-1.00)) ); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+                let q1_k = ( g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0)) * (nk/(nk-1.00)) ) + ( 1.00 - (nk/(nk-1.00)) ); // with a n/(n-1) factor on the heteroygosity to make it unbiased
                 let q2_jk = g
                     .slice(s![j, ..])
                     .iter()
                     .zip(&g.slice(s![k, ..]))
                     .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-                // NOTE trying to use unbiased estimators: DOES NOT ALIGN WITH EXPECTATIONS OF WHEN LOCUS IS FIXED
-                    // * ((nj*nk)/((nj-1.00)*(nk-1.00)));
-                // let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk);
-                // *f = if f_unbiased < 0.0 {
-                //     0.0
-                // } else if f_unbiased > 1.0 {
-                //     1.0
-                // } else {
-                //     f_unbiased
-                // };
-                *f = if (1.00 - q2_jk) >= f64::EPSILON {
-                    (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk)
+                let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
+                *f = if f_unbiased < 0.0 {
+                    0.0
+                } else if f_unbiased > 1.0 {
+                    1.0
                 } else {
-                    // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
-                    // Adding machine epsilon (f64::EPSILON) sort of makes this esimate unbiased I think ...
-                    (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - (q2_jk - f64::EPSILON))
+                    f_unbiased
                 };
             } else {
-                *f = 0.0;
+                *f = 0.0; // Fst within itself is zero
             }
         });
-    println!("loci={:?}", loci);
-    println!("pop1={:?}", pop1);
-    println!("pop2={:?}", pop2);
-    println!("fst={:?}", fst);
-    println!("fst.mean_axis(Axis(0))={:?}", fst.mean_axis(Axis(0)));
+    // println!("loci={:?}", loci);
+    // println!("pop1={:?}", pop1);
+    // println!("pop2={:?}", pop2);
+    // println!("fst={:?}", fst);
+    // println!("fst.mean_axis(Axis(0))={:?}", fst.mean_axis(Axis(0)));
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -221,7 +202,11 @@ mod tests {
                 "Pop4".to_owned(),
                 "Pop5".to_owned(),
             ],
-            coverages: Array2::from_shape_vec((5,2), vec![100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]).unwrap()
+            coverages: Array2::from_shape_vec((5,2), vec![ 10.0,  10.0,
+                                                                   100.0, 100.0,
+                                                                   100.0, 100.0,
+                                                                   100.0, 100.0,
+                                                                   100.0, 100.0]).unwrap()
         };
         // Outputs
         let out = fst(
