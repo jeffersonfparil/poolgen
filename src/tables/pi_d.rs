@@ -13,19 +13,25 @@ pub fn pi_d(
     let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
-    // Count the number of loci (Note: assumes the loci are sorted)
+    assert_eq!(p, genotypes_and_phenotypes.chromosome.len(), "The number of entries in the 'chromosome' field and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'chromosome' fields of 'GenotypesAndPhenotypes' struct.");
+    assert_eq!(p, genotypes_and_phenotypes.position.len(), "The number of entries in the 'position' field and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'chromosome' fields of 'GenotypesAndPhenotypes' struct.");
+    // Count the number of loci (Note: assumes the loci are sorted) and extract the loci coordinates
     let mut loci_idx: Vec<usize> = vec![];
+    let mut loci_chr: Vec<&String> = vec![];
+    let mut loci_pos: Vec<&u64> = vec![];
     for i in 1..p {
         // includes the intercept
         if (genotypes_and_phenotypes.chromosome[i - 1] != genotypes_and_phenotypes.chromosome[i])
             | (genotypes_and_phenotypes.position[i - 1] != genotypes_and_phenotypes.position[i])
         {
             loci_idx.push(i);
+            loci_chr.push(&genotypes_and_phenotypes.chromosome[i]);
+            loci_pos.push(&genotypes_and_phenotypes.position[i]);
         }
     }
     loci_idx.push(p); // last allele of the last locus
     let l = loci_idx.len();
-    assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols());
+    assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
     // pi is the nucleotide diversity per population, and each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
     let mut pi: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     // d is the pairwise divergence between populations
@@ -83,11 +89,54 @@ pub fn pi_d(
                 .iter()
                 .zip(&g.slice(s![k, ..]))
                 .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-            *pi_ = nj; // nucleotide diversity, where population across rows which means each column is the same value
+            *pi_ = q1_j; // nucleotide diversity, where population across rows which means each column is the same value
             *d_ = q2_jk; // pairwise divergence, where d_i,j,k is the divergens in the ith loci between population j and population k
         });
     // Summarize per non-overlapping window
+
+    // Find window indices making sure we respect chromosomal boundaries
+    //// We start with the first locus, i.e. index 1 skipping the intercept at index 0
+    let mut idx_windows: Vec<usize> = vec![1]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
+    let mut window_end_chr = loci_chr[1];
+    let mut window_end_pos = loci_pos[1] + (*window_size_kb as u64);
+    for i in 2..p {
+        let chr = loci_chr[i];
+        let pos = loci_pos[i];
+        if (chr != window_end_chr) | ((chr == window_end_chr) & (pos > &window_end_pos)) {
+            idx_windows.push(i);
+        }
+    }
+
+
+
+
     let n_windows = window_size_kb / loci_idx.len();
+
+    let mut pi_per_pool_across_windows: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
+    let mut d_per_pool_across_windows:  Array3<f64> = Array3::from_elem((n_windows, n, n), f64::NAN);
+
+    println!("n = {:?}", loci_idx.len());
+    println!("n_windows = {:?}", n_windows);
+
+    for i in 0..(n_windows-1) {
+        let idx_ini = i*window_size_kb;
+        let idx_fin = (i*window_size_kb) + 1;
+        for j in 0..n {
+            pi_per_pool_across_windows[(i, j)] = pi.slice(s![idx_ini..idx_fin, j, j])
+                                         .mean_axis(Axis(0))
+                                         .unwrap()
+                                         .fold(0.0, |_, &x| x);
+            
+            for k in 0..n {
+                let x = d.slice(s![idx_ini..idx_fin, j, k])
+                                            .mean_axis(Axis(0))
+                                            .unwrap()
+                                            .fold(0.0, |_, &x| x);
+                println!("x={:?}", x);
+                
+            }
+        }
+    }
     
     
     
@@ -205,13 +254,13 @@ mod tests {
                                                                    100.0, 100.0]).unwrap()
         };
         // Outputs
-        // let out = pi_d(
-        //     &genotypes_and_phenotypes,
-        //     &100, // 100-kb windows
-        //     &"test.something".to_owned(),
-        //     &"".to_owned(),
-        // )
-        // .unwrap();
+        let out = pi_d(
+            &genotypes_and_phenotypes,
+            &100, // 100-kb windows
+            &"test.something".to_owned(),
+            &"".to_owned(),
+        )
+        .unwrap();
         // let file = std::fs::File::open(&out).unwrap();
         // let reader = std::io::BufReader::new(file);
         // let mut header: Vec<String> = vec![];

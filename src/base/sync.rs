@@ -790,7 +790,8 @@ impl LoadAll for FileSyncPhen {
         // Instantiate thread object for parallel execution
         let mut thread_objects = Vec::new();
         // Vector holding all returns from pileup2sync_chunk()
-        let thread_ouputs_freq: Arc<Mutex<Vec<LocusFrequencies>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
+        let thread_ouputs_freq: Arc<Mutex<Vec<LocusFrequencies>>> =
+            Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
         let thread_ouputs_cnts: Arc<Mutex<Vec<LocusCounts>>> = Arc::new(Mutex::new(Vec::new())); // Mutated within each thread worker
                                                                                                  // Making four separate threads calling the `search_for_word` function
         for i in 0..*n_threads {
@@ -833,7 +834,6 @@ impl LoadAll for FileSyncPhen {
                 .cmp(&b.chromosome)
                 .then(a.position.cmp(&b.position))
         });
-
 
         Ok((freq, cnts))
     }
@@ -918,7 +918,7 @@ impl LoadAll for FileSyncPhen {
         let (freqs, cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         let n = self.pool_names.len();
         let m = freqs.len(); // total number of loci
-        // Find the total number of alleles across all loci
+                             // Find the total number of alleles across all loci
         let mut p = 1; // start with the intercept
         for f in freqs.iter() {
             p += f.matrix.ncols();
@@ -930,9 +930,9 @@ impl LoadAll for FileSyncPhen {
         position.push(0);
         let mut allele: Vec<String> = Vec::with_capacity(p);
         allele.push("intercept".to_owned());
-        let mut coverages: Array2<f64> = Array2::from_elem((n,m), f64::NAN);
+        let mut coverages: Array2<f64> = Array2::from_elem((n, m), f64::NAN);
         let mut l: usize = 0; // locus index
-        let mut mat: Array2<f64> = Array2::from_elem((n,p), 1.0);
+        let mut mat: Array2<f64> = Array2::from_elem((n, p), 1.0);
         let mut j: usize = 1; // SNP index across loci, start after the intercept
         for f in freqs.iter() {
             // Allele frequencies

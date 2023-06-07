@@ -24,7 +24,7 @@ pub fn fst(
     }
     loci_idx.push(p); // last allele of the last locus
     let l = loci_idx.len();
-    assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols());
+    assert_eq!(l - 1, genotypes_and_phenotypes.coverages.ncols());
     // A probably not so unbiased and multi-allelic version of Gautier et al, 2019 (assumes biallelic loci)
     let mut fst: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     let loci: Array3<usize> = Array3::from_shape_vec(
@@ -73,8 +73,12 @@ pub fn fst(
                     .slice(s![.., idx_start..idx_end]);
                 let nj = genotypes_and_phenotypes.coverages[(j, i)];
                 let nk = genotypes_and_phenotypes.coverages[(k, i)];
-                let q1_j = ( g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0)) * (nj/(nj-1.00)) ) + ( 1.00 - (nj/(nj-1.00)) ); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-                let q1_k = ( g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0)) * (nk/(nk-1.00)) ) + ( 1.00 - (nk/(nk-1.00)) ); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+                let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                    * (nj / (nj - 1.00)))
+                    + (1.00 - (nj / (nj - 1.00))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+                let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                    * (nk / (nk - 1.00)))
+                    + (1.00 - (nk / (nk - 1.00))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
                 let q2_jk = g
                     .slice(s![j, ..])
                     .iter()
@@ -162,11 +166,8 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4,
-                1.0, 1.0, 0.0, 0.0, 1.0, 0.0,
-                1.0, 0.6, 0.4, 0.0, 0.9, 0.1,
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4,
-                1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
+                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
             ],
         )
         .unwrap();
@@ -202,11 +203,13 @@ mod tests {
                 "Pop4".to_owned(),
                 "Pop5".to_owned(),
             ],
-            coverages: Array2::from_shape_vec((5,2), vec![ 10.0,  10.0,
-                                                                   100.0, 100.0,
-                                                                   100.0, 100.0,
-                                                                   100.0, 100.0,
-                                                                   100.0, 100.0]).unwrap()
+            coverages: Array2::from_shape_vec(
+                (5, 2),
+                vec![
+                    10.0, 10.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
+                ],
+            )
+            .unwrap(),
         };
         // Outputs
         let out = fst(

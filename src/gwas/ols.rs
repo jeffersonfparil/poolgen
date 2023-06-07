@@ -465,7 +465,7 @@ mod tests {
             intercept_and_allele_frequencies: x.clone(),
             phenotypes: y.clone(),
             pool_names: vec!["".to_owned()],
-            coverages: Array2::from_elem((1,1), f64::NAN)
+            coverages: Array2::from_elem((1, 1), f64::NAN),
         };
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(0, 2)] = 10.0;
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(1, 2)] = 8.0;
