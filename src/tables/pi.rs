@@ -83,6 +83,8 @@ pub fn pi(
     }
     // Add the last index of the final position
     windows_idx.push(m);
+    windows_chr.push(windows_chr.last().unwrap().to_owned());
+    windows_pos.push(*loci_pos.last().unwrap() - 1);
     // Take the means per window
     let n_windows = windows_idx.len() - 1;
     let mut pi_per_pool_across_windows: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
@@ -135,8 +137,11 @@ pub fn pi(
         .expect(&error_writing_file);
     // Header
     let mut line: Vec<String> = vec!["Pool".to_owned()];
-    for window in 0..n_windows {
-        line.push("Window-".to_owned() + &window.to_string());
+    for i in 0..n_windows {
+        let window_chr = windows_chr[i].clone();
+        let window_pos_ini = windows_pos[i];
+        let window_pos_fin = windows_pos[i+1] + 1;
+        line.push("Window-".to_owned() + &window_chr + "_" + &window_pos_ini.to_string() + "_" + &window_pos_fin.to_string());
     }
     let line = line.join(",") + "\n";
     file_out.write_all(line.as_bytes()).unwrap();
