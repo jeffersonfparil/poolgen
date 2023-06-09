@@ -934,8 +934,10 @@ impl LoadAll for FileSyncPhen {
         let mut l: usize = 0; // locus index
         let mut mat: Array2<f64> = Array2::from_elem((n, p), 1.0);
         let mut j: usize = 1; // SNP index across loci, start after the intercept
-        for f in freqs.iter() {
+        assert_eq!(freqs.len(), cnts.len(), "Frequencies and counts not the same length.");
+        for i in 0..freqs.len() {
             // Allele frequencies
+            let f = &freqs[i];
             for j_ in 0..f.matrix.ncols() {
                 chromosome.push(f.chromosome.clone());
                 position.push(f.position);
@@ -946,7 +948,8 @@ impl LoadAll for FileSyncPhen {
                 j += 1; // next allele
             }
             // Coverages
-            let cov: Array1<f64> = f.matrix.sum_axis(Axis(0));
+            let c = &cnts[i];
+            let cov: Array1<f64> = c.matrix.sum_axis(Axis(1)).map(|&x| x as f64);
             for l_ in 0..cov.len() {
                 coverages[(l_, l)] = cov[l_];
             }
@@ -1165,6 +1168,7 @@ mod tests {
             expected_output6.matrix[(0, 0)],
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]
         );
+        // TO DO: IMPROVE UNIT TESTS!!!! 2023/06/09
         // assert_eq!(
         //     expected_output6.matrix[(1, 0)],
         //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 0)]

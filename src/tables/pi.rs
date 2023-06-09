@@ -30,6 +30,8 @@ pub fn pi(
         }
     }
     loci_idx.push(p); // last allele of the last locus
+    loci_chr.push(genotypes_and_phenotypes.chromosome.last().unwrap()); // last allele of the last locus
+    loci_pos.push(genotypes_and_phenotypes.position.last().unwrap()); // last allele of the last locus
     let l = loci_idx.len();
     assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
     // pi is the nucleotide diversity per population, and each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
@@ -63,19 +65,21 @@ pub fn pi(
             let nj = genotypes_and_phenotypes.coverages[(j, i)];
             // Nucleotide diversity (~ heterozygosity), where population across rows which means each column is the same value
             *pi_ = ( (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                * (nj / (nj - 1.00)))
-                - (nj / (nj - 1.00)) ).abs(); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-        });
+                * (nj / (nj - 1.00 + f64::EPSILON)))
+                - (nj / (nj - 1.00 + f64::EPSILON)) ).abs(); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+    });
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
     let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
-    let mut windows_pos: Vec<u64> = vec![loci_pos[0] + (*window_size_kb as u64)];
+    let mut windows_pos: Vec<u64> = vec![*loci_pos[0] as u64];
     for i in 1..m {
         let chr = loci_chr[i];
         let pos = loci_pos[i];
-        if (chr != windows_chr.last().unwrap()) | ((chr == windows_chr.last().unwrap()) & (pos > windows_pos.last().unwrap())) {
+        if (chr != windows_chr.last().unwrap()) 
+            | ((chr == windows_chr.last().unwrap()) 
+                & (pos > &(windows_pos.last().unwrap() + &(*window_size_kb as u64)))) {
             windows_idx.push(i);
             windows_chr.push(chr.to_owned());
             windows_pos.push(*pos);
@@ -88,7 +92,6 @@ pub fn pi(
     // Take the means per window
     let n_windows = windows_idx.len() - 1;
     let mut pi_per_pool_across_windows: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
-    // let mut d_per_pool_across_windows: Array3<f64> = Array3::from_elem((n_windows, n, n), f64::NAN);
     for i in 0..n_windows {
         let idx_start = windows_idx[i];
         let idx_end = windows_idx[i + 1];
@@ -100,10 +103,17 @@ pub fn pi(
                 .fold(0.0, |_, &x| x);
         }
     }
-    // println!(
-    //     "pi_per_pool_across_windows={:?}",
-    //     pi_per_pool_across_windows
-    // );
+    let vec_pi_across_windows = pi_per_pool_across_windows
+                                                                    .mean_axis(Axis(0))
+                                                                    .unwrap();
+    println!(
+        "pi_per_pool_across_windows={:?}",
+        pi_per_pool_across_windows
+    );
+    println!(
+        "vec_pi_across_windows={:?}",
+        vec_pi_across_windows
+    );
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -136,11 +146,11 @@ pub fn pi(
         .open(&fname_output)
         .expect(&error_writing_file);
     // Header
-    let mut line: Vec<String> = vec!["Pool".to_owned()];
+    let mut line: Vec<String> = vec!["Pool".to_owned(), "Mean_across_windows".to_owned()];
     for i in 0..n_windows {
         let window_chr = windows_chr[i].clone();
         let window_pos_ini = windows_pos[i];
-        let window_pos_fin = windows_pos[i+1] + 1;
+        let window_pos_fin = window_pos_ini + (*window_size_kb as u64);
         line.push("Window-".to_owned() + &window_chr + "_" + &window_pos_ini.to_string() + "_" + &window_pos_fin.to_string());
     }
     let line = line.join(",") + "\n";
@@ -148,6 +158,8 @@ pub fn pi(
     // Write the nucleotide diversity per window
     for i in 0..n {
         let line = genotypes_and_phenotypes.pool_names[i].to_owned()
+            + ","
+            + &vec_pi_across_windows[i].to_string()
             + ","
             + &pi
                 .column(i)
@@ -251,11 +263,11 @@ mod tests {
                 }
             }
         }
-        let pi: Array2<f64> = Array2::from_shape_vec((5, 2), pi).unwrap();
-        let pop2_locus1 = pi[(1, 0)]; // locus fixed, i.e. pi=0.0
-        let pop2_locus2 = pi[(1, 1)]; // locus fixed, i.e. pi=0.0
-        let pop5_locus1 = pi[(4, 0)]; // locus fixed, i.e. pi=0.0
-        let pop5_locus2 = pi[(4, 1)]; // locus at 0.5, i.e. pi = 50 / (100-1) = 0.5051
+        let pi: Array2<f64> = Array2::from_shape_vec((5, 3), pi).unwrap();
+        let pop2_locus1 = pi[(1, 1)]; // locus fixed, i.e. pi=0.0
+        let pop2_locus2 = pi[(1, 2)]; // locus fixed, i.e. pi=0.0
+        let pop5_locus1 = pi[(4, 1)]; // locus fixed, i.e. pi=0.0
+        let pop5_locus2 = pi[(4, 2)]; // locus at 0.5, i.e. pi = 50 / (100-1) = 0.5051
         assert_eq!(pop2_locus1, 0.0);
         assert_eq!(pop2_locus2, 0.0);
         assert_eq!(pop5_locus1, 0.0);

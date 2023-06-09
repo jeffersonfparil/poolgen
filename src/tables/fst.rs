@@ -60,46 +60,54 @@ pub fn fst(
     )
     .unwrap();
     // Parallel computations
-    Zip::from(&mut fst)
-        .and(&loci)
-        .and(&pop1)
-        .and(&pop2)
-        .par_for_each(|f, &i, &j, &k| {
-            if j != k {
-                let idx_start = loci_idx[i];
-                let idx_end = loci_idx[i + 1];
-                let g = genotypes_and_phenotypes
-                    .intercept_and_allele_frequencies
-                    .slice(s![.., idx_start..idx_end]);
-                let nj = genotypes_and_phenotypes.coverages[(j, i)];
-                let nk = genotypes_and_phenotypes.coverages[(k, i)];
-                let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                    * (nj / (nj - 1.00)))
-                    + (1.00 - (nj / (nj - 1.00))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-                let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                    * (nk / (nk - 1.00)))
-                    + (1.00 - (nk / (nk - 1.00))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-                let q2_jk = g
-                    .slice(s![j, ..])
-                    .iter()
-                    .zip(&g.slice(s![k, ..]))
-                    .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-                let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
-                *f = if f_unbiased < 0.0 {
-                    0.0
-                } else if f_unbiased > 1.0 {
-                    1.0
+    // Zip::from(&mut fst)
+    //     .and(&loci)
+    //     .and(&pop1)
+    //     .and(&pop2)
+    //     .par_for_each(|f, &i, &j, &k| {
+    for i in 0..(l-1) {
+        for j in 0..n {
+            for k in 0..n {
+                if j != k {
+                    let idx_start = loci_idx[i];
+                    let idx_end = loci_idx[i + 1];
+                    let g = genotypes_and_phenotypes
+                        .intercept_and_allele_frequencies
+                        .slice(s![.., idx_start..idx_end]);
+                    let nj = genotypes_and_phenotypes.coverages[(j, i)];
+                    let nk = genotypes_and_phenotypes.coverages[(k, i)];
+                    let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                        * (nj / (nj - 1.00 + f64::EPSILON)))
+                        + (1.00 - (nj / (nj - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+                    let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                        * (nk / (nk - 1.00 + f64::EPSILON)))
+                        + (1.00 - (nk / (nk - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+                    let q2_jk = g
+                        .slice(s![j, ..])
+                        .iter()
+                        .zip(&g.slice(s![k, ..]))
+                        .fold(0.0, |sum, (&x, &y)| sum + (x * y));
+                    let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
+                    // *f = if f_unbiased < 0.0 {
+                    fst[(i, j, k)] = if f_unbiased < 0.0 {
+                        0.0
+                    } else if f_unbiased > 1.0 {
+                        1.0
+                    } else {
+                        f_unbiased
+                    };
                 } else {
-                    f_unbiased
-                };
-            } else {
-                *f = 0.0; // Fst within itself is zero
+                    // *f = 0.0; // Fst within itself is zero
+                    fst[(i, j, k)] = 0.0; // Fst within itself is zero
+                }
             }
-        });
-    // println!("loci={:?}", loci);
-    // println!("pop1={:?}", pop1);
-    // println!("pop2={:?}", pop2);
-    // println!("fst={:?}", fst);
+        }
+    }
+        // });
+    println!("loci={:?}", loci);
+    println!("pop1={:?}", pop1);
+    println!("pop2={:?}", pop2);
+    println!("fst={:?}", fst);
     // println!("fst.mean_axis(Axis(0))={:?}", fst.mean_axis(Axis(0)));
     // Write output
     let mut fname_output = fname_output.to_owned();

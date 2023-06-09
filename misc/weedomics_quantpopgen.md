@@ -328,7 +328,7 @@ dev.off()
 ![heatmap_Fst](./../tests/misc/weedomics/Fst_heatmap_unfiltered.svg)
 ![heatmap_Fst](./../tests/misc/weedomics/Fst_heatmap.svg)
 
-These 2 outliers come from park areas, phenotypically (eyeballing it) different from the field-collected populations, and are most probably different species. I will therefore convert the pileups into syncs excluing these 2 populations, i.e. ACC021 and ACC115.
+These 2 outliers come from park areas, phenotypically (eyeballing it) different from the field-collected populations, and are most probably different species. I will therefore convert the pileups into syncs excluding these 2 populations, i.e. ACC021 and ACC115.
 
 ```shell
 # cd /data/weedomics/2.c_60_populations_genotyping/READ_LINKS
@@ -336,10 +336,10 @@ These 2 outliers come from park areas, phenotypically (eyeballing it) different 
 # head Lolium_SEAU.pileup | cut -f1-5
 # time cut -f1-183,187-228,232-360 Lolium_SEAU.pileup > Lolium_SEAU_filteredout_ACC021_and_ACC115.pileup
 cd /data-weedomics-1/poolgen/tests/misc/weedomics
-time poolgen fst \
+time poolgen-dev fst \
     -f Lolium_SEAU_filteredout_ACC021_and_ACC115.sync \
     -p Lolium_SEAU_filteredout_ACC021_and_ACC115.csv \
-    -o Lolium_SEAU_filteredout_ACC021_and_ACC115.fst
+    -o Lolium_SEAU_filteredout_ACC021_and_ACC115.fst \
     --n-threads 32
 ```
 
@@ -359,6 +359,28 @@ dev.off()
 
 ![heatmap_Fst](./../tests/misc/weedomics/Fst_heatmap_filtered.svg)
 
+Also, let's see the heterozygosity of each population, i.e. the nucleotide diversity within each population:
+
+```shell
+cd /data-weedomics-1/poolgen/tests/misc/weedomics
+time poolgen-dev heterozygosity \
+    -f Lolium_SEAU_filteredout_ACC021_and_ACC115.sync \
+    -p Lolium_SEAU_filteredout_ACC021_and_ACC115.csv \
+    -o Lolium_SEAU_filteredout_ACC021_and_ACC115.pi \
+    --n-threads 32
+```
+
+Let's take a look:
+
+```R
+setwd("/data-weedomics-1/poolgen/tests/misc/weedomics")
+dat = read.csv("Lolium_SEAU_filteredout_ACC021_and_ACC115.pi")
+PI = dat[,2]
+rownames(PI) = dat$Pool
+svg("Heterozygosity_barplot_filtered.svg", width=10, height=10)
+barplot
+
+``
 
 Now, let's just build a simple dendrogram from genotype data
 
