@@ -6,6 +6,65 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+impl CheckStruct for LocusCounts {
+    fn check(&self) -> io::Result<()> {
+        let (_n, p) = self.matrix.dim();
+        let a = self.alleles_vector.len();
+        match p == a {
+            true => return Ok(()),
+            false => {
+                let locus = vec![self.chromosome.clone(),  self.position.to_string()].join("-");
+                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusCounts error: the counts matrix does not have the same the number columns as the number of alleles."))
+            }
+        }
+    }
+}
+
+impl CheckStruct for LocusFrequencies {
+    fn check(&self) -> io::Result<()> {
+        let (_n, p) = self.matrix.dim();
+        let a = self.alleles_vector.len();
+        match p == a {
+            true => return Ok(()),
+            false => {
+                let locus = vec![self.chromosome.clone(),  self.position.to_string()].join("-");
+                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusFrequencies error: the frequencies matrix does not have the same the number columns as the number of alleles."))
+            }
+        }
+    }
+}
+
+impl CheckStruct for LocusCountsAndPhenotypes {
+    fn check(&self) -> io::Result<()> {
+        self.locus_counts.check().unwrap();
+        let (n, _p) = self.locus_counts.matrix.dim();
+        let (n_, _k) = self.phenotypes.dim();
+        let n__ = self.pool_names.len();
+        match (n == n_) & (n_ == n__) {
+            true => return Ok(()),
+            false => {
+                let locus = vec![self.locus_counts.chromosome.clone(),  self.locus_counts.position.to_string()].join("-");
+                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusCountsAndPhenotypes error: the number of pools are inconsistent in the locus counts, and/or phenotypes matrix and/or pool names."))
+            }
+        }
+    }
+}
+
+impl CheckStruct for GenotypesAndPhenotypes {
+    fn check(&self) -> io::Result<()> {
+        let p = self.chromosome.len();
+        let p_ = self.position.len();
+        let (n, p__) = self.intercept_and_allele_frequencies.dim();
+        let (n_, _k) = self.phenotypes.dim();
+        let n__ = self.pool_names.len();
+        let (n___, l) = self.coverages.dim();
+        match (p == p_) & (p_ == p__) & (n == n_) & (n_ == n__) & (n__ == n___) & (l <= p) {
+            true => return Ok(()),
+            false => return Err(Error::new(ErrorKind::Other, "GenotypesAndPhenotypes: there are at least 1 mismatch in the number of pools and loci."))
+        }
+    }
+}
+
 impl Parse<LocusCounts> for String {
     // Parse a line of pileup into PileupLine struct
     fn lparse(&self) -> io::Result<Box<LocusCounts>> {
@@ -104,6 +163,7 @@ impl Filter for LocusCounts {
     // Filter PileupLine by minimum coverage, minimum quality
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
+        self.check().unwrap(); // preliminary check of the structure format
         // Remove Ns
         if filter_stats.remove_ns {
             let i = match self
@@ -239,6 +299,7 @@ impl Filter for LocusFrequencies {
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
         // Also, cannot filter by minimum coverage as that data is lost from counts to frequencies conversion
+        self.check().unwrap(); // preliminary check of the structure format
         // Remove Ns
         if filter_stats.remove_ns {
             let i = match self
@@ -934,7 +995,11 @@ impl LoadAll for FileSyncPhen {
         let mut l: usize = 0; // locus index
         let mut mat: Array2<f64> = Array2::from_elem((n, p), 1.0);
         let mut j: usize = 1; // SNP index across loci, start after the intercept
-        assert_eq!(freqs.len(), cnts.len(), "Frequencies and counts not the same length.");
+        assert_eq!(
+            freqs.len(),
+            cnts.len(),
+            "Frequencies and counts not the same length."
+        );
         for i in 0..freqs.len() {
             // Allele frequencies
             let f = &freqs[i];

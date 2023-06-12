@@ -84,35 +84,6 @@ pub fn prepare_solver_neldermead(p: f64, h: f64) -> NelderMead<Vec<f64>, f64> {
     NelderMead::new(init_param)
 }
 
-pub fn histogram(x: Vec<f64>, nbins: usize) -> (Vec<f64>, Vec<f64>, Vec<usize>) {
-    if x.clone().population_variance().is_nan() {
-        return (vec![f64::NAN], vec![f64::NAN], vec![0]);
-    }
-    let max = x.iter().max_by(|x, y| x.partial_cmp(y).unwrap()).unwrap();
-    let min = x.iter().min_by(|x, y| x.partial_cmp(y).unwrap()).unwrap();
-    let bin_size = (max - min) / (nbins as f64);
-    let mut bins_start: Vec<f64> = vec![];
-    let mut bins_end: Vec<f64> = vec![];
-    let mut counts: Vec<usize> = vec![];
-    for i in 0..nbins {
-        bins_start.push(sensible_round(min + ((i + 0) as f64 * bin_size), 7));
-        bins_end.push(sensible_round(min + ((i + 1) as f64 * bin_size), 7));
-        counts.push(
-            x.iter()
-                .map(|xi| {
-                    if (*xi >= bins_start[i]) & (*xi < bins_end[i]) {
-                        1 as usize
-                    } else {
-                        0 as usize
-                    }
-                })
-                .sum(),
-        );
-    }
-    counts[nbins - 1] += 1; // add the x.max()
-    (bins_start, bins_end, counts)
-}
-
 pub fn multiply_views_xx(
     a: &Array2<f64>,
     b: &Array2<f64>,
@@ -267,7 +238,6 @@ mod tests {
         // Outputs
         let splits = find_file_splits(fname, &n_threads).unwrap();
         let string_f64 = parse_f64_roundup_and_own(number, 4);
-        let binning = histogram(betas, 5);
         let a_x_b = multiply_views_xx(&a, &b, &idx_w3, &idx_x2, &idx_y2, &idx_z2).unwrap();
         let at_x_b = multiply_views_xtx(&a, &b, &idx_w3, &idx_x2, &idx_w3, &idx_z2).unwrap();
         let a_x_bt = multiply_views_xxt(&a, &b, &idx_w3, &idx_x2, &idx_w3, &idx_z2).unwrap();
@@ -296,14 +266,6 @@ mod tests {
         // Assertion
         assert_eq!(splits.len(), 3);
         assert_eq!(string_f64, "0.42".to_owned());
-        assert_eq!(
-            binning,
-            (
-                vec![0.0, 0.2, 0.4, 0.6, 0.8],
-                vec![0.2, 0.4, 0.6, 0.8, 1.0],
-                vec![1, 2, 3, 4, 5],
-            )
-        );
         assert_eq!(
             a_x_b,
             Array2::from_shape_vec((3, 2), vec![27.0, 31.0, 63.0, 73.0, 81.0, 94.0]).unwrap()

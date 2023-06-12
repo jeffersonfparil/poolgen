@@ -5,6 +5,8 @@ use plotlib::style::PointStyle;
 use plotlib::view::ContinuousView;
 use std::io::{self, Error, ErrorKind};
 
+// Functions for tests and debugging mostly. This module will probably not be expanded/developed further.
+
 pub fn plot_scatter_2d(
     x: &Array1<f64>,
     y: &Array1<f64>,

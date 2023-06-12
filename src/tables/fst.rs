@@ -65,7 +65,7 @@ pub fn fst(
     //     .and(&pop1)
     //     .and(&pop2)
     //     .par_for_each(|f, &i, &j, &k| {
-    for i in 0..(l-1) {
+    for i in 0..(l - 1) {
         for j in 0..n {
             for k in 0..n {
                 if j != k {
@@ -88,7 +88,7 @@ pub fn fst(
                         .zip(&g.slice(s![k, ..]))
                         .fold(0.0, |sum, (&x, &y)| sum + (x * y));
                     let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
-                    // *f = if f_unbiased < 0.0 {
+                                                                                                    // *f = if f_unbiased < 0.0 {
                     fst[(i, j, k)] = if f_unbiased < 0.0 {
                         0.0
                     } else if f_unbiased > 1.0 {
@@ -103,7 +103,7 @@ pub fn fst(
             }
         }
     }
-        // });
+    // });
     println!("loci={:?}", loci);
     println!("pop1={:?}", pop1);
     println!("pop2={:?}", pop2);

@@ -282,6 +282,8 @@ pub fn gwalpha_ls(
     locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes,
     filter_stats: &FilterStats,
 ) -> Option<String> {
+    // Check struct
+    locus_counts_and_phenotypes.check().unwrap();
     // Prepare phenotype and genotype statistics
     let (locus_frequencies, bins, q, sig, min, max, n, p) =
         match prepare_geno_and_pheno_stats(locus_counts_and_phenotypes, filter_stats) {
@@ -330,6 +332,8 @@ pub fn gwalpha_ml(
     locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes,
     filter_stats: &FilterStats,
 ) -> Option<String> {
+    // Check struct
+    locus_counts_and_phenotypes.check().unwrap();
     // Prepare phenotype and genotype statistics
     let (locus_frequencies, bins, q, sig, min, max, n, p) =
         match prepare_geno_and_pheno_stats(locus_counts_and_phenotypes, filter_stats) {

@@ -44,6 +44,8 @@ pub fn correlation(
     locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes,
     filter_stats: &FilterStats,
 ) -> Option<String> {
+    // Check struct
+    locus_counts_and_phenotypes.check().unwrap();
     // Filter and extract the allele frequencies
     let locus_counts = match locus_counts_and_phenotypes
         .locus_counts

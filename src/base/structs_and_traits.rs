@@ -155,23 +155,26 @@ pub struct GenotypesAndPhenotypes {
 
 #[derive(Debug, Clone)]
 pub struct PredictionPerformance {
-    pub n: usize,                                           // number of observations
-    pub p: usize,                                           // number of predictors
-    pub k: usize,                                           // number cross-validation folds
+    pub n: usize,                                // number of observations
+    pub p: usize,                                // number of predictors
+    pub k: usize,                                // number cross-validation folds
     pub r: usize, // number replications where each cross-validation results in random groupings
     pub models: Vec<String>, // genomic prediction model used
     pub y_validation_and_predicted: Array4<f64>, // reps x n x models x traits+traits
-    pub b_histogram: Vec<(Vec<f64>, Vec<f64>, Vec<usize>)>, // bin_start (inclusive), bin_end (exclusive), counts or frequency
-    pub cor: Array4<f64>,                                   // reps x folds x models x traits
-    pub mbe: Array4<f64>,
-    pub mae: Array4<f64>,
-    pub mse: Array4<f64>,
-    pub rmse: Array4<f64>,
+    pub cor: Array4<f64>, // reps x folds x models x traits
+    pub mbe: Array4<f64>, // reps x folds x models x traits
+    pub mae: Array4<f64>, // reps x folds x models x traits
+    pub mse: Array4<f64>, // reps x folds x models x traits
+    pub rmse: Array4<f64>, // reps x folds x models x traits
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // TRAITS
 ///////////////////////////////////////////////////////////////////////////////
+
+pub trait CheckStruct {
+    fn check(&self) -> io::Result<()>;
+}
 
 pub trait Parse<T> {
     fn lparse(&self) -> io::Result<Box<T>>;
@@ -271,7 +274,7 @@ pub trait CrossValidation<F> {
         functions: Vec<F>,
         fname_input: &String,
         fname_output: &String,
-    ) -> io::Result<(String, Vec<String>)>
+    ) -> io::Result<(String, String, Vec<String>)>
     where
         F: Fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>;
 }

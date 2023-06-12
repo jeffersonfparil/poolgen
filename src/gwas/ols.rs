@@ -191,6 +191,8 @@ pub fn ols_iterate(
     locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes,
     filter_stats: &FilterStats,
 ) -> Option<String> {
+    // Check struct
+    locus_counts_and_phenotypes.check().unwrap();
     // Filter and extract the allele frequencies
     let locus_counts = match locus_counts_and_phenotypes
         .locus_counts
@@ -266,6 +268,8 @@ pub fn ols_with_covariate(
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
+    // Check struct
+    genotypes_and_phenotypes.check().unwrap();
     // Generate the covariate
     let g = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
@@ -459,13 +463,13 @@ mod tests {
                 .collect::<Vec<String>>(),
         };
         let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
-            chromosome: vec!["X".to_owned(), "Y".to_owned()],
-            position: vec![123, 987],
-            allele: vec!["a".to_string(), "g".to_string()],
+            chromosome: vec!["intercept".to_owned(), "X".to_owned(), "Y".to_owned()],
+            position: vec![0, 123, 987],
+            allele: vec!["intercept".to_owned(), "a".to_owned(), "g".to_owned()],
             intercept_and_allele_frequencies: x.clone(),
             phenotypes: y.clone(),
-            pool_names: vec!["".to_owned()],
-            coverages: Array2::from_elem((1, 1), f64::NAN),
+            pool_names: (0..5).map(|x| "pool-".to_owned() + &x.to_string()[..]).collect(),
+            coverages: Array2::from_elem((5, 2), 100.0),
         };
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(0, 2)] = 10.0;
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(1, 2)] = 8.0;

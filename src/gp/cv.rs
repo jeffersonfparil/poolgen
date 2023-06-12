@@ -111,16 +111,14 @@ impl
         fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>:
             Fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
     {
+        // Check struct
+        self.check().unwrap();
+        // Prepare metric arrays
         let n = self.intercept_and_allele_frequencies.nrows();
         let p = self.intercept_and_allele_frequencies.ncols();
         let m = self.phenotypes.ncols();
-        // let mut x_matrix_training = Array2::from_element(n - s, p, f64::NAN);
-        // let mut x_matrix_validation = Array2::from_element(s, p, f64::NAN);
-        // let mut y_matrix_training = Array2::from_element(n - s, 1, f64::NAN);
-        // let mut y_matrix_validation = Array2::from_element(s, 1, f64::NAN);
         let l = functions.len();
         let mut models: Vec<String> = vec![];
-        let mut b_histogram = vec![];
         let mut cor: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
         let mut mbe: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
         let mut mae: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
@@ -128,7 +126,7 @@ impl
         let mut rmse: Array4<f64> = Array4::from_elem((r, k, l, m), f64::NAN);
 
         let mut y_validation_and_predicted: Array4<f64> =
-            Array4::from_elem((r, n, l, m + m), f64::NAN);
+            Array4::from_elem((r, l, n, m + m), f64::NAN);
 
         let idx_cols: Vec<usize> = (0..p).collect::<Vec<usize>>();
         for rep in 0..r {
@@ -162,8 +160,8 @@ impl
                 .unwrap();
 
                 // for f in functions.iter() {
-                for i in 0..l {
-                    let (b_hat, model_name) = functions[i](
+                for model in 0..l {
+                    let (b_hat, model_name) = functions[model](
                         &self.intercept_and_allele_frequencies,
                         &self.phenotypes,
                         &idx_training,
@@ -179,57 +177,33 @@ impl
                         &(0..b_hat.ncols()).collect::<Vec<usize>>(),
                     )
                     .unwrap();
-                    let metrics = self.performance(&y_validation, &y_pred).unwrap();
-                    models.push(model_name.clone());
-                    b_histogram.push(histogram(
-                        b_hat.iter().map(|x| x.clone()).collect::<Vec<f64>>(),
-                        10,
-                    ));
-
-                    //////////////////////////////////////
-                    // let mut y_validation_and_predicted: Array4<f64> = Array4::from_elem((r, n, l, m+1), f64::NAN);
+                    // Save model name for the first rep and first fold only for brevity
+                    if (rep == 0) & (fold == 0) {
+                        models.push(model_name.clone());
+                    }
+                    // Save expected and predicted phenotypes (reps x n x models x traits+traits, i.e. prediced phenotypes from axis(4) field 0 to m-1 and expected phenotypes afterwards)
                     for i_ in 0..idx_validation.len() {
                         for j_ in 0..(m + m) {
                             if j_ >= m {
-                                y_validation_and_predicted[(rep, idx_validation[i_], i, j_)] =
+                                y_validation_and_predicted[(rep, model, idx_validation[i_], j_)] =
                                     y_validation[(i_, (j_ - m))];
                             } else {
-                                y_validation_and_predicted[(rep, idx_validation[i_], i, j_)] =
+                                y_validation_and_predicted[(rep, model, idx_validation[i_], j_)] =
                                     y_pred[(i_, j_)];
                             }
                         }
                     }
-                    for j in 0..m {
-                        cor[(rep, fold, i, j)] = metrics[0][j];
-                        mbe[(rep, fold, i, j)] = metrics[1][j];
-                        mae[(rep, fold, i, j)] = metrics[2][j];
-                        mse[(rep, fold, i, j)] = metrics[3][j];
-                        rmse[(rep, fold, i, j)] = metrics[4][j];
+                    // Extract prediction performance metrics
+                    let metrics = self.performance(&y_validation, &y_pred).unwrap();
+                    for phe in 0..m {
+                        cor[(rep, fold, model, phe)] = metrics[0][phe];
+                        mbe[(rep, fold, model, phe)] = metrics[1][phe];
+                        mae[(rep, fold, model, phe)] = metrics[2][phe];
+                        mse[(rep, fold, model, phe)] = metrics[3][phe];
+                        rmse[(rep, fold, model, phe)] = metrics[4][phe];
                     }
                 }
             }
-        }
-        // //////////////////////////////////////
-        // Try to plot
-        let rep = 0;
-        let y_validation: Array1<f64> = y_validation_and_predicted
-            .slice(s![rep, 0..n, 0, m])
-            .to_owned();
-        // println!("y_validation={:?}", y_validation);
-        for model in 0..l {
-            let model_name = &models[model];
-            let y_predicted: Array1<f64> = y_validation_and_predicted
-                .slice(s![rep, 0..n, model, 0])
-                .to_owned();
-            let fname_svg = "test-".to_owned() + &model_name[..] + ".svg";
-            plot_scatter_2d(
-                &y_validation,
-                &y_predicted,
-                "Expected",
-                "Predicted",
-                &fname_svg[..],
-            )
-            .unwrap();
         }
         Ok(PredictionPerformance {
             n: n,
@@ -238,7 +212,6 @@ impl
             r: r,
             models: models,
             y_validation_and_predicted: y_validation_and_predicted,
-            b_histogram: b_histogram,
             cor: cor,
             mbe: mbe,
             mae: mae,
@@ -255,18 +228,19 @@ impl
         >,
         fname_input: &String,
         fname_output: &String,
-    ) -> io::Result<(String, Vec<String>)>
+    ) -> io::Result<(String, String, Vec<String>)>
     where
         fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>:
             Fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
     {
-        // Write tabulated performance output
+        // Prepare output basename
         let mut fname_output = fname_output.to_owned();
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        // Write tabulated performance output
         if fname_output == "".to_owned() {
-            let time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs_f64();
             let bname = fname_input
                 .split(".")
                 .collect::<Vec<&str>>()
@@ -318,10 +292,72 @@ impl
                 }
             }
         }
-
+        // Write expected and predicted phenotypes across replications, models, pools, and traits+traits (i.e. prediced phenotypes from axis(4) field 0 to m-1 and expected phenotypes afterwards)
+        let (r, l, n, m_twice) = prediction_performance.y_validation_and_predicted.dim();
+        let m = m_twice / 2; // total number of traits
+        let bname = fname_output
+            .split(".")
+            .collect::<Vec<&str>>()
+            .into_iter()
+            .map(|a| a.to_owned())
+            .collect::<Vec<String>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()[1..]
+            .to_owned()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()
+            .join(".");
+        let predicted_and_expected_fname =
+            bname.to_owned() + "-expected_and_predicted_phenotypes.csv";
+        let error_writing_file =
+            "Unable to create file: ".to_owned() + &predicted_and_expected_fname;
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&predicted_and_expected_fname)
+            .expect(&error_writing_file);
+        let header = vec![
+            "#rep,model,pool".to_owned(),
+            (0..m)
+                .map(|x| "predicted_trait_".to_owned() + &x.to_string()[..])
+                .collect::<Vec<String>>()
+                .join(","),
+            (0..m)
+                .map(|x| "expected_trait_".to_owned() + &x.to_string()[..])
+                .collect::<Vec<String>>()
+                .join(","),
+        ]
+        .join(",")
+            + "\n";
+        file_out.write_all(header.as_bytes()).unwrap();
+        for rep in 0..r {
+            for idx_model in 0..l {
+                for pool in 0..n {
+                    let line = vec![
+                        rep.to_string(),
+                        prediction_performance.models[idx_model].clone(),
+                        self.pool_names[pool].clone(),
+                        prediction_performance
+                            .y_validation_and_predicted
+                            .slice(s![rep, idx_model, pool, ..])
+                            .iter()
+                            .map(|&x| x.to_string())
+                            .collect::<Vec<String>>()
+                            .join(","),
+                    ]
+                    .join(",")
+                        + "\n";
+                    file_out.write_all(line.as_bytes()).unwrap();
+                }
+            }
+        }
         // Generate the predictors for all the models tested and write-out
         let (n, p) = self.intercept_and_allele_frequencies.dim();
         let idx_all = (0..n).collect::<Vec<usize>>();
+        let mut model_fit_fnames: Vec<String> = vec![];
         for f in functions.iter() {
             // Fit
             let (b_hat, model_name) = f(
@@ -330,11 +366,6 @@ impl
                 &idx_all,
             )
             .unwrap();
-            // Write
-            let time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs_f64();
             let bname = fname_output
                 .split(".")
                 .collect::<Vec<&str>>()
@@ -349,8 +380,8 @@ impl
                 .rev()
                 .collect::<Vec<String>>()
                 .join(".");
-            let model_fit_fname =
-                bname.to_owned() + "genomic_predictors-" + &model_name + &time.to_string() + ".csv";
+            let model_fit_fname = bname.to_owned() + "-genomic_predictors-" + &model_name + ".csv";
+            model_fit_fnames.push(model_fit_fname.clone());
             let error_writing_file = "Unable to create file: ".to_owned() + &model_fit_fname;
             let mut file_out = OpenOptions::new()
                 .create_new(true)
@@ -376,8 +407,7 @@ impl
                 }
             }
         }
-
-        Ok(("".to_owned(), vec!["".to_owned()]))
+        Ok((fname_output, predicted_and_expected_fname, model_fit_fnames))
     }
 }
 
@@ -438,7 +468,7 @@ mod tests {
             }
         }
         // Simulate effects
-        let mut b: Array2<f64> = Array2::zeros((p + 1, 1));
+        let mut b: Array2<f64> = Array2::zeros((p + 1, 2));
         let idx_b: Vec<usize> = dist_unif
             .sample_iter(&mut rng)
             .take(q)
@@ -446,6 +476,10 @@ mod tests {
             .collect::<Vec<usize>>();
         for i in idx_b.into_iter() {
             b[(i, 0)] = 1.00;
+        }
+        // Some genome-wide polygenic trait. We are actually getting better prediction with lasso that OLS with this trait given the less complex trait, i.e. q=2 trait above. Probably because of some covariation between traits? It's helping with the prediction accuracy of the other? Or coding errors?!
+        for i in 0..p {
+            b[(i, 1)] = 1.0;
         }
         // Simulate phenotype
         let xb = multiply_views_xx(
@@ -461,49 +495,54 @@ mod tests {
         let ve = (vg / h2) - vg;
         let dist_gaus = statrs::distribution::Normal::new(0.0, ve.sqrt()).unwrap();
         let e: Array2<f64> = Array2::from_shape_vec(
-            (n, 1),
+            (n, 2),
             dist_gaus
                 .sample_iter(&mut rng)
-                .take(n)
+                .take(2 * n)
                 .collect::<Vec<f64>>(),
         )
         .unwrap();
         let y = &xb + e;
         let frequencies_and_phenotypes = GenotypesAndPhenotypes {
-            chromosome: vec!["".to_owned()],
-            position: vec![0],
-            allele: vec!["".to_owned()],
+            chromosome: std::iter::repeat("dummy_chr".to_owned())
+                .take(p + 1)
+                .collect(),
+            position: (0..p + 1).map(|x| x as u64).collect(),
+            allele: std::iter::repeat("A".to_owned()).take(p + 1).collect(),
             intercept_and_allele_frequencies: f.clone(),
             phenotypes: y,
-            pool_names: vec!["".to_owned()],
-            coverages: Array2::from_elem((1, 1), f64::NAN),
+            pool_names: (0..n)
+                .map(|x| "pool-".to_owned() + &x.to_string()[..])
+                .collect(),
+            coverages: Array2::from_elem((n, p+1), 100.0),
         };
-        println!(
-            "frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]={:?}",
-            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]
-        );
-        println!(
-            "frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]={:?}",
-            frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]
-        );
-        println!(
-            "frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]={:?}",
-            frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]
-        );
+        // println!("frequencies_and_phenotypes={:?}", frequencies_and_phenotypes);
+        // println!(
+        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]={:?}",
+        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]
+        // );
+        // println!(
+        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]={:?}",
+        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]
+        // );
+        // println!(
+        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]={:?}",
+        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]
+        // );
         let (_a, _k, _s) = frequencies_and_phenotypes.k_split(10).unwrap();
         let models: Vec<
             fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,
         > = vec![
             ols,
             penalise_lasso_like,
-            // penalise_ridge_like,
+            penalise_ridge_like,
             // penalise_lasso_like_with_iterative_proxy_norms,
             // penalise_ridge_like_with_iterative_proxy_norms,
             // penalise_glmnet,
         ];
         let m = models.len();
         let prediction_performance = frequencies_and_phenotypes
-            .cross_validate(k, r, models)
+            .cross_validate(k, r, models.clone())
             .unwrap();
         let mean_cor = prediction_performance
             .cor
@@ -525,6 +564,18 @@ mod tests {
         // Assertions
         // assert_eq!(0, 1); // Output dimensions
         assert_eq!(mean_cor[(1, 0)].round(), 1.0);
+
+        let (tabulated, pred_v_expe, predictor_files) = frequencies_and_phenotypes
+            .tabulate_predict_and_output(
+                &prediction_performance,
+                models,
+                &"test-cv-input.tmp".to_owned(),
+                &"".to_owned(),
+            )
+            .unwrap();
+        println!("tabulated={}", tabulated);
+        println!("pred_v_expe={}", pred_v_expe);
+        println!("predictor_files={:?}", predictor_files);
     }
 }
 

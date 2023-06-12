@@ -257,7 +257,7 @@ fn main() {
             let prediction_performances = genotypes_and_phenotypes
                 .cross_validate(args.k_folds, args.n_reps, functions.clone())
                 .unwrap();
-            let (tabulated, predictor_files) = genotypes_and_phenotypes
+            let (tabulated, pred_v_expe, predictor_files) = genotypes_and_phenotypes
                 .tabulate_predict_and_output(
                     &prediction_performances,
                     functions,
@@ -280,7 +280,13 @@ fn main() {
             let genotypes_and_phenotypes = file_sync_phen
                 .into_genotypes_and_phenotypes(&filter_stats, args.keep_p_minus_1, &args.n_threads)
                 .unwrap();
-            output = pi(&genotypes_and_phenotypes, &args.window_size_kb, &args.fname, &args.output).unwrap();
+            output = pi(
+                &genotypes_and_phenotypes,
+                &args.window_size_kb,
+                &args.fname,
+                &args.output,
+            )
+            .unwrap();
         } else if args.analysis == String::from("test") {
             let output = 0;
             println!("TEST={:?}", output);

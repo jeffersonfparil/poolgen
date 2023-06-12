@@ -163,7 +163,7 @@ fn expand_and_contract(
     let (p, k) = (b_hat.nrows(), b_hat.ncols());
     for j in 0..k {
         //Exclude the intercept from penalisation
-        let mut intercept = b_hat[(0, j)];
+        let intercept = b_hat[(0, j)];
         // Norm 1 or norm 2 (exclude the intercept)
         let normed1: Array1<f64> = b_hat.column(j).slice(s![1..p]).map(|&x| x.abs());
         let normed2 = b_hat.column(j).slice(s![1..p]).map(|&x| x.powf(2.0));
@@ -278,7 +278,7 @@ fn error_index(
     let mut error_index: Vec<f64> = Vec::with_capacity(k);
     for j in 0..k {
         // let y_pred: Array2<f64> = x * b_hat;
-        let y_true: Array2<f64> = Array2::from_shape_vec(
+        let y_true_j: Array2<f64> = Array2::from_shape_vec(
             (n, 1),
             idx_validation
                 .iter()
@@ -286,21 +286,23 @@ fn error_index(
                 .collect::<Vec<f64>>(),
         )
         .unwrap();
-        let y_pred: Array2<f64> =
-            multiply_views_xx(x, b_hat, idx_validation, idx_b_hat, idx_b_hat, &vec![j]).unwrap();
-        let min = y_true
+        let b_hat_j: Array2<f64> =
+            Array2::from_shape_vec((p, 1), b_hat.column(j).to_owned().to_vec()).unwrap();
+        let y_pred_j: Array2<f64> =
+            multiply_views_xx(x, &b_hat_j, idx_validation, idx_b_hat, idx_b_hat, &vec![0]).unwrap();
+        let min = y_true_j
             .iter()
-            .fold(y_true[(0, j)], |min, &x| if x < min { x } else { min });
-        let max = y_true
+            .fold(y_true_j[(0, 0)], |min, &x| if x < min { x } else { min });
+        let max = y_true_j
             .iter()
-            .fold(y_true[(0, j)], |max, &x| if x > max { x } else { max });
-        let (cor, _pval) = pearsons_correlation(&y_true.column(j), &y_pred.column(j)).unwrap();
-        // let mbe = (y_true - &y_pred).mean() / (max - min);vec![0.0]
-        let mae = (&y_true - &y_pred)
+            .fold(y_true_j[(0, 0)], |max, &x| if x > max { x } else { max });
+        let (cor, _pval) = pearsons_correlation(&y_true_j.column(0), &y_pred_j.column(0)).unwrap();
+        // let mbe = (y_true_j - &y_pred_j).mean() / (max - min);vec![0.0]
+        let mae = (&y_true_j - &y_pred_j)
             .iter()
             .fold(0.0, |norm, &x| norm + x.abs())
             / (max - min);
-        let mse = (&y_true - &y_pred)
+        let mse = (&y_true_j - &y_pred_j)
             .iter()
             .fold(0.0, |norm, &x| norm + x.powf(2.0))
             / (max - min).powf(2.0);
@@ -308,6 +310,7 @@ fn error_index(
         error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
         // error_index.push(((1.0 - cor.abs()) + mae + mse) / 3.0);
         // error_index.push(((1.0 - cor.abs()) + rmse) / 2.0);
+        // error_index.push(1.0 - cor.abs());
         // error_index.push(rmse);
         // error_index.push(mae);
     }
@@ -448,7 +451,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
                     for j in 0..k {
                         performances[(rep, fold, i0, i1, j)] = errors[(i0, i1)][j];
                         effects[(rep, fold, i0, i1, j)] = b_hats[(i0, i1)].column(j).to_owned();
-                        // reps x folds x alpha x lambda x traits
+                        // insert and array1 into effects: reps x folds x alpha x lambda x traits x loci, i.e. an Array5<Array1<f64>>
                     }
                 }
             }
@@ -461,41 +464,44 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     // let one_less_scaled_error = performances.iter().map(|&x| 1.00 - (x-min_error)/(max_error-min_error)).collect::<Vec<f64>>();
     // let sum_perf = one_less_scaled_error.iter().fold(0.0, |sum, &x| sum + x);
 
-    let mut errors = performances.iter().map(|&x| x).collect::<Vec<f64>>();
-    errors.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let e = errors.len();
-    let idx = (0.01 * e as f64).ceil() as usize;
-    let max_error_threshold = errors[idx];
-    let mut b_hat_proxy: Array2<f64> = Array2::from_elem((p, k), 0.0);
-    // let mut perf = 0.0;
-    // // let nall = performances.len();
-    // // let (mut b, _) = ols(x, y, row_idx).unwrap();
-    for rep in 0..r {
-        for fold in 0..nfolds {
-            for alfa in 0..a {
-                for lam in 0..l {
-                    for phe in 0..k {
-                        if performances[(rep, fold, alfa, lam, phe)] <= max_error_threshold {
-                            for i in 0..p {
-                                b_hat_proxy[(i, phe)] += &effects[(rep, fold, alfa, lam, phe)][i]
-                                    * (1.00 / (idx as f64 + 1.00));
-                            }
-                        }
-                        // let error = (&performances[(rep, fold, alfa, lam, phe)] - min_error)/(max_error-min_error);
-                        // let weight = (1.00-error) / sum_perf;
-                        // let b_new: Array1<f64> = b.column(phe).to_owned() + (weight * &effects[(rep, fold, alfa, lam, phe)]);
-                        // if (1.00-error) > perf {
-                        //     perf = 1.00 - error;
-                        //
-                        //
-                        //
-                        // }
-                    }
-                }
-            }
-        }
-    }
-    // println!("sum_perf={}, min_error={:?}; max_error={:?}; b={:?}", sum_perf, min_error, max_error, &b);
+    // // Use a better b_hat_proxy, i.e. other that b_hat itself, i.e. account for the stochasticity across reps and folds
+    // let mut errors = performances.iter().map(|&x| x).collect::<Vec<f64>>();
+    // errors.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    // println!("errors[0]={:?}", errors[0]);
+    // println!("errors[100]={:?}", errors[100]);
+    // let e = errors.len();
+    // let idx = (0.01 * e as f64).ceil() as usize; // Using the best 1% of the prediction errors
+    // let max_error_threshold = errors[idx]; //
+    // let mut b_hat_proxy: Array2<f64> = Array2::from_elem((p, k), 0.0);
+    // // let mut perf = 0.0;
+    // // // let nall = performances.len();
+    // // // let (mut b, _) = ols(x, y, row_idx).unwrap();
+    // for rep in 0..r {
+    //     for fold in 0..nfolds {
+    //         for alfa in 0..a {
+    //             for lam in 0..l {
+    //                 for phe in 0..k {
+    //                     if performances[(rep, fold, alfa, lam, phe)] <= max_error_threshold {
+    //                         for i in 0..p {
+    //                             b_hat_proxy[(i, phe)] += &effects[(rep, fold, alfa, lam, phe)][i]
+    //                                 * (1.00 / (idx as f64 + 1.00));
+    //                         }
+    //                     }
+    //                     // let error = (&performances[(rep, fold, alfa, lam, phe)] - min_error)/(max_error-min_error);
+    //                     // let weight = (1.00-error) / sum_perf;
+    //                     // let b_new: Array1<f64> = b.column(phe).to_owned() + (weight * &effects[(rep, fold, alfa, lam, phe)]);
+    //                     // if (1.00-error) > perf {
+    //                     //     perf = 1.00 - error;
+    //                     //
+    //                     //
+    //                     //
+    //                     // }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // // println!("sum_perf={}, min_error={:?}; max_error={:?}; b={:?}", sum_perf, min_error, max_error, &b);
 
     // Find best lambda and estimate effects on the full dataset
     let mean_error_across_reps_and_folds: Array3<f64> = performances
@@ -531,10 +537,16 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
 
         alphas.push(alpha_path[(idx_0, idx_1)]);
         lambdas.push(lambda_path[(idx_0, idx_1)]);
+        // Note: Lasso/Ridge and glmnet have different best paramaters even though for example lasso seems to get the best performance while glmnet failed to get the same result even though it should given it searches other alphas including alpha=1.00 in lasso.
+        //       This is because of the stochasticity per fold, i.e. glmnet might get an alpha  not equal to 1 which results in better performance.
+        // println!("min_error={}; alpha={:?}; lambda={:?}", min_error, alphas, lambdas);
+        let b_hat_penalised_2d: Array2<f64> = if iterative == false {
+            expand_and_contract(&b_hat, &b_hat, alphas[j], lambdas[j]).unwrap()
+        } else {
+            let (b_hat_proxy, _) = ols_iterative_with_kinship_pca_covariate(x, y, row_idx).unwrap();
+            expand_and_contract(&b_hat, &b_hat_proxy, alphas[j], lambdas[j]).unwrap()
+        };
 
-        let b_hat_penalised_2d: Array2<f64> =
-            // expand_and_contract(&b_hat, &b_hat, alphas[j], lambdas[j]).unwrap();
-            expand_and_contract(&b_hat, &b_hat_proxy, alphas[j], lambdas[j]).unwrap();
         for i in 0..p {
             b_hat_penalised[(i, j)] = b_hat_penalised_2d[(i, j)];
         }

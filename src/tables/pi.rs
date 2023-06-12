@@ -45,11 +45,10 @@ pub fn pi(
     .unwrap();
     let pop: Array2<usize> = Array2::from_shape_vec(
         (l - 1, n),
-        std::iter::repeat((0..n)
-        .collect::<Vec<usize>>())
-        .take(l-1)
-        .flat_map(|x| x)
-        .collect(),
+        std::iter::repeat((0..n).collect::<Vec<usize>>())
+            .take(l - 1)
+            .flat_map(|x| x)
+            .collect(),
     )
     .unwrap();
     // Parallel computations
@@ -64,10 +63,11 @@ pub fn pi(
                 .slice(s![.., idx_start..idx_end]);
             let nj = genotypes_and_phenotypes.coverages[(j, i)];
             // Nucleotide diversity (~ heterozygosity), where population across rows which means each column is the same value
-            *pi_ = ( (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+            *pi_ = ((g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
                 * (nj / (nj - 1.00 + f64::EPSILON)))
-                - (nj / (nj - 1.00 + f64::EPSILON)) ).abs(); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-    });
+                - (nj / (nj - 1.00 + f64::EPSILON)))
+                .abs(); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+        });
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
     let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
@@ -77,9 +77,10 @@ pub fn pi(
     for i in 1..m {
         let chr = loci_chr[i];
         let pos = loci_pos[i];
-        if (chr != windows_chr.last().unwrap()) 
-            | ((chr == windows_chr.last().unwrap()) 
-                & (pos > &(windows_pos.last().unwrap() + &(*window_size_kb as u64)))) {
+        if (chr != windows_chr.last().unwrap())
+            | ((chr == windows_chr.last().unwrap())
+                & (pos > &(windows_pos.last().unwrap() + &(*window_size_kb as u64))))
+        {
             windows_idx.push(i);
             windows_chr.push(chr.to_owned());
             windows_pos.push(*pos);
@@ -103,17 +104,12 @@ pub fn pi(
                 .fold(0.0, |_, &x| x);
         }
     }
-    let vec_pi_across_windows = pi_per_pool_across_windows
-                                                                    .mean_axis(Axis(0))
-                                                                    .unwrap();
+    let vec_pi_across_windows = pi_per_pool_across_windows.mean_axis(Axis(0)).unwrap();
     println!(
         "pi_per_pool_across_windows={:?}",
         pi_per_pool_across_windows
     );
-    println!(
-        "vec_pi_across_windows={:?}",
-        vec_pi_across_windows
-    );
+    println!("vec_pi_across_windows={:?}", vec_pi_across_windows);
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -151,7 +147,14 @@ pub fn pi(
         let window_chr = windows_chr[i].clone();
         let window_pos_ini = windows_pos[i];
         let window_pos_fin = window_pos_ini + (*window_size_kb as u64);
-        line.push("Window-".to_owned() + &window_chr + "_" + &window_pos_ini.to_string() + "_" + &window_pos_fin.to_string());
+        line.push(
+            "Window-".to_owned()
+                + &window_chr
+                + "_"
+                + &window_pos_ini.to_string()
+                + "_"
+                + &window_pos_fin.to_string(),
+        );
     }
     let line = line.join(",") + "\n";
     file_out.write_all(line.as_bytes()).unwrap();
@@ -183,11 +186,8 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
-                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
+                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
             ],
         )
         .unwrap();
