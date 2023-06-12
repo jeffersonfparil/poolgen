@@ -128,6 +128,10 @@ impl Parse<Phen> for FilePhen {
             phen_matrix[(0, 2)] = sig;
             phen_matrix[(1, 2)] = min;
             phen_matrix[(2, 2)] = max;
+            // Since, GWAlpha's phenotype data does not contain pool names, we will be just naming the pools with consecutive numbers, i.e.:
+            for i in 0..n {
+                pool_names.push("pool-".to_owned() + &i.to_string()[..]);
+            }
             return Ok(Box::new(Phen {
                 pool_names: pool_names,
                 pool_sizes: bins.iter().copied().collect::<Vec<f64>>(), // pool sizes, i.e. bins in the GWAlpha.py format is found in phen_matrix
