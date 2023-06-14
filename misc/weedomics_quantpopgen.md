@@ -445,10 +445,15 @@ dev.off()
 clusters = data.frame(X.POP=names(K[[k_optimal]]$cluster), cluster=K[[k_optimal]]$cluster)
 phenotypes = merge(phenotypes, clusters, by="X.POP")
 cluster_colours = rainbow(k_optimal)
+# Q = phenotypes
+# phenotypes = phenotypes[61:nrow(phenotypes), ]
 
 svg("kmeans_clusters.svg", width=10, height=10)
 plot(x=phenotypes$COORDINATE_E, y=phenotypes$COORDINATE_N,
      col=cluster_colours[phenotypes$cluster], pch=19, cex=2)
+text(x=phenotypes$COORDINATE_E,
+     y=phenotypes$COORDINATE_N,
+     lab=phenotypes$X.POP, pos=3)
 dev.off()
 
 
