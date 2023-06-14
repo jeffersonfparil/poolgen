@@ -13,8 +13,8 @@ impl CheckStruct for LocusCounts {
         match p == a {
             true => return Ok(()),
             false => {
-                let locus = vec![self.chromosome.clone(),  self.position.to_string()].join("-");
-                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusCounts error: the counts matrix does not have the same the number columns as the number of alleles."))
+                let locus = vec![self.chromosome.clone(), self.position.to_string()].join("-");
+                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusCounts error: the counts matrix does not have the same the number columns as the number of alleles."));
             }
         }
     }
@@ -27,8 +27,8 @@ impl CheckStruct for LocusFrequencies {
         match p == a {
             true => return Ok(()),
             false => {
-                let locus = vec![self.chromosome.clone(),  self.position.to_string()].join("-");
-                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusFrequencies error: the frequencies matrix does not have the same the number columns as the number of alleles."))
+                let locus = vec![self.chromosome.clone(), self.position.to_string()].join("-");
+                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusFrequencies error: the frequencies matrix does not have the same the number columns as the number of alleles."));
             }
         }
     }
@@ -43,8 +43,12 @@ impl CheckStruct for LocusCountsAndPhenotypes {
         match (n == n_) & (n_ == n__) {
             true => return Ok(()),
             false => {
-                let locus = vec![self.locus_counts.chromosome.clone(),  self.locus_counts.position.to_string()].join("-");
-                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusCountsAndPhenotypes error: the number of pools are inconsistent in the locus counts, and/or phenotypes matrix and/or pool names."))
+                let locus = vec![
+                    self.locus_counts.chromosome.clone(),
+                    self.locus_counts.position.to_string(),
+                ]
+                .join("-");
+                return Err(Error::new(ErrorKind::Other, locus + " ::: LocusCountsAndPhenotypes error: the number of pools are inconsistent in the locus counts, and/or phenotypes matrix and/or pool names."));
             }
         }
     }
@@ -164,7 +168,7 @@ impl Filter for LocusCounts {
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
         self.check().unwrap(); // preliminary check of the structure format
-        // Remove Ns
+                               // Remove Ns
         if filter_stats.remove_ns {
             let i = match self
                 .alleles_vector
@@ -300,7 +304,7 @@ impl Filter for LocusFrequencies {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
         // Also, cannot filter by minimum coverage as that data is lost from counts to frequencies conversion
         self.check().unwrap(); // preliminary check of the structure format
-        // Remove Ns
+                               // Remove Ns
         if filter_stats.remove_ns {
             let i = match self
                 .alleles_vector
@@ -1044,10 +1048,100 @@ impl LoadAll for FileSyncPhen {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {
+    use rand::prelude::Distribution;
+
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     #[test]
-    fn test_sync_methods() {
+    fn test_sync() {
+        // (01) CheckStruct: LocusCounts
+        let mut locus_counts = LocusCounts {
+            chromosome: "chr1".to_owned(),
+            position: 12345,
+            alleles_vector: vec!["A".to_owned()], // Missing an allele in alleles_vector
+            matrix: Array2::from_shape_vec((5, 2), vec![10, 90, 20, 80, 50, 50, 80, 20, 90, 10])
+                .unwrap(),
+        };
+        // Missing an allele in alleles_vector
+        assert_eq!(true, locus_counts.check().is_err());
+        // Append the missing allele
+        locus_counts.alleles_vector.push("D".to_owned());
+        // No error
+        assert_eq!((), locus_counts.check().unwrap());
+        // (02) CheckStruct: LocusFrequencies
+        let mut locus_frequncies = LocusFrequencies {
+            chromosome: "chr1".to_owned(),
+            position: 12345,
+            alleles_vector: vec!["A".to_owned()], // Missing an allele in alleles_vector
+            matrix: Array2::from_shape_vec(
+                (5, 2),
+                vec![0.1, 0.9, 0.2, 0.8, 0.5, 0.5, 0.8, 0.2, 0.9, 0.1],
+            )
+            .unwrap(),
+        };
+        // Missing an allele in alleles_vector
+        assert_eq!(true, locus_frequncies.check().is_err());
+        // Append the missing allele
+        locus_frequncies.alleles_vector.push("D".to_owned());
+        // No error
+        assert_eq!((), locus_frequncies.check().unwrap());
+        // (03) CheckStruct: LocusCountsAndPhenotypes
+        let mut locus_counts_and_phenotypes = LocusCountsAndPhenotypes {
+            locus_counts: locus_counts,
+            phenotypes: Array2::from_shape_vec((4, 1), vec![0.1, 0.2, 0.3, 0.4]).unwrap(),
+            pool_names: (1..5)
+                .map(|x| "Pop".to_owned() + &x.to_string()[..])
+                .collect(),
+        };
+        // Missing phenotype, and pool name
+        assert_eq!(true, locus_counts_and_phenotypes.check().is_err());
+        // Replace phenotype array with the complete data
+        locus_counts_and_phenotypes.phenotypes =
+            Array2::from_shape_vec((5, 1), vec![0.1, 0.2, 0.3, 0.4, 0.5]).unwrap();
+        // Missing pool name
+        assert_eq!(true, locus_counts_and_phenotypes.check().is_err());
+        // Append missing pool name
+        locus_counts_and_phenotypes
+            .pool_names
+            .push("Pop5".to_owned());
+        // No error
+        assert_eq!((), locus_counts_and_phenotypes.check().unwrap());
+        // (04) CheckStruct: GenotypesAndPhenotypes
+        let mut rng = rand::thread_rng();
+        let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
+        let dist_gaus = statrs::distribution::Normal::new(0.0, 1.0).unwrap();
+        let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
+            chromosome: vec![
+                "chr1", "chr1", "chr1", "chr2", "chr2", "chr2", "chrX", "chrX", "chrX",
+            ]
+            .iter()
+            .map(|&x| x.to_owned())
+            .collect(),
+            position: vec![123, 456, 789, 10005, 10010, 10015, 701, 702],
+            allele: vec!["A", "T", "C", "A", "T", "C", "A", "T"]
+                .iter()
+                .map(|&x| x.to_owned())
+                .collect(),
+            intercept_and_allele_frequencies: Array2::from_shape_vec(
+                (5, 9),
+                dist_unif.sample_iter(rng.clone()).take(5 * 9).collect(),
+            )
+            .unwrap(),
+            phenotypes: Array2::from_shape_vec(
+                (4, 2),
+                dist_gaus.sample_iter(rng.clone()).take(4 * 2).collect(),
+            )
+            .unwrap(),
+            pool_names: (1..5)
+                .map(|x| "Pop".to_owned() + &x.to_string()[..])
+                .collect(),
+            coverages: Array2::from_shape_vec(
+                (4, 2),
+                std::iter::repeat(100.0).take(4 * 2).collect(),
+            )
+            .unwrap(),
+        };
+
         // Expected output
         let counts_matrix: Array2<u64> = Array2::from_shape_vec(
             (5, 6),

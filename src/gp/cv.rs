@@ -514,7 +514,7 @@ mod tests {
             pool_names: (0..n)
                 .map(|x| "pool-".to_owned() + &x.to_string()[..])
                 .collect(),
-            coverages: Array2::from_elem((n, p+1), 100.0),
+            coverages: Array2::from_elem((n, p + 1), 100.0),
         };
         // println!("frequencies_and_phenotypes={:?}", frequencies_and_phenotypes);
         // println!(

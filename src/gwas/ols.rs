@@ -468,7 +468,9 @@ mod tests {
             allele: vec!["intercept".to_owned(), "a".to_owned(), "g".to_owned()],
             intercept_and_allele_frequencies: x.clone(),
             phenotypes: y.clone(),
-            pool_names: (0..5).map(|x| "pool-".to_owned() + &x.to_string()[..]).collect(),
+            pool_names: (0..5)
+                .map(|x| "pool-".to_owned() + &x.to_string()[..])
+                .collect(),
             coverages: Array2::from_elem((5, 2), 100.0),
         };
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(0, 2)] = 10.0;
