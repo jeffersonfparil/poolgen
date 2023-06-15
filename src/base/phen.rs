@@ -35,6 +35,7 @@ impl Parse<Phen> for FilePhen {
                 }
                 // Ignore commented-out lines (i.e. '#' => 35)
                 if line.as_bytes()[0] == 35 as u8 {
+                    println!("line.as_bytes()[0]={:?}", line.as_bytes()[0]);
                     continue;
                 }
                 // Parse the sync line
@@ -49,7 +50,7 @@ impl Parse<Phen> for FilePhen {
                 pool_sizes.push(
                     vec_line[sizes_column_id]
                         .parse::<f64>()
-                        .expect(&("T_T Pool sizes column (column index:".to_owned() + &sizes_column_id.to_string() + ") is not a valid number. Line: " + &line)),
+                        .expect(&("T_T Pool sizes column (column index: ".to_owned() + &sizes_column_id.to_string() + ") is not a valid number. Line: " + &line + ".")),
                 );
                 for j in 0..k {
                     if vec_line[trait_values_column_ids[j]] == "".to_string() {
@@ -200,6 +201,10 @@ mod tests {
             trait_values_column_ids: vec![2, 3],
             format: "default".to_owned(),
         };
+
+        let q = file_phen.lparse().unwrap();
+        // assert_eq!(0,1);
+
         let file_sync = FileSync {
             filename: "./tests/test.sync".to_owned(),
             test: "".to_owned(),
