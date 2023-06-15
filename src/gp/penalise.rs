@@ -3,9 +3,9 @@ use crate::gp::*;
 use crate::gwas::*;
 use ndarray::{prelude::*, Zip};
 use rand::prelude::*;
-use statrs::statistics::Statistics;
+
 use std::io::{self, Error, ErrorKind};
-use std::sync::{Arc, Mutex};
+
 
 #[function_name::named]
 pub fn penalise_lasso_like(
@@ -359,7 +359,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     lambda_step_size: f64,
     r: usize,
 ) -> io::Result<(Array2<f64>, Vec<f64>, Vec<f64>)> {
-    let (n, p) = (row_idx.len(), x.ncols());
+    let (_n, p) = (row_idx.len(), x.ncols());
     let k = y.ncols();
     let max_usize: usize = (1.0 / lambda_step_size).round() as usize;
     let lambda_path: Array1<f64> = (0..(max_usize + 1))
@@ -397,7 +397,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     )
     .unwrap();
 
-    let (_, nfolds, s) = k_split(row_idx, 10).unwrap();
+    let (_, nfolds, _s) = k_split(row_idx, 10).unwrap();
     let mut performances: Array5<f64> = Array5::from_elem((r, nfolds, a, l, k), f64::NAN);
     let mut effects: Array5<Array1<f64>> =
         Array5::from_elem((r, nfolds, a, l, k), Array1::from_elem(1, f64::NAN));
@@ -558,7 +558,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::concatenate;
+    
     #[test]
     fn test_penalised() {
         let b: Array2<f64> =

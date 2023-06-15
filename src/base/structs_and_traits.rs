@@ -4,19 +4,22 @@ use std::io;
 ///////////////////////////////////////////////////////////////////////////////
 // STRUCTS
 ///////////////////////////////////////////////////////////////////////////////
-///
+
+/// Filename of the pileup file and names of the pools from the phenotype file
 #[derive(Debug, Clone)]
 pub struct FilePileup {
     pub filename: String,
     pub pool_names: Vec<String>,
 }
 
+/// Filename of the synchronised pileup file and the name of statistical test, i.e. "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity"
 #[derive(Debug, Clone)]
 pub struct FileSync {
     pub filename: String,
     pub test: String,
 }
 
+/// Filename of the phenotype file which can be a simple delimited file (e.g. csv and tsv) or a specialised GWAlpha phenotype infomation file in a python file.
 #[derive(Debug, Clone)]
 pub struct FilePhen {
     pub filename: String,

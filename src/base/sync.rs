@@ -1107,10 +1107,10 @@ mod tests {
         // No error
         assert_eq!((), locus_counts_and_phenotypes.check().unwrap());
         // (04) CheckStruct: GenotypesAndPhenotypes
-        let mut rng = rand::thread_rng();
+        let rng = rand::thread_rng();
         let dist_unif = statrs::distribution::Uniform::new(0.0, 1.0).unwrap();
         let dist_gaus = statrs::distribution::Normal::new(0.0, 1.0).unwrap();
-        let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
+        let _genotypes_and_phenotypes = GenotypesAndPhenotypes {
             chromosome: vec![
                 "chr1", "chr1", "chr1", "chr2", "chr2", "chr2", "chrX", "chrX", "chrX",
             ]
@@ -1238,7 +1238,7 @@ mod tests {
             .unwrap()
             .reversed_axes(),
         };
-        let expected_output7 = LocusFrequencies {
+        let _expected_output7 = LocusFrequencies {
             chromosome: "Chromosome1".to_owned(),
             position: 1041321,
             alleles_vector: ["G"]
@@ -1296,7 +1296,7 @@ mod tests {
             .sort_by_allele_freq(true)
             .unwrap();
         let n_threads = 2;
-        let (loaded_freqs, loaded_counts) = file_sync_phen
+        let (loaded_freqs, _loaded_counts) = file_sync_phen
             .load(&filter_stats, true, &n_threads)
             .unwrap();
         let frequencies_and_phenotypes = file_sync_phen

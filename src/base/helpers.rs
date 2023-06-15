@@ -2,7 +2,7 @@ use crate::base::*;
 use argmin::solver::neldermead::NelderMead;
 use ndarray::{prelude::*, Zip};
 use ndarray_linalg::svd::*;
-use statrs::statistics::Statistics;
+
 use std;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, SeekFrom};
@@ -220,7 +220,7 @@ mod tests {
         let fname: &String = &"./tests/test.pileup".to_owned();
         let n_threads = 2;
         let number: f64 = 0.420000012435;
-        let betas = vec![
+        let _betas = vec![
             0.0, 0.2, 0.3, 0.4, 0.5, 0.55, 0.6, 0.7, 0.75, 0.77, 0.8, 0.85, 0.86, 0.89, 1.0,
         ];
         let a: Array2<f64> =

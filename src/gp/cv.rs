@@ -1,6 +1,6 @@
 use crate::base::*;
 use crate::gwas::*;
-use crate::plot::*;
+
 use ndarray::{prelude::*, stack};
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*, Error, ErrorKind};
@@ -422,7 +422,7 @@ mod tests {
     #[test]
     fn test_cv() {
         // Expected
-        let expected_output1: Array2<f64> =
+        let _expected_output1: Array2<f64> =
             Array2::from_shape_vec((3, 1), vec![-0.73, 5.53, 6.42]).unwrap();
         // Inputs
         let file_sync = FileSync {
@@ -540,7 +540,7 @@ mod tests {
             // penalise_ridge_like_with_iterative_proxy_norms,
             // penalise_glmnet,
         ];
-        let m = models.len();
+        let _m = models.len();
         let prediction_performance = frequencies_and_phenotypes
             .cross_validate(k, r, models.clone())
             .unwrap();

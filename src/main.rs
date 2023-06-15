@@ -15,7 +15,6 @@ use crate::base::CrossValidation;
 mod base;
 mod gp;
 mod gwas;
-mod plot;
 mod tables;
 
 // Instatiate arguments struct
@@ -257,7 +256,7 @@ fn main() {
             let prediction_performances = genotypes_and_phenotypes
                 .cross_validate(args.k_folds, args.n_reps, functions.clone())
                 .unwrap();
-            let (tabulated, pred_v_expe, predictor_files) = genotypes_and_phenotypes
+            let (tabulated, _pred_v_expe, predictor_files) = genotypes_and_phenotypes
                 .tabulate_predict_and_output(
                     &prediction_performances,
                     functions,

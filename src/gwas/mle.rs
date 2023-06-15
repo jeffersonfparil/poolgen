@@ -469,7 +469,7 @@ mod tests {
         let expected_output4: Array1<f64> = Array1::from_vec(vec![0.08, 0.99, -0.41]);
         let expected_output5: Array1<f64> = Array1::from_vec(vec![0.25, 3.44, 1.60]);
         let expected_output6: Array1<f64> = Array1::from_vec(vec![0.77, 0.80, 0.82]);
-        let expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.5856869833119951\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.8004426037481633\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.2485036431073504\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.8230663350210885\n".to_owned();
+        let _expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.5856869833119951\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.8004426037481633\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.2485036431073504\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.8230663350210885\n".to_owned();
         // Inputs
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 3),
@@ -544,7 +544,7 @@ mod tests {
         let k1 = beta.ncols();
         let p2 = var_beta.nrows();
         let k2 = var_beta.ncols();
-        let ols_line = mle_iterate(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
+        let _ols_line = mle_iterate(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
         // Assertions
         assert_eq!(p1, 3); // Output dimensions
         assert_eq!(p1, p2);

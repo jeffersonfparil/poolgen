@@ -1,7 +1,7 @@
 use crate::base::*;
 use ndarray::{prelude::*, Zip};
 use std::fs::OpenOptions;
-use std::io::{self, prelude::*, Error, ErrorKind};
+use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn pi(

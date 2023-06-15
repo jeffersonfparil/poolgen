@@ -49,7 +49,7 @@ impl Parse<Phen> for FilePhen {
                 pool_sizes.push(
                     vec_line[sizes_column_id]
                         .parse::<f64>()
-                        .expect("T_T Pool sizes column is not a valid number."),
+                        .expect(&("T_T Pool sizes column (column index:".to_owned() + &sizes_column_id.to_string() + ") is not a valid number. Line: " + &line)),
                 );
                 for j in 0..k {
                     if vec_line[trait_values_column_ids[j]] == "".to_string() {

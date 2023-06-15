@@ -264,7 +264,7 @@ impl Filter for PileupLine {
         }
         // Filter by minimum allele frequency,
         //// First convert the counts per pool into frequencies
-        let mut allele_frequencies = match self.to_frequencies() {
+        let allele_frequencies = match self.to_frequencies() {
             Ok(x) => x,
             Err(_) => {
                 return Err(Error::new(
@@ -318,7 +318,7 @@ pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) 
         Err(_) => return None,
     };
     // Convert to counts
-    let mut locus_counts = match pileup_line.to_counts() {
+    let locus_counts = match pileup_line.to_counts() {
         Ok(x) => x,
         Err(_) => return None,
     };
