@@ -34,8 +34,8 @@ impl Parse<Phen> for FilePhen {
                     }
                 }
                 // Ignore commented-out lines (i.e. '#' => 35)
+                println!("line.as_bytes()[0]={:?}", line.as_bytes()[0]);
                 if line.as_bytes()[0] == 35 as u8 {
-                    println!("line.as_bytes()[0]={:?}", line.as_bytes()[0]);
                     continue;
                 }
                 // Parse the sync line
