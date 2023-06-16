@@ -1,4 +1,14 @@
-// For quick tests
+//! **poolgen**: quantitative and population genetics on pool sequencind data
+/// Performs:
+/// - *pileup2sync* - convert a pileup file into a synchronised pileup file with a header
+/// - *sync2csv* - convert a synchronised pileup file (sync format) into a smple comma-separated file (csv format)
+/// - *fisher_exact_test* - using the genotype data in sync format, perform Fisher's exact test per locus, i.e. using allele counts matrix of n-pools x p-alleles (Note: phenotype data is only required for the pool sizes and/or pool names)
+/// - *chisq_test* - 
+/// *pearson_corr*, *ols_iter*, *ols_iter_with_kinship*, *mle_iter*,
+/// *mle_iter_with_kinship*, *gwalpha*, *ridge_iter*,
+/// *genomic_prediction_cross_validation*, *fst*, *heterozygosity*)
+///  
+
 use base::{ChunkyReadAnalyseWrite, LoadAll, Parse};
 use clap::Parser;
 use gp::{
