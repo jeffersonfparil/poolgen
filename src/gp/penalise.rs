@@ -6,7 +6,6 @@ use rand::prelude::*;
 
 use std::io::{self, Error, ErrorKind};
 
-
 #[function_name::named]
 pub fn penalise_lasso_like(
     x: &Array2<f64>,
@@ -205,11 +204,21 @@ fn expand_and_contract(
         let mut added_penalised = 0.0;
         for i in idx_penalised.into_iter() {
             if b_hat[(i + 1, j)] >= 0.0 {
-                b_hat[(i + 1, j)] -= normed[i];
-                subtracted_penalised += normed[i];
+                if (b_hat[(i + 1, j)] - normed[i]) < 0.0 {
+                    subtracted_penalised += b_hat[(i + 1, j)];
+                    b_hat[(i + 1, j)] = 0.0;
+                } else {
+                    subtracted_penalised += normed[i];
+                    b_hat[(i + 1, j)] -= normed[i];
+                };
             } else {
-                b_hat[(i + 1, j)] += normed[i];
-                added_penalised += normed[i];
+                if (b_hat[(i + 1, j)] + normed[i]) > 0.0 {
+                    added_penalised += b_hat[(i + 1, j)].abs();
+                    b_hat[(i + 1, j)] = 0.0;
+                } else {
+                    added_penalised += normed[i];
+                    b_hat[(i + 1, j)] += normed[i];
+                }
             }
         }
         // Find total depenalised (expanded) values
@@ -558,7 +567,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_penalised() {
         let b: Array2<f64> =

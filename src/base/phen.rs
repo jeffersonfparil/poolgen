@@ -46,11 +46,13 @@ impl Parse<Phen> for FilePhen {
                     .map(|x| x.to_owned())
                     .collect::<Vec<String>>();
                 pool_names.push(vec_line[names_column_id].clone());
-                pool_sizes.push(
-                    vec_line[sizes_column_id]
-                        .parse::<f64>()
-                        .expect(&("T_T Pool sizes column (column index: ".to_owned() + &sizes_column_id.to_string() + ") is not a valid number. Line: " + &line + ".")),
-                );
+                pool_sizes.push(vec_line[sizes_column_id].parse::<f64>().expect(
+                    &("T_T Pool sizes column (column index: ".to_owned()
+                        + &sizes_column_id.to_string()
+                        + ") is not a valid number. Line: "
+                        + &line
+                        + "."),
+                ));
                 for j in 0..k {
                     if vec_line[trait_values_column_ids[j]] == "".to_string() {
                         phen_vec.push(f64::NAN)

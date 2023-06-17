@@ -1,5 +1,5 @@
 use crate::base::*;
-use ndarray::{prelude::*};
+use ndarray::prelude::*;
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};

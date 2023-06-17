@@ -538,7 +538,7 @@ mod tests {
             penalise_ridge_like,
             // penalise_lasso_like_with_iterative_proxy_norms,
             // penalise_ridge_like_with_iterative_proxy_norms,
-            // penalise_glmnet,
+            penalise_glmnet,
         ];
         let _m = models.len();
         let prediction_performance = frequencies_and_phenotypes
@@ -564,6 +564,7 @@ mod tests {
         // Assertions
         // assert_eq!(0, 1); // Output dimensions
         assert_eq!(mean_cor[(1, 0)].round(), 1.0);
+        assert_eq!(mean_cor[(1, 1)].round(), 1.0);
 
         let (tabulated, pred_v_expe, predictor_files) = frequencies_and_phenotypes
             .tabulate_predict_and_output(
