@@ -24,6 +24,12 @@ cargo build --release
 ./target/release/poolgen -h
 ```
 
+4. Detailed documentation
+
+```shell
+cargo doc --open
+```
+
 ## File formats
 
 ### Pileup
