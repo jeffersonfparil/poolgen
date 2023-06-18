@@ -455,7 +455,7 @@ mod tests {
         // let p = 50_000;
         // let q = 50;
         let p = 1_000;
-        let q = 2;
+        let q = 3;
         let h2 = 0.75;
         let (k, r) = (10, 5);
         let mut rng = rand::thread_rng();
@@ -562,7 +562,7 @@ mod tests {
         println!("p={:?}", f.ncols());
         println!("q={:?}", q);
         // Assertions
-        // assert_eq!(0, 1); // Output dimensions
+        // assert_eq!(0, 1);
         assert_eq!(mean_cor[(1, 0)].round(), 1.0);
         assert_eq!(mean_cor[(1, 1)].round(), 1.0);
 
