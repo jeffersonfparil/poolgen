@@ -3,14 +3,18 @@
 use ndarray::prelude::*;
 use std::io;
 
-/// Filename of the pileup file and names of the pools from the phenotype file
+/// The entry point genotype file struct, i.e. describing the genotype data in pileup format
+/// - `filename` - filename of the pileup file
+/// - `pool_names` - names of the pools from the phenotype file
 #[derive(Debug, Clone)]
 pub struct FilePileup {
     pub filename: String,
     pub pool_names: Vec<String>,
 }
 
-/// Filename of the synchronised pileup file and the name of statistical test, i.e. "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity"
+/// The main genotype file struct used for most of the analyses
+/// - `filename` - filename of the synchronised pileup file
+/// - `test` - name of statistical test, i.e. "sync2csv", "fisher_exact_test", "chisq_test", "fst", "heterozygosity, "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "genomic_prediction_cross_validation""
 #[derive(Debug, Clone)]
 pub struct FileSync {
     pub filename: String,
@@ -18,6 +22,7 @@ pub struct FileSync {
 }
 
 /// Filename of the phenotype file which can be a simple delimited file (e.g. csv and tsv) or a specialised GWAlpha phenotype infomation file in a python file.
+/// - `filename` - 
 #[derive(Debug, Clone)]
 pub struct FilePhen {
     pub filename: String,
@@ -28,6 +33,7 @@ pub struct FilePhen {
     pub format: String,
 }
 
+/// Phenotype data including the names of the pools, the size of each pool, and the trait values
 #[derive(Debug, Clone)]
 pub struct Phen {
     pub pool_names: Vec<String>,
@@ -35,6 +41,7 @@ pub struct Phen {
     pub phen_matrix: Array2<f64>,
 }
 
+/// Filename of the synchronised pileup file and its corresponding phenotype data
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileSyncPhen {
     pub filename_sync: String,
@@ -44,6 +51,7 @@ pub struct FileSyncPhen {
     pub test: String,
 }
 
+/// Locus and allele filtering settings
 #[derive(Debug, Clone)]
 pub struct FilterStats {
     pub remove_ns: bool,
@@ -53,14 +61,15 @@ pub struct FilterStats {
     pub pool_sizes: Vec<f64>,
 }
 
+/// A line of a pileup file corresponding to a single locus across all the pools
 #[derive(Debug, Clone, PartialEq)]
 pub struct PileupLine {
-    pub chromosome: String,           // chromosome or scaffold name
-    pub position: u64,                // position in number of bases
-    pub reference_allele: char,       // reference allele
-    pub coverages: Vec<u64>,          // number of times the locus was covered
-    pub read_codes: Vec<Vec<u8>>, // utf8 read codes corresponding to 'A', 'T', 'C', or 'G' (252 other alleles can be accommodated)
-    pub read_qualities: Vec<Vec<u8>>, // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
+    pub chromosome: String,             // chromosome or scaffold name
+    pub position: u64,                  // position in number of bases
+    pub reference_allele: char,         // reference allele
+    pub coverages: Vec<u64>,            // number of times the locus was covered
+    pub read_codes: Vec<Vec<u8>>,       // utf8 read codes corresponding to 'A', 'T', 'C', or 'G' (252 other alleles can be accommodated)
+    pub read_qualities: Vec<Vec<u8>>,   // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
 }
 
 // Struct of allele counts to convert reads into sync

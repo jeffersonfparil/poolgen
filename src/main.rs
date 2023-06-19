@@ -1,20 +1,20 @@
 //! **poolgen**: quantitative and population genetics on pool sequencing (Pool-seq) data
 
+use clap::Parser;
+use ndarray::prelude::*;
 #[allow(warnings)]
 use std::io;
-use ndarray::prelude::*;
-use clap::Parser;
 mod base;
 mod gp;
 mod gwas;
 mod tables;
-use tables::{fst, pi};
-use base::{ChunkyReadAnalyseWrite, LoadAll, Parse, CrossValidation};
-use gwas::{mle_with_covariate, ols_with_covariate};
+use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse};
 use gp::{
     ols, penalise_glmnet, penalise_lasso_like, penalise_lasso_like_with_iterative_proxy_norms,
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
+use gwas::{mle_with_covariate, ols_with_covariate};
+use tables::{fst, pi};
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -106,7 +106,7 @@ struct Args {
 /// - *genomic_prediction_cross_validation* - perform *k*-fold cross-validation with *r* replicates using genomic prediction models (i.e. OLS and various penalised regression models)
 ///  
 /// Please refer to the documentation of each module for more details.
-/// 
+///
 /// ## Examples
 /// ```shell
 /// cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv

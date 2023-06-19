@@ -310,11 +310,11 @@ fn error_index(
         let mae = (&y_true_j - &y_pred_j)
             .iter()
             .fold(0.0, |norm, &x| norm + x.abs());
-            // / (max - min);
+        // / (max - min);
         let mse = (&y_true_j - &y_pred_j)
             .iter()
             .fold(0.0, |norm, &x| norm + x.powf(2.0));
-            // / (max - min).powf(2.0);
+        // / (max - min).powf(2.0);
         let rmse = mse.sqrt(); // / (max - min);
         error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
         // error_index.push(((1.0 - cor.abs()) + mae + mse) / 3.0);
@@ -389,7 +389,7 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
             Array2::from_shape_vec(
                 (l, l),
                 parameters_path
-                .clone()
+                    .clone()
                     .iter()
                     .flat_map(|&x| std::iter::repeat(x).take(l))
                     .collect(),
@@ -476,8 +476,6 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
     let mut alphas = vec![];
     let mut lambdas = vec![];
     for j in 0..k {
-
-
         ///////////////////////////////////
         // TODO: Account for overfit cross-validation folds, i.e. filter them out, or just use mode of the lambda and alphas?
         let mut alpha_path_counts: Array1<usize> = Array1::from_elem(l, 0);
@@ -487,14 +485,16 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
                 .slice(s![rep, .., .., .., j])
                 .mean_axis(Axis(0))
                 .unwrap();
-            let min_error = mean_error_per_rep_across_folds
-                .fold(mean_error_per_rep_across_folds[(0, 0)], |min, &x| {
+            let min_error = mean_error_per_rep_across_folds.fold(
+                mean_error_per_rep_across_folds[(0, 0)],
+                |min, &x| {
                     if x < min {
                         x
                     } else {
                         min
                     }
-            });
+                },
+            );
             // println!("min_error={:?}", min_error);
             // println!("mean_error_per_rep_across_folds={:?}", mean_error_per_rep_across_folds);
             // println!("lambda_path_counts={:?}", lambda_path_counts);
@@ -514,14 +514,19 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
         }
         // Find the mode alpha and lambda
         // println!("lambda_path_counts={:?}", lambda_path_counts);
-        let alpha_max_count = alpha_path_counts.fold(0,  |max, &x| if x>max{x}else{max});
-        let (alpha_idx, _) = alpha_path_counts.indexed_iter().find(|(_a, &x)| x==alpha_max_count).unwrap();
-        let lambda_max_count = lambda_path_counts.fold(0,  |max, &x| if x>max{x}else{max});
-        let (lambda_idx, _) = lambda_path_counts.indexed_iter().find(|(_a, &x)| x==lambda_max_count).unwrap();
+        let alpha_max_count = alpha_path_counts.fold(0, |max, &x| if x > max { x } else { max });
+        let (alpha_idx, _) = alpha_path_counts
+            .indexed_iter()
+            .find(|(_a, &x)| x == alpha_max_count)
+            .unwrap();
+        let lambda_max_count = lambda_path_counts.fold(0, |max, &x| if x > max { x } else { max });
+        let (lambda_idx, _) = lambda_path_counts
+            .indexed_iter()
+            .find(|(_a, &x)| x == lambda_max_count)
+            .unwrap();
         alphas.push(parameters_path[alpha_idx]);
         lambdas.push(parameters_path[lambda_idx]);
         ///////////////////////////////////
-
 
         // let min_error = mean_error_across_reps_and_folds
         //     .index_axis(Axis(2), j)
