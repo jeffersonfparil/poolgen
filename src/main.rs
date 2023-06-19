@@ -1,30 +1,53 @@
-//! **poolgen**: quantitative and population genetics on pool sequencind data
-/// Performs:
+//! **poolgen**: quantitative and population genetics on pool sequencing (Pool-seq) data
+///
+/// ## Analyses
 /// - *pileup2sync* - convert a pileup file into a synchronised pileup file with a header
 /// - *sync2csv* - convert a synchronised pileup file (sync format) into a smple comma-separated file (csv format)
-/// - *fisher_exact_test* - using the genotype data in sync format, perform Fisher's exact test per locus, i.e. using allele counts matrix of n-pools x p-alleles (Note: phenotype data is only required for the pool sizes and/or pool names)
-/// - *chisq_test* -
-/// *pearson_corr*, *ols_iter*, *ols_iter_with_kinship*, *mle_iter*,
-/// *mle_iter_with_kinship*, *gwalpha*, *ridge_iter*,
-/// *genomic_prediction_cross_validation*, *fst*, *heterozygosity*)
+/// - *fisher_exact_test* - perform Fisher's exact test per locus (sync format), i.e. using allele counts matrix of n-pools x p-alleles (Note: phenotype data is only required for the pool sizes and/or pool names)
+/// - *chisq_test* - perform $\Chi^2$ test per locus (sync format), i.e. using allele counts matrix of n-pools x p-alleles (Note: likewise phenotype data is only required for the pool sizes and/or pool names)
+/// - *fst* - find the pairwise differentiation between populations using multiple/genome-wide allele frequencies (sync format) with unbiased Fst (fixation index) estimates from multiallelic loci (similar to [Gautier et al, 2019](https://doi.org/10.1111/1755-0998.13557))
+/// - *heterozygosity* - find the heterozygosity or nucleotide diversity ($\pi$) of each population using multiple/genome-wide allele frequencies (sync format) with unbiased Fst (fixation index) estimates from multiallelic loci (similar to [Korunes & Samuk, 2021](https://doi.org/10.1111/1755-0998.13326))
+/// - *pearson_corr* - find the correlation between phenotypes (csv format) and allele frequencies (sync format) per locus
+/// - *ols_iter* - find the strength of association between phenotypes (csv format) and allele frequencies (sync format) per locus using ordinary least squares (OLS) regression
+/// - *ols_iter_with_kinship* - similar to *ols_iter* but controls for the effects of kinship
+/// - *mle_iter* - similar to *ols_iter* but uses maximum likelihood estimation
+/// - *mle_iter_with_kinship* - similar to *ols_iter_with_kinship* but uses maximum likelihood estimation
+/// - *gwalpha* - parametric allele effect estimation using Pool-seq data in cases where the number of pools is small, e.g. 5 pools genotyped across thousands to hundred of thousands of loci. See [Fournier-Level et al, 2017](https://doi.org/10.1093/bioinformatics/btw805) for details.
+/// - *genomic_prediction_cross_validation* - perform *k*-fold cross-validation with *r* replicates using genomic prediction models (i.e. OLS and various penalised regression models)
 ///  
-use base::{ChunkyReadAnalyseWrite, LoadAll, Parse};
-use clap::Parser;
-use gp::{
-    ols, penalise_glmnet, penalise_lasso_like, penalise_lasso_like_with_iterative_proxy_norms,
-    penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
-};
-use gwas::{mle_with_covariate, ols_with_covariate};
-use ndarray::prelude::*;
+/// Please refer to the documentation of each module for more details.
+/// 
+/// ## Examples
+/// ```shell
+/// cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv
+/// cargo run -- fisher_exact_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
+/// cargo run -- chisq_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
+/// cargo run -- pearson_corr -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
+/// cargo run -- fst -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32
+/// cargo run -- heterozygosity -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32
+/// cargo run -- ols_iter -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
+/// cargo run -- mle_iter -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
+/// cargo run -- gwalpha  -f ./tests/test.sync -p ./tests/test.py --n-threads 32 --gwalpha-method ML
+/// cargo run -- sync2csv -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --keep-p-minus-1
+/// # cargo run -- genomic_prediction_cross_validation -f ./tests/test_MORE_POOLS.sync -p ./tests/test_MORE_POOLS.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32
+/// ```
+
 #[allow(warnings)]
 use std::io;
-use tables::{fst, pi};
-
-use crate::base::CrossValidation;
+use ndarray::prelude::*;
+use clap::Parser;
 mod base;
 mod gp;
 mod gwas;
 mod tables;
+use tables::{fst, pi};
+use base::{ChunkyReadAnalyseWrite, LoadAll, Parse, CrossValidation};
+use gwas::{mle_with_covariate, ols_with_covariate};
+use gp::{
+    ols, penalise_glmnet, penalise_lasso_like, penalise_lasso_like_with_iterative_proxy_norms,
+    penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
+};
+
 
 // Instatiate arguments struct
 #[derive(Parser, Debug)]

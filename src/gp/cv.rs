@@ -69,11 +69,11 @@ impl
         let mut mse: Array1<f64> = Array1::from_elem(m, f64::NAN);
         let mut rmse: Array1<f64> = Array1::from_elem(m, f64::NAN);
         for j in 0..m {
-            let min = y_true
+            let _min = y_true
                 .column(j)
                 .iter()
                 .fold(y_true[(0, j)], |min, &x| if x < min { x } else { min });
-            let max = y_true
+            let _max = y_true
                 .column(j)
                 .iter()
                 .fold(y_true[(0, j)], |max, &x| if x > max { x } else { max });

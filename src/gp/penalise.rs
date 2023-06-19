@@ -299,10 +299,10 @@ fn error_index(
             Array2::from_shape_vec((p, 1), b_hat.column(j).to_owned().to_vec()).unwrap();
         let y_pred_j: Array2<f64> =
             multiply_views_xx(x, &b_hat_j, idx_validation, idx_b_hat, idx_b_hat, &vec![0]).unwrap();
-        let min = y_true_j
+        let _min = y_true_j
             .iter()
             .fold(y_true_j[(0, 0)], |min, &x| if x < min { x } else { min });
-        let max = y_true_j
+        let _max = y_true_j
             .iter()
             .fold(y_true_j[(0, 0)], |max, &x| if x > max { x } else { max });
         let (cor, _pval) = pearsons_correlation(&y_true_j.column(0), &y_pred_j.column(0)).unwrap();

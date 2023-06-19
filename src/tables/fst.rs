@@ -25,7 +25,7 @@ pub fn fst(
     loci_idx.push(p); // last allele of the last locus
     let l = loci_idx.len();
     assert_eq!(l - 1, genotypes_and_phenotypes.coverages.ncols());
-    // A probably not so unbiased and multi-allelic version of Gautier et al, 2019 (assumes biallelic loci)
+    // Unbiased multi-allelic version of Fst similar to Gautier et al, 2019 which assumes biallelic loci
     let mut fst: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     let loci: Array3<usize> = Array3::from_shape_vec(
         (l - 1, n, n),

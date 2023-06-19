@@ -203,7 +203,7 @@ mod tests {
             format: "default".to_owned(),
         };
 
-        let q = file_phen.lparse().unwrap();
+        let _q = file_phen.lparse().unwrap();
         // assert_eq!(0,1);
 
         let file_sync = FileSync {
