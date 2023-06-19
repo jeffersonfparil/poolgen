@@ -79,22 +79,20 @@ impl
                 .fold(y_true[(0, j)], |max, &x| if x > max { x } else { max });
             let (cor_, _pval) = pearsons_correlation(&y_true.column(j), &y_pred.column(j)).unwrap();
             cor[j] = cor_;
-            mbe[j] = y_true.column(j).sub(&y_pred.column(j)).mean().unwrap() / (max - min);
+            mbe[j] = y_true.column(j).sub(&y_pred.column(j)).mean().unwrap();
             mae[j] = y_true
                 .column(j)
                 .sub(&y_pred.column(j))
                 .iter()
                 .map(|&x| x.abs())
-                .fold(0.0, |sum, x| sum + x)
-                / (max - min);
+                .fold(0.0, |sum, x| sum + x);
             mse[j] = y_true
                 .column(j)
                 .sub(&y_pred.column(j))
                 .iter()
                 .map(|&x| x.powf(2.0))
-                .fold(0.0, |sum, x| sum + x)
-                / (max - min).powf(2.0);
-            rmse[j] = mse[j].sqrt() / (max - min);
+                .fold(0.0, |sum, x| sum + x);
+            rmse[j] = mse[j].sqrt();
         }
         Ok(vec![cor, mbe, mae, mse, rmse])
     }
@@ -455,7 +453,7 @@ mod tests {
         // let p = 50_000;
         // let q = 50;
         let p = 1_000;
-        let q = 3;
+        let q = 2;
         let h2 = 0.75;
         let (k, r) = (10, 5);
         let mut rng = rand::thread_rng();
@@ -579,20 +577,3 @@ mod tests {
         println!("predictor_files={:?}", predictor_files);
     }
 }
-
-// // In R testing the relationships between RMSE, etc...
-// mbe = c()
-// mae = c()
-// mse = c()
-// rmse = c()
-// n = 1000
-// for (i in 1:n) {
-//     x = runif(0,1,n=10000)
-//     y = runif(0,1,n=10000)
-//     mbe = c(mbe, mean(x-y))
-//     mae = c(mae, mean(abs(x-y)))
-//     mse = c(mse, mean((x-y)^2))
-//     rmse = c(rmse, sqrt(mean((x-y)^2)))
-// }
-// df = data.frame(mbe, mae, mse, rmse)
-// plot(df)
