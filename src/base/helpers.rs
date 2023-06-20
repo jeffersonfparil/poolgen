@@ -1,3 +1,5 @@
+//! Helper functions including parallel selective matrix multiplication and pseudo-inverse via singular value decomposition
+
 use crate::base::*;
 use argmin::solver::neldermead::NelderMead;
 use ndarray::{prelude::*, Zip};
@@ -8,7 +10,7 @@ use std::fs::File;
 use std::io::{self, prelude::*, BufReader, SeekFrom};
 use std::io::{Error, ErrorKind};
 
-// File splitting for thread allocation for parallele computation
+/// File splitting for thread allocation for parallel computation
 fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
     let mut out = pos.clone();
     if out > 0 {
@@ -22,6 +24,7 @@ fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
     return out;
 }
 
+/// Detect the cursor positions across the input file corresponding to the splits for parallel computation
 pub fn find_file_splits(fname: &String, n_threads: &usize) -> io::Result<Vec<u64>> {
     let mut file = match File::open(fname) {
         Ok(x) => x,
@@ -41,6 +44,7 @@ pub fn find_file_splits(fname: &String, n_threads: &usize) -> io::Result<Vec<u64
     return Ok(out);
 }
 
+/// Round-up an `f64` to `n_digits` decimal points
 pub fn sensible_round(x: f64, n_digits: usize) -> f64 {
     let factor = ("1e".to_owned() + &n_digits.to_string())
         .parse::<f64>()
@@ -48,6 +52,7 @@ pub fn sensible_round(x: f64, n_digits: usize) -> f64 {
     (x * factor).round() / factor
 }
 
+/// Round-up an `f64` to `n_digits` decimal points and cast into a `String`
 pub fn parse_f64_roundup_and_own(x: f64, n_digits: usize) -> String {
     let s = x.to_string();
     if s.len() < n_digits {
@@ -56,18 +61,19 @@ pub fn parse_f64_roundup_and_own(x: f64, n_digits: usize) -> String {
     sensible_round(x, n_digits).to_string()
 }
 
+/// Map a vector of `f64` with a logistic regression, so that they are bound between `lower_limit` and `upper_limit`
 pub fn bound_parameters_with_logit(
     params: &Vec<f64>,
     lower_limit: f64,
     upper_limit: f64,
 ) -> Vec<f64> {
-    // Map parameters with a logistic regression to bound them between 0 and PARAMETER_UPPER_LIMIT
     params
         .into_iter()
         .map(|x| lower_limit + ((upper_limit - lower_limit) / (1.00 + (-x).exp())))
         .collect::<Vec<f64>>()
 }
 
+/// Instantiate the Nelder-Mead optimiser with `p` parameters an initial values equal defined by a `p+1 x p+1` kernel with `h` in the off-diagonals and `h+0.5 in the diagonals
 pub fn prepare_solver_neldermead(p: f64, h: f64) -> NelderMead<Vec<f64>, f64> {
     let mut init_param: Vec<Vec<f64>> = Vec::new();
     for i in 0..(p as usize + 1) {
@@ -84,6 +90,9 @@ pub fn prepare_solver_neldermead(p: f64, h: f64) -> NelderMead<Vec<f64>, f64> {
     NelderMead::new(init_param)
 }
 
+/// Multi-threaded selective matrix multiplication variant: $AB$
+/// Matrix multiplication of two 2-dimensional arrays where only the specified rows and columns are used
+/// This is an attempt at multi-threadded selective matrix multiplication while minimising memory allocation by using pointers to arrays and a subset of its data, instead of coping data.
 pub fn multiply_views_xx(
     a: &Array2<f64>,
     b: &Array2<f64>,
@@ -118,6 +127,7 @@ pub fn multiply_views_xx(
     Ok(out)
 }
 
+/// Multi-threaded selective matrix multiplication variant: $A^{T}B$
 pub fn multiply_views_xtx(
     a: &Array2<f64>,
     b: &Array2<f64>,
@@ -153,6 +163,7 @@ pub fn multiply_views_xtx(
     Ok(out)
 }
 
+/// Multi-threaded selective matrix multiplication variant: $AB^{T}$
 pub fn multiply_views_xxt(
     a: &Array2<f64>,
     b: &Array2<f64>,
@@ -188,6 +199,7 @@ pub fn multiply_views_xxt(
     Ok(out)
 }
 
+/// Implementation of pseudo-inverse using singlar-value decomposition where $\Sigma_{j,j} < \epsilon_{machine}$ are set to zero
 impl MoorePenrosePseudoInverse for Array2<f64> {
     fn pinv(&self) -> io::Result<Array2<f64>> {
         let n: usize = self.nrows();
