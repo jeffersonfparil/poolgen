@@ -514,19 +514,6 @@ mod tests {
                 .collect(),
             coverages: Array2::from_elem((n, p + 1), 100.0),
         };
-        // println!("frequencies_and_phenotypes={:?}", frequencies_and_phenotypes);
-        // println!(
-        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]={:?}",
-        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)]
-        // );
-        // println!(
-        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]={:?}",
-        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(1, 2)]
-        // );
-        // println!(
-        //     "frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]={:?}",
-        //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(2, 3)]
-        // );
         let (_a, _k, _s) = frequencies_and_phenotypes.k_split(10).unwrap();
         let models: Vec<
             fn(&Array2<f64>, &Array2<f64>, &Vec<usize>) -> io::Result<(Array2<f64>, String)>,

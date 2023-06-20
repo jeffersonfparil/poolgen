@@ -299,23 +299,23 @@ fn error_index(
             Array2::from_shape_vec((p, 1), b_hat.column(j).to_owned().to_vec()).unwrap();
         let y_pred_j: Array2<f64> =
             multiply_views_xx(x, &b_hat_j, idx_validation, idx_b_hat, idx_b_hat, &vec![0]).unwrap();
-        let _min = y_true_j
+        let min = y_true_j
             .iter()
             .fold(y_true_j[(0, 0)], |min, &x| if x < min { x } else { min });
-        let _max = y_true_j
+        let max = y_true_j
             .iter()
             .fold(y_true_j[(0, 0)], |max, &x| if x > max { x } else { max });
         let (cor, _pval) = pearsons_correlation(&y_true_j.column(0), &y_pred_j.column(0)).unwrap();
         // let mbe = (y_true_j - &y_pred_j).mean() / (max - min);vec![0.0]
         let mae = (&y_true_j - &y_pred_j)
             .iter()
-            .fold(0.0, |norm, &x| norm + x.abs());
-        // / (max - min);
+            .fold(0.0, |norm, &x| norm + x.abs())
+        / (max - min);
         let mse = (&y_true_j - &y_pred_j)
             .iter()
-            .fold(0.0, |norm, &x| norm + x.powf(2.0));
-        // / (max - min).powf(2.0);
-        let rmse = mse.sqrt(); // / (max - min);
+            .fold(0.0, |norm, &x| norm + x.powf(2.0))
+        / (max - min).powf(2.0);
+        let rmse = mse.sqrt() / (max - min);
         error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
         // error_index.push(((1.0 - cor.abs()) + mae + mse) / 3.0);
         // error_index.push(((1.0 - cor.abs()) + rmse) / 2.0);
