@@ -1,3 +1,5 @@
+//! Phenotype data parsing from simple delimited files (e.g. csv and tsv) and [GWAlpha.py's Python-esq data structure](https://github.com/aflevel/GWAlpha)
+
 use ndarray::prelude::*;
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader, Error, ErrorKind};
@@ -6,7 +8,16 @@ use std::{str, vec};
 use crate::base::*;
 
 impl Parse<Phen> for FilePhen {
-    // Parse a line of pileup into PileupLine struct
+    /// Parse a phenotype file into `Phen` struct containing the `pool_names`, `pool_sizes`, and `phen_matrix`
+    /// Phenotype file formats:
+    /// 1. A simple delimited file (e.g. `csv` and `tsv` extensions) with a column for the individual IDs, and at least one column for the phenotypic values. Header line/s and comments should be prepended by `#`.
+    /// 2. GWAlpha-compatible text file (i.e. `py` extension):
+    /// - *Line 1*: phenotype name
+    /// - *Line 2*: standard deviation of the phenotype across pools or for the entire population
+    /// - *Line 3*: minimum phenotype value
+    /// - *Line 4*: maximum phenotype value
+    /// - *Line 5*: cummulative pool sizes percentiles (e.g. `0.2,0.4,0.6,0.8,1.0`)
+    /// - *Line 6*: phenotype values corresponding to each percentile (e.g. `0.16,0.20,0.23,0.27,0.42`)
     fn lparse(&self) -> io::Result<Box<Phen>> {
         let mut pool_names: Vec<String> = vec![];
         let mut pool_sizes: Vec<f64> = vec![];
@@ -149,7 +160,7 @@ impl Parse<Phen> for FilePhen {
 }
 
 impl Parse<FileSyncPhen> for (FileSync, FilePhen) {
-    // Parse a line of pileup into PileupLine struct
+    /// Combine the `Phen` struct with the filename of the genotype file in `sync` format, and include the name of the `test` or analysis to perform
     fn lparse(&self) -> io::Result<Box<FileSyncPhen>> {
         let filename_sync = self.0.filename.clone();
         let test = self.0.test.clone();
@@ -189,11 +200,9 @@ impl Parse<FileSyncPhen> for (FileSync, FilePhen) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     #[test]
     fn test_phen() {
-        // Inputs
         let file_phen = FilePhen {
             filename: "./tests/test.csv".to_owned(),
             delim: ",".to_owned(),
@@ -202,19 +211,28 @@ mod tests {
             trait_values_column_ids: vec![2, 3],
             format: "default".to_owned(),
         };
-
-        let _q = file_phen.lparse().unwrap();
-        // assert_eq!(0,1);
-
+        assert_eq!(
+            *file_phen.lparse().unwrap(),
+            Phen {
+                pool_names: vec!["G1", "G2", "G3", "G4", "G5"]
+                    .into_iter()
+                    .map(|x| x.to_owned())
+                    .collect::<Vec<String>>(),
+                pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
+                phen_matrix: Array2::from_shape_vec(
+                    (2, 5),
+                    vec![0.1, 0.3, 0.5, 0.7, 0.9, 83.2, 75.3, 49.8, 23.9, 12.0],
+                )
+                .unwrap()
+                .reversed_axes(),
+            }
+        );
         let file_sync = FileSync {
             filename: "./tests/test.sync".to_owned(),
             test: "".to_owned(),
         };
-        // Output
-        let output = *(file_sync, file_phen).lparse().unwrap();
-        // Assertion
         assert_eq!(
-            output,
+            *(file_sync, file_phen).lparse().unwrap(),
             FileSyncPhen {
                 filename_sync: "./tests/test.sync".to_owned(),
                 pool_names: vec!["G1", "G2", "G3", "G4", "G5"]

@@ -310,11 +310,11 @@ fn error_index(
         let mae = (&y_true_j - &y_pred_j)
             .iter()
             .fold(0.0, |norm, &x| norm + x.abs())
-        / (max - min);
+            / (max - min);
         let mse = (&y_true_j - &y_pred_j)
             .iter()
             .fold(0.0, |norm, &x| norm + x.powf(2.0))
-        / (max - min).powf(2.0);
+            / (max - min).powf(2.0);
         let rmse = mse.sqrt() / (max - min);
         error_index.push(((1.0 - cor.abs()) + mae + mse + rmse) / 4.0);
         // error_index.push(((1.0 - cor.abs()) + mae + mse) / 3.0);

@@ -22,7 +22,7 @@ pub struct FileSync {
 }
 
 /// Filename of the phenotype file which can be a simple delimited file (e.g. csv and tsv) or a specialised GWAlpha phenotype infomation file in a python file.
-/// - `filename` - 
+/// - `filename` -
 #[derive(Debug, Clone)]
 pub struct FilePhen {
     pub filename: String,
@@ -34,7 +34,7 @@ pub struct FilePhen {
 }
 
 /// Phenotype data including the names of the pools, the size of each pool, and the trait values
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Phen {
     pub pool_names: Vec<String>,
     pub pool_sizes: Vec<f64>,
@@ -64,12 +64,12 @@ pub struct FilterStats {
 /// A line of a pileup file corresponding to a single locus across all the pools
 #[derive(Debug, Clone, PartialEq)]
 pub struct PileupLine {
-    pub chromosome: String,             // chromosome or scaffold name
-    pub position: u64,                  // position in number of bases
-    pub reference_allele: char,         // reference allele
-    pub coverages: Vec<u64>,            // number of times the locus was covered
-    pub read_codes: Vec<Vec<u8>>,       // utf8 read codes corresponding to 'A', 'T', 'C', or 'G' (252 other alleles can be accommodated)
-    pub read_qualities: Vec<Vec<u8>>,   // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
+    pub chromosome: String,           // chromosome or scaffold name
+    pub position: u64,                // position in number of bases
+    pub reference_allele: char,       // reference allele
+    pub coverages: Vec<u64>,          // number of times the locus was covered
+    pub read_codes: Vec<Vec<u8>>, // utf8 read codes corresponding to 'A', 'T', 'C', or 'G' (252 other alleles can be accommodated)
+    pub read_qualities: Vec<Vec<u8>>, // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
 }
 
 // Struct of allele counts to convert reads into sync

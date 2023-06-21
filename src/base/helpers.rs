@@ -10,7 +10,9 @@ use std::fs::File;
 use std::io::{self, prelude::*, BufReader, SeekFrom};
 use std::io::{Error, ErrorKind};
 
-/// File splitting for thread allocation for parallel computation
+/// Find the start position of the next line given the current position,`pos`.
+/// Positions are coded as the nth UTF8 character count in the file counting the newline characters at the end of each line.
+/// This is used in file splitting to allocate a chunk of the file to a single thread for parallel processing.
 fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
     let mut out = pos.clone();
     if out > 0 {
@@ -199,8 +201,8 @@ pub fn multiply_views_xxt(
     Ok(out)
 }
 
-/// Implementation of pseudo-inverse using singlar-value decomposition where $\Sigma_{j,j} < \epsilon_{machine}$ are set to zero
 impl MoorePenrosePseudoInverse for Array2<f64> {
+    /// Implementation of pseudo-inverse using singlar-value decomposition where $\Sigma_{j,j} < \epsilon_{machine}$ are set to zero
     fn pinv(&self) -> io::Result<Array2<f64>> {
         let n: usize = self.nrows();
         let p: usize = self.ncols();
@@ -228,13 +230,21 @@ mod tests {
     use super::*;
     #[test]
     fn test_helpers() {
-        // Inputs
-        let fname: &String = &"./tests/test.pileup".to_owned();
-        let n_threads = 2;
-        let number: f64 = 0.420000012435;
-        let _betas = vec![
-            0.0, 0.2, 0.3, 0.4, 0.5, 0.55, 0.6, 0.7, 0.75, 0.77, 0.8, 0.85, 0.86, 0.89, 1.0,
-        ];
+        assert_eq!(
+            find_start_of_next_line(&"./tests/test.pileup".to_owned(), 56),
+            57
+        ); // 56th character is the newline character as line 1 has a total of 56 characters, so the next line should start at the 57th character position
+        assert_eq!(
+            find_file_splits(&"./tests/test.pileup".to_owned(), &2)
+                .unwrap()
+                .len(),
+            3
+        );
+        assert_eq!(sensible_round(0.420000012435, 4), 0.42);
+        assert_eq!(
+            parse_f64_roundup_and_own(0.690000012435, 4),
+            "0.69".to_owned()
+        );
         let a: Array2<f64> =
             Array2::from_shape_vec((5, 3), (0..15).map(|x| x as f64).collect::<Vec<f64>>())
                 .unwrap();
@@ -247,47 +257,16 @@ mod tests {
         let idx_x2: Vec<usize> = vec![0, 2];
         let idx_y2: Vec<usize> = vec![1, 3];
         let idx_z2: Vec<usize> = vec![0, 1];
-        // Outputs
-        let splits = find_file_splits(fname, &n_threads).unwrap();
-        let string_f64 = parse_f64_roundup_and_own(number, 4);
-        let a_x_b = multiply_views_xx(&a, &b, &idx_w3, &idx_x2, &idx_y2, &idx_z2).unwrap();
-        let at_x_b = multiply_views_xtx(&a, &b, &idx_w3, &idx_x2, &idx_w3, &idx_z2).unwrap();
-        let a_x_bt = multiply_views_xxt(&a, &b, &idx_w3, &idx_x2, &idx_w3, &idx_z2).unwrap();
-
-        // let (n, p) = (100, 50_000);
-        // let a: Array2<f64> =
-        //     Array2::from_shape_vec((n, p), (0..(n * p)).map(|x| x as f64).collect::<Vec<f64>>())
-        //         .unwrap();
-        // let b: Array2<f64> = Array2::from_shape_vec(
-        //     (p, n),
-        //     (0..(p * n)).map(|x| x as f64 / 2.0).collect::<Vec<f64>>(),
-        // )
-        // .unwrap();
-        // let idx_w3: Vec<usize> = (0..n).collect();
-        // let idx_x2: Vec<usize> = (0..p).collect();
-        // let idx_y2: Vec<usize> = (0..p).collect();
-        // let idx_z2: Vec<usize> = (0..n).collect();
-
-        // let a_x_b_multhread =
-        //     MULTITHREAD_multiply_views_xx(&a, &b, &idx_w3, &idx_x2, &idx_y2, &idx_z2).unwrap();
-        // // println!("a_x_b_multhread={:?}", a_x_b_multhread);
-        // let a_x_b = multiply_views_xx(&a, &b, &idx_w3, &idx_x2, &idx_y2, &idx_z2).unwrap();
-        // // println!("a_x_b={:?}", a_x_b);
-        // assert_eq!(a_x_b_multhread, a_x_b);
-
-        // Assertion
-        assert_eq!(splits.len(), 3);
-        assert_eq!(string_f64, "0.42".to_owned());
         assert_eq!(
-            a_x_b,
+            multiply_views_xx(&a, &b, &idx_w3, &idx_x2, &idx_y2, &idx_z2).unwrap(),
             Array2::from_shape_vec((3, 2), vec![27.0, 31.0, 63.0, 73.0, 81.0, 94.0]).unwrap()
         );
         assert_eq!(
-            at_x_b,
+            multiply_views_xtx(&a, &b, &idx_w3, &idx_x2, &idx_w3, &idx_z2).unwrap(),
             Array2::from_shape_vec((2, 2), vec![117.0, 129.0, 141.0, 156.0]).unwrap()
         );
         assert_eq!(
-            a_x_bt,
+            multiply_views_xxt(&a, &b, &idx_w3, &idx_x2, &idx_w3, &idx_z2).unwrap(),
             Array2::from_shape_vec(
                 (3, 3),
                 vec![14.5, 38.5, 50.5, 35.5, 95.5, 125.5, 46.0, 124.0, 163.0]
