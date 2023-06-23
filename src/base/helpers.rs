@@ -230,10 +230,19 @@ mod tests {
     use super::*;
     #[test]
     fn test_helpers() {
+if cfg!(windows) {
+
+assert_eq!(
+            find_start_of_next_line(&"./tests/test.pileup".to_owned(), 56),
+            58
+        ); // line 1 has a total of 57 characters in windows and only 56 in unix, so the next line should start at the 58th character position
+
+} else{
         assert_eq!(
             find_start_of_next_line(&"./tests/test.pileup".to_owned(), 56),
             57
         ); // 56th character is the newline character as line 1 has a total of 56 characters, so the next line should start at the 57th character position
+}
         assert_eq!(
             find_file_splits(&"./tests/test.pileup".to_owned(), &2)
                 .unwrap()
