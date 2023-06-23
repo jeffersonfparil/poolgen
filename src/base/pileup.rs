@@ -1,3 +1,5 @@
+//! Pileup data (i.e. reference genome-aligned DNA sequences) processing (`Parse` and `Filter` traits and `pileup_to_sync` format conversion function) and parallel I/O (`ChunkyReadAnalyseWrite` trait)
+
 use crate::base::*;
 use ndarray::prelude::*;
 use std::fs::{File, OpenOptions};
@@ -7,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 impl Parse<PileupLine> for String {
-    // Parse a line of pileup into PileupLine struct
+    /// Parse a line of pileup into a `PileupLine` struct corresponding to a locus, i.e. representing the allele counts of one or more pools in a single locus
     fn lparse(&self) -> io::Result<Box<PileupLine>> {
         let raw_locus_data: Box<Vec<&str>> = Box::new(self.split("\t").collect());
         // Chromosome or scaffold name
@@ -166,7 +168,7 @@ impl Parse<PileupLine> for String {
 }
 
 impl Filter for PileupLine {
-    // PileupLine to AlleleCounts
+    /// Parse the `PileupLine` into `AlleleCounts`
     fn to_counts(&self) -> io::Result<Box<LocusCounts>> {
         let n: usize = self.coverages.len();
         let p: usize = 6;
@@ -212,7 +214,7 @@ impl Filter for PileupLine {
         }))
     }
 
-    // PileupLine to AlleleFrequencies
+    /// Parse `PileupLine` into `AlleleFrequencies`
     fn to_frequencies(&self) -> io::Result<Box<LocusFrequencies>> {
         let locus_counts = self.to_counts().unwrap();
         let n = locus_counts.matrix.nrows();
@@ -232,7 +234,10 @@ impl Filter for PileupLine {
         }))
     }
 
-    // Filter PileupLine by minimum coverage, minimum quality
+    /// Filter `PileupLine` by:
+    /// 1. removing nucleotide reads with counts less than `minimum coverage`, and read qualities less than `minimum quality`
+    /// 2. removing allele/s if the minor allele frequency is less than `min_allele_frequency`
+    /// 3. removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after previous filterings
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // Convert low quality bases into Ns
         let n = self.read_qualities.len();
@@ -310,6 +315,7 @@ impl Filter for PileupLine {
     }
 }
 
+/// Convert `PileupLine` into a string representing a line or locus in a `sync` file.
 pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) -> Option<String> {
     // let mut pileup_line: Box<PileupLine> = line.lparse().unwrap();
     // Filter
@@ -347,6 +353,8 @@ pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) 
 impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Option<String>>
     for FilePileup
 {
+    /// Load a `FilePileup`, process/analyse `PileupLine`s using some `function`, and output a file
+    /// This function performs the I/O and processing/analyses for a chunk of the input file, such that each chunk is allocated to a dedicated thread for computational efficiency
     fn per_chunk(
         &self,
         start: &u64,
@@ -412,6 +420,8 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
         Ok(out)
     }
 
+    /// I/O and processing/analyses of a `FilePileup` using multiple threads for computational efficiency
+    /// Each thread is allocated a chunk of the file, and the number of threads is set by the user with a default of 2.
     fn read_analyse_write(
         &self,
         filter_stats: &FilterStats,
@@ -515,31 +525,69 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     #[test]
     fn test_pileup_methods() {
-        // Expected outputs
-        let expected_output1 = PileupLine {
-            chromosome: "Chromosome1".to_owned(),
-            position: 456527,
-            reference_allele: "C".to_owned().parse::<char>().unwrap(),
-            coverages: vec![4, 3, 7, 5, 7],
-            read_codes: vec![
-                vec![67, 67, 67, 67],
-                vec![67, 84, 67],
-                vec![67, 68, 67, 84, 67, 67, 84],
-                vec![84, 67, 67, 67, 67],
-                vec![67, 67, 67, 84, 67, 67, 67],
-            ],
-            read_qualities: vec![
-                vec![74, 74, 74, 74],
-                vec![74, 74, 74],
-                vec![74, 70, 74, 70, 74, 70, 74],
-                vec![74, 74, 74, 74, 74],
-                vec![74, 74, 74, 74, 60, 55, 74],
-            ],
+        let line = "Chromosome1\t456527\tC\t4\t....+1c\tJJJJ\t3\t.T.-3atg\tJJJ\t7\t.*.T..T\tJFJFJFJ\t5\tT....\tJJJJJ\t7\t...T...\tJJJJ<7J".to_owned();
+        let pileup_line: PileupLine = *(line.lparse().unwrap());
+        let counts = *(pileup_line.to_counts().unwrap());
+        let frequencies = *(pileup_line.to_frequencies().unwrap());
+        let filter_stats = FilterStats {
+            remove_ns: true,
+            min_quality: 0.005,
+            min_coverage: 1,
+            min_allele_frequency: 0.0,
+            pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
         };
+        let mut filtered_pileup = pileup_line.clone();
+        filtered_pileup.filter(&filter_stats).unwrap();
+        // Assertions
+        assert_eq!(
+            pileup_line,
+            PileupLine {
+                chromosome: "Chromosome1".to_owned(),
+                position: 456527,
+                reference_allele: "C".to_owned().parse::<char>().unwrap(),
+                coverages: vec![4, 3, 7, 5, 7],
+                read_codes: vec![
+                    vec![67, 67, 67, 67],
+                    vec![67, 84, 67],
+                    vec![67, 68, 67, 84, 67, 67, 84],
+                    vec![84, 67, 67, 67, 67],
+                    vec![67, 67, 67, 84, 67, 67, 67],
+                ],
+                read_qualities: vec![
+                    vec![74, 74, 74, 74],
+                    vec![74, 74, 74],
+                    vec![74, 70, 74, 70, 74, 70, 74],
+                    vec![74, 74, 74, 74, 74],
+                    vec![74, 74, 74, 74, 60, 55, 74],
+                ],
+            }
+        );
+        assert_eq!(
+            filtered_pileup,
+            PileupLine {
+                chromosome: "Chromosome1".to_owned(),
+                position: 456527,
+                reference_allele: "C".to_owned().parse::<char>().unwrap(),
+                coverages: vec![4, 3, 7, 5, 6],
+                read_codes: vec![
+                    vec![67, 67, 67, 67],
+                    vec![67, 84, 67],
+                    vec![67, 68, 67, 84, 67, 67, 84],
+                    vec![84, 67, 67, 67, 67],
+                    vec![67, 67, 67, 84, 67, 67],
+                ],
+                read_qualities: vec![
+                    vec![74, 74, 74, 74],
+                    vec![74, 74, 74],
+                    vec![74, 70, 74, 70, 74, 70, 74],
+                    vec![74, 74, 74, 74, 74],
+                    vec![74, 74, 74, 74, 60, 74],
+                ],
+            }
+        );
         let counts_matrix: Array2<u64> = Array2::from_shape_vec(
             (5, 6),
             vec![
@@ -560,63 +608,29 @@ mod tests {
                 frequencies_matrix[(i, j)] = counts_matrix[(i, j)] as f64 / row_sums[i];
             }
         }
-        let expected_output2 = LocusCounts {
-            chromosome: "Chromosome1".to_owned(),
-            position: 456527,
-            alleles_vector: vec!["A", "T", "C", "G", "D", "N"]
-                .into_iter()
-                .map(|x| x.to_owned())
-                .collect::<Vec<String>>(),
-            matrix: counts_matrix,
-        };
-        let expected_output3 = LocusFrequencies {
-            chromosome: "Chromosome1".to_owned(),
-            position: 456527,
-            alleles_vector: vec!["A", "T", "C", "G", "D", "N"]
-                .into_iter()
-                .map(|x| x.to_owned())
-                .collect::<Vec<String>>(),
-            matrix: frequencies_matrix,
-        };
-        let expected_output4 = PileupLine {
-            chromosome: "Chromosome1".to_owned(),
-            position: 456527,
-            reference_allele: "C".to_owned().parse::<char>().unwrap(),
-            coverages: vec![4, 3, 7, 5, 6],
-            read_codes: vec![
-                vec![67, 67, 67, 67],
-                vec![67, 84, 67],
-                vec![67, 68, 67, 84, 67, 67, 84],
-                vec![84, 67, 67, 67, 67],
-                vec![67, 67, 67, 84, 67, 67],
-            ],
-            read_qualities: vec![
-                vec![74, 74, 74, 74],
-                vec![74, 74, 74],
-                vec![74, 70, 74, 70, 74, 70, 74],
-                vec![74, 74, 74, 74, 74],
-                vec![74, 74, 74, 74, 60, 74],
-            ],
-        };
-        // Inputs
-        let line = "Chromosome1\t456527\tC\t4\t....+1c\tJJJJ\t3\t.T.-3atg\tJJJ\t7\t.*.T..T\tJFJFJFJ\t5\tT....\tJJJJJ\t7\t...T...\tJJJJ<7J".to_owned();
-        // Outputs
-        let pileup_line: PileupLine = *(line.lparse().unwrap());
-        let counts = *(pileup_line.to_counts().unwrap());
-        let frequencies = *(pileup_line.to_frequencies().unwrap());
-        let filter_stats = FilterStats {
-            remove_ns: true,
-            min_quality: 0.005,
-            min_coverage: 1,
-            min_allele_frequency: 0.0,
-            pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
-        };
-        let mut filtered_pileup = pileup_line.clone();
-        filtered_pileup.filter(&filter_stats).unwrap();
-        // Assertions
-        assert_eq!(expected_output1, pileup_line);
-        assert_eq!(expected_output2, counts);
-        assert_eq!(expected_output3, frequencies);
-        assert_eq!(expected_output4, filtered_pileup);
+        assert_eq!(
+            counts,
+            LocusCounts {
+                chromosome: "Chromosome1".to_owned(),
+                position: 456527,
+                alleles_vector: vec!["A", "T", "C", "G", "D", "N"]
+                    .into_iter()
+                    .map(|x| x.to_owned())
+                    .collect::<Vec<String>>(),
+                matrix: counts_matrix,
+            }
+        );
+        assert_eq!(
+            frequencies,
+            LocusFrequencies {
+                chromosome: "Chromosome1".to_owned(),
+                position: 456527,
+                alleles_vector: vec!["A", "T", "C", "G", "D", "N"]
+                    .into_iter()
+                    .map(|x| x.to_owned())
+                    .collect::<Vec<String>>(),
+                matrix: frequencies_matrix,
+            }
+        );
     }
 }
