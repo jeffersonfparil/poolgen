@@ -548,8 +548,8 @@ mod tests {
         println!("q={:?}", q);
         // Assertions
         // assert_eq!(0, 1);
-        assert_eq!(mean_cor[(1, 0)].round(), 1.0);
-        assert_eq!(mean_cor[(1, 1)].round(), 1.0);
+        assert_eq!(mean_cor[(3, 0)].round(), 1.0);
+        assert_eq!(mean_cor[(3, 1)].round(), 1.0);
 
         let (tabulated, pred_v_expe, predictor_files) = frequencies_and_phenotypes
             .tabulate_predict_and_output(
