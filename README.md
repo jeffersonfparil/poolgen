@@ -12,23 +12,23 @@ Quantitative and population genetics analyses using pool sequencing data
 
 2. Download this repository
 
-```shell
-git clone https://github.com/jeffersonfparil/poolgen.git
-```
+    ```shell
+    git clone https://github.com/jeffersonfparil/poolgen.git
+    ```
 
 3. Compile and run
 
-```shell
-cd poolgen/
-cargo build --release
-./target/release/poolgen -h
-```
+    ```shell
+    cd poolgen/
+    cargo build --release
+    ./target/release/poolgen -h
+    ```
 
 4. Detailed documentation
 
-```shell
-cargo doc --open
-```
+    ```shell
+    cargo doc --open
+    ```
 
 ## File formats
 

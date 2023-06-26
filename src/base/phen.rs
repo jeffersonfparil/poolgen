@@ -65,7 +65,13 @@ impl Parse<Phen> for FilePhen {
                         + "."),
                 ));
                 for j in 0..k {
-                    if vec_line[trait_values_column_ids[j]] == "".to_string() {
+                    if (vec_line[trait_values_column_ids[j]] == "".to_string())
+                        | (vec_line[trait_values_column_ids[j]] == "NA".to_string())
+                        | (vec_line[trait_values_column_ids[j]] == "NAN".to_string())
+                        | (vec_line[trait_values_column_ids[j]] == "NaN".to_string())
+                        | (vec_line[trait_values_column_ids[j]] == "na".to_string())
+                        | (vec_line[trait_values_column_ids[j]] == "nan".to_string())
+                    {
                         phen_vec.push(f64::NAN)
                     } else {
                         phen_vec.push(vec_line[trait_values_column_ids[j]].parse::<f64>()

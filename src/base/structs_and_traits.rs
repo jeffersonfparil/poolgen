@@ -72,7 +72,7 @@ pub struct PileupLine {
     pub read_qualities: Vec<Vec<u8>>, // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
 }
 
-// Struct of allele counts to convert reads into sync
+/// Allele counts at a locus across pools
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocusCounts {
     pub chromosome: String,
