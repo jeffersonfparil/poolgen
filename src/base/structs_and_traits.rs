@@ -4,7 +4,7 @@ use ndarray::prelude::*;
 use std::io;
 
 /// The entry point genotype file struct, i.e. describing the genotype data in pileup format
-/// - `filename` - filename of the pileup file
+/// - `filename` - filename of the pileup file (`*.pileup`)
 /// - `pool_names` - names of the pools from the phenotype file
 #[derive(Debug, Clone)]
 pub struct FilePileup {
@@ -13,7 +13,7 @@ pub struct FilePileup {
 }
 
 /// The main genotype file struct used for most of the analyses
-/// - `filename` - filename of the synchronised pileup file
+/// - `filename` - filename of the synchronised pileup file (`*.sync`)
 /// - `test` - name of statistical test, i.e. "sync2csv", "fisher_exact_test", "chisq_test", "fst", "heterozygosity, "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "genomic_prediction_cross_validation""
 #[derive(Debug, Clone)]
 pub struct FileSync {
@@ -22,7 +22,11 @@ pub struct FileSync {
 }
 
 /// Filename of the phenotype file which can be a simple delimited file (e.g. csv and tsv) or a specialised GWAlpha phenotype infomation file in a python file.
-/// - `filename` -
+/// - `filename` - filename of the phenotype file (e.g. `*.csv`, `*.txt`, `*.tsv`, or `*.py`)
+/// - `delim` - string delimiter of the phenotype file (e.g. `","` or `"\t"`)
+/// - `names_column_id` - index of the column containing the names of the pools or populations
+/// - `sizes_column_id` - index of the column contating the sizes of each pool or population
+/// 
 #[derive(Debug, Clone)]
 pub struct FilePhen {
     pub filename: String,
@@ -198,6 +202,10 @@ pub trait Filter {
 
 pub trait Sort {
     fn sort_by_allele_freq(&mut self, decreasing: bool) -> io::Result<&mut Self>;
+}
+
+pub trait RemoveMissing {
+    fn remove_missing(&mut self) -> io::Result<&mut Self>;
 }
 
 pub trait ChunkyReadAnalyseWrite<T, F> {

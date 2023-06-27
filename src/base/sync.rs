@@ -402,6 +402,98 @@ impl Sort for LocusFrequencies {
     }
 }
 
+impl RemoveMissing for LocusCountsAndPhenotypes {
+    fn remove_missing(&mut self) -> io::Result<&mut Self> {
+        let (n, k) = self.phenotypes.dim();
+        let n_ = self.pool_names.len();
+        let (n__, p) = self.locus_counts.matrix.dim();
+        assert_eq!(n, n_);
+        assert_eq!(n, n__);
+        let pool_means: Array1<f64> = self.phenotypes.mean_axis(Axis(1)).unwrap();
+        let mut idx: Vec<usize> = vec![];
+        for i in 0..n {
+            if pool_means[i].is_nan() == false {
+                idx.push(i);
+            }
+        }
+        if idx.len() > 0 {
+            let mut new_phenotypes: Array2<f64> = Array2::from_elem((idx.len(), k), f64::NAN);
+            let mut new_pool_names: Vec<String> = vec![];
+            let mut new_locus_counts_matrix: Array2<u64> = Array2::from_elem((idx.len(), p), 0);
+            for i in idx {
+                for j in 0..k {
+                    new_phenotypes[(i, j)] = self.phenotypes[(i, j)];
+                }
+                new_pool_names.push(self.pool_names[i].clone());
+                for j in 0..p {
+                    new_locus_counts_matrix[(i, j)] = self.locus_counts.matrix[(i, j)];
+                }
+            }
+            self.phenotypes = new_phenotypes;
+            self.pool_names = new_pool_names;
+            self.locus_counts.matrix = new_locus_counts_matrix;
+        } else {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "All pools have missing data. Please check the phenotype file.",
+            ));
+        }
+        return Ok(self);
+    }
+}
+
+impl RemoveMissing for GenotypesAndPhenotypes {
+    fn remove_missing(&mut self) -> io::Result<&mut Self> {
+        let (n, k) = self.phenotypes.dim();
+        let n_ = self.pool_names.len();
+        let (n__, p) = self.intercept_and_allele_frequencies.dim();
+        let (n___, l) = self.coverages.dim();
+        assert_eq!(n, n_);
+        assert_eq!(n, n__);
+        assert_eq!(n, n___);
+        let pool_means: Array1<f64> = self.phenotypes.mean_axis(Axis(1)).unwrap();
+        let mut idx: Vec<usize> = vec![];
+        for i in 0..n {
+            if pool_means[i].is_nan() == false {
+                idx.push(i);
+            }
+        }
+        println!("self={:?}", self);
+        println!("self.phenotypes={:?}", self.phenotypes);
+        println!("idx={:?}", idx);
+        if idx.len() > 0 {
+            let mut new_phenotypes: Array2<f64> = Array2::from_elem((idx.len(), k), f64::NAN);
+            let mut new_pool_names: Vec<String> = vec![];
+            let mut new_intercept_and_allele_frequencies: Array2<f64> =
+                Array2::from_elem((idx.len(), p), f64::NAN);
+            let mut new_coverages: Array2<f64> = Array2::from_elem((idx.len(), p), f64::NAN);
+            for i in idx {
+                for j in 0..k {
+                    new_phenotypes[(i, j)] = self.phenotypes[(i, j)];
+                }
+                new_pool_names.push(self.pool_names[i].clone());
+                for j in 0..p {
+                    new_intercept_and_allele_frequencies[(i, j)] =
+                        self.intercept_and_allele_frequencies[(i, j)];
+                }
+                for j in 0..l {
+                    new_coverages[(i, j)] = self.coverages[(i, j)];
+                }
+            }
+            self.phenotypes = new_phenotypes;
+            self.pool_names = new_pool_names;
+            self.intercept_and_allele_frequencies = new_intercept_and_allele_frequencies;
+            self.coverages = new_coverages;
+        } else {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "All pools have missing data. Please check the phenotype file.",
+            ));
+        }
+        return Ok(self);
+    }
+}
+
 impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> Option<String>>
     for FileSync
 {

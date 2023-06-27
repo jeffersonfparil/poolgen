@@ -203,11 +203,11 @@ fn main() {
                 .unwrap();
         } else if args.analysis == String::from("ols_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
-            let genotypes_and_phenotypes = file_sync_phen
+            let mut genotypes_and_phenotypes = file_sync_phen
                 .into_genotypes_and_phenotypes(&filter_stats, args.keep_p_minus_1, &args.n_threads)
                 .unwrap();
             output = ols_with_covariate(
-                &genotypes_and_phenotypes,
+                &mut genotypes_and_phenotypes,
                 args.xxt_eigen_variance_explained,
                 &args.fname.clone(),
                 &args.output,

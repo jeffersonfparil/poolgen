@@ -191,6 +191,8 @@ pub fn ols_iterate(
     locus_counts_and_phenotypes: &mut LocusCountsAndPhenotypes,
     filter_stats: &FilterStats,
 ) -> Option<String> {
+    // Remove pools with missing phenotype information
+    locus_counts_and_phenotypes.remove_missing().unwrap();
     // Check struct
     locus_counts_and_phenotypes.check().unwrap();
     // Filter and extract the allele frequencies
@@ -263,11 +265,13 @@ pub fn ols_iterate(
 }
 
 pub fn ols_with_covariate(
-    genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    genotypes_and_phenotypes: &mut GenotypesAndPhenotypes,
     xxt_eigen_variance_explained: f64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
+    // Remove pools with missing phenotype information
+    genotypes_and_phenotypes.remove_missing().unwrap();
     // Check struct
     genotypes_and_phenotypes.check().unwrap();
     // Generate the covariate
@@ -479,7 +483,7 @@ mod tests {
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(3, 2)] = 2.0;
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(4, 2)] = 1.0;
         let ols_iterate_with_covariate = ols_with_covariate(
-            &genotypes_and_phenotypes,
+            &mut genotypes_and_phenotypes,
             0.5,
             &"test-iterative_ols_with_xxt_eigens.sync".to_owned(),
             &"test-iterative_ols_with_xxt_eigens.csv".to_owned(),
