@@ -133,7 +133,6 @@ impl Regression for UnivariateOrdinaryLeastSquares {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
         let d = StudentsT::new(0.0, 1.0, p as f64 - 1.0).unwrap();
-        // let d = StudentsT::new(0.0, 1.0, 1.0).unwrap();
         self.t = Array1::from_elem(p, f64::NAN);
         self.pval = Array1::from_elem(p, f64::NAN);
         for i in 0..p {
@@ -398,13 +397,21 @@ pub fn ols_with_covariate(
         .unwrap();
     for j in 0..k {
         for i in 0..p {
+            let beta_ = match beta[(i, j)].is_nan() {
+                true => "NaN".to_string(),
+                false => beta[(i, j)].to_string()
+            };
+            let pval_ = match pval[(i, j)].is_nan() {
+                true => "NaN".to_string(),
+                false => pval[(i, j)].to_string()
+            };
             let line = vec![
                 genotypes_and_phenotypes.chromosome[i].to_string(),
                 genotypes_and_phenotypes.position[i].to_string(),
                 genotypes_and_phenotypes.allele[i].clone(),
                 j.to_string(),
-                beta[(i, j)].to_string(),
-                pval[(i, j)].to_string(),
+                beta_,
+                pval_,
             ]
             .join(",")
                 + "\n";
