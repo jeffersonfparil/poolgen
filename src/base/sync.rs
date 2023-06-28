@@ -420,14 +420,16 @@ impl RemoveMissing for LocusCountsAndPhenotypes {
             let mut new_phenotypes: Array2<f64> = Array2::from_elem((idx.len(), k), f64::NAN);
             let mut new_pool_names: Vec<String> = vec![];
             let mut new_locus_counts_matrix: Array2<u64> = Array2::from_elem((idx.len(), p), 0);
+            let mut i_new: usize = 0;
             for i in idx {
                 for j in 0..k {
-                    new_phenotypes[(i, j)] = self.phenotypes[(i, j)];
+                    new_phenotypes[(i_new, j)] = self.phenotypes[(i, j)];
                 }
                 new_pool_names.push(self.pool_names[i].clone());
                 for j in 0..p {
-                    new_locus_counts_matrix[(i, j)] = self.locus_counts.matrix[(i, j)];
+                    new_locus_counts_matrix[(i_new, j)] = self.locus_counts.matrix[(i, j)];
                 }
+                i_new += 1;
             }
             self.phenotypes = new_phenotypes;
             self.pool_names = new_pool_names;
@@ -458,27 +460,26 @@ impl RemoveMissing for GenotypesAndPhenotypes {
                 idx.push(i);
             }
         }
-        println!("self={:?}", self);
-        println!("self.phenotypes={:?}", self.phenotypes);
-        println!("idx={:?}", idx);
         if idx.len() > 0 {
             let mut new_phenotypes: Array2<f64> = Array2::from_elem((idx.len(), k), f64::NAN);
             let mut new_pool_names: Vec<String> = vec![];
             let mut new_intercept_and_allele_frequencies: Array2<f64> =
                 Array2::from_elem((idx.len(), p), f64::NAN);
-            let mut new_coverages: Array2<f64> = Array2::from_elem((idx.len(), p), f64::NAN);
-            for i in idx {
+            let mut new_coverages: Array2<f64> = Array2::from_elem((idx.len(), l), f64::NAN);
+            let mut i_new: usize = 0;
+            for i in idx.clone() {
                 for j in 0..k {
-                    new_phenotypes[(i, j)] = self.phenotypes[(i, j)];
+                    new_phenotypes[(i_new, j)] = self.phenotypes[(i, j)];
                 }
                 new_pool_names.push(self.pool_names[i].clone());
                 for j in 0..p {
-                    new_intercept_and_allele_frequencies[(i, j)] =
+                    new_intercept_and_allele_frequencies[(i_new, j)] =
                         self.intercept_and_allele_frequencies[(i, j)];
                 }
                 for j in 0..l {
-                    new_coverages[(i, j)] = self.coverages[(i, j)];
+                    new_coverages[(i_new, j)] = self.coverages[(i, j)];
                 }
+                i_new += 1;
             }
             self.phenotypes = new_phenotypes;
             self.pool_names = new_pool_names;
@@ -490,6 +491,9 @@ impl RemoveMissing for GenotypesAndPhenotypes {
                 "All pools have missing data. Please check the phenotype file.",
             ));
         }
+        // println!("self={:?}", self);
+        // println!("self.phenotypes={:?}", self.phenotypes);
+        // println!("idx={:?}", idx);
         return Ok(self);
     }
 }

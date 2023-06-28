@@ -136,14 +136,21 @@ impl Regression for UnivariateOrdinaryLeastSquares {
         self.t = Array1::from_elem(p, f64::NAN);
         self.pval = Array1::from_elem(p, f64::NAN);
         for i in 0..p {
-            self.t[i] = self.b[i] / self.v_b[i].sqrt();
-            if self.t[i].is_infinite() {
-                self.pval[i] = 0.0
+            self.t[i] = if self.b[i].abs() <= f64::EPSILON {
+                0.0
+            } else {
+                self.b[i] / self.v_b[i].sqrt()
+            };
+            if self.t[i].abs() <= f64::EPSILON {
+                self.pval[i] = 1.0
             } else if self.t[i].is_nan() {
                 self.pval[i] = 1.0
             } else {
                 self.pval[i] = 2.00 * (1.00 - d.cdf(self.t[i].abs()));
             }
+            // println!("self.b[i]={:?}", self.b[i]);
+            // println!("self.t[i]={:?}", self.t[i]);
+            // println!("self.pval[i]={:?}", self.pval[i]);
         }
         Ok(self)
     }
@@ -236,7 +243,7 @@ pub fn ols_iterate(
     let y_matrix = locus_counts_and_phenotypes.phenotypes.clone();
     // OLS and compute the p-values associated with each estimate
     let (beta, _var_beta, pval): (Array2<f64>, Array2<f64>, Array2<f64>) =
-        match ols(&x_matrix, &y_matrix, true) {
+        match ols(&x_matrix, &y_matrix, false) {
             Ok(x) => x,
             Err(_) => return None,
         };
@@ -399,11 +406,11 @@ pub fn ols_with_covariate(
         for i in 0..p {
             let beta_ = match beta[(i, j)].is_nan() {
                 true => "NaN".to_string(),
-                false => beta[(i, j)].to_string()
+                false => beta[(i, j)].to_string(),
             };
             let pval_ = match pval[(i, j)].is_nan() {
                 true => "NaN".to_string(),
-                false => pval[(i, j)].to_string()
+                false => pval[(i, j)].to_string(),
             };
             let line = vec![
                 genotypes_and_phenotypes.chromosome[i].to_string(),
