@@ -26,7 +26,7 @@ pub struct FileSync {
 /// - `delim` - string delimiter of the phenotype file (e.g. `","` or `"\t"`)
 /// - `names_column_id` - index of the column containing the names of the pools or populations
 /// - `sizes_column_id` - index of the column contating the sizes of each pool or population
-/// 
+/// - `trait_values_column_ids` - 
 #[derive(Debug, Clone)]
 pub struct FilePhen {
     pub filename: String,

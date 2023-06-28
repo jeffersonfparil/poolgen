@@ -133,10 +133,11 @@ impl Regression for UnivariateOrdinaryLeastSquares {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
         let d = StudentsT::new(0.0, 1.0, p as f64 - 1.0).unwrap();
+        // let d = StudentsT::new(0.0, 1.0, 1.0).unwrap();
         self.t = Array1::from_elem(p, f64::NAN);
         self.pval = Array1::from_elem(p, f64::NAN);
         for i in 0..p {
-            self.t[i] = self.b[i] / self.v_b[i];
+            self.t[i] = self.b[i] / self.v_b[i].sqrt();
             if self.t[i].is_infinite() {
                 self.pval[i] = 0.0
             } else if self.t[i].is_nan() {
@@ -494,7 +495,25 @@ mod tests {
             "test-iterative_ols_with_xxt_eigens.csv".to_owned()
         );
         // Outputs
+
+        let x: Array2<f64> = Array2::from_shape_vec(
+            (5, 3),
+            vec![
+                1.0, 0.4, 0.1, 1.0, 0.2, 0.1, 1.0, 0.3, 0.2, 1.0, 0.4, 0.3, 1.0, 0.5, 0.5,
+            ],
+        )
+        .unwrap();
+        let y: Array2<f64> = Array2::from_shape_vec(
+            (5, 2),
+            vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
+        )
+        .unwrap();
+
         let (beta, var_beta, pval) = ols(&x, &y, true).unwrap();
+        println!("beta={:?}", beta);
+        println!("var_beta={:?}", var_beta);
+        println!("pval={:?}", pval);
+        // assert_eq!(0, 1);
         let p1 = beta.nrows();
         let k1 = beta.ncols();
         let p2 = var_beta.nrows();
