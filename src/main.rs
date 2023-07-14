@@ -85,9 +85,9 @@ struct Args {
     /// Genomic prediction cross-validation: number of replicates of k-fold cross-validation
     #[clap(long, default_value_t = 3)]
     n_reps: usize,
-    /// Estimation of intra-population nucleotide diversity per window, i.e. pi or simply heterozygosiy of loci per population per window
+    /// Estimation of intra-population nucleotide diversity per window, i.e. pi or simply heterozygosiy of loci per population per window: window size in terms of number of bases
     #[clap(long, default_value_t = 100)]
-    window_size_kb: usize,
+    window_size_bp: usize,
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
@@ -310,7 +310,7 @@ fn main() {
                 .unwrap();
             output = pi(
                 &genotypes_and_phenotypes,
-                &args.window_size_kb,
+                &args.window_size_bp,
                 &args.fname,
                 &args.output,
             )

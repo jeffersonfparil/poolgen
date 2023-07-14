@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
-    window_size_kb: &usize,
+    window_size_bp: &usize,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
@@ -79,7 +79,7 @@ pub fn pi(
         let pos = loci_pos[i];
         if (chr != windows_chr.last().unwrap())
             | ((chr == windows_chr.last().unwrap())
-                & (pos > &(windows_pos.last().unwrap() + &(*window_size_kb as u64))))
+                & (pos > &(windows_pos.last().unwrap() + &(*window_size_bp as u64))))
         {
             windows_idx.push(i);
             windows_chr.push(chr.to_owned());
@@ -146,7 +146,7 @@ pub fn pi(
     for i in 0..n_windows {
         let window_chr = windows_chr[i].clone();
         let window_pos_ini = windows_pos[i];
-        let window_pos_fin = window_pos_ini + (*window_size_kb as u64);
+        let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
         line.push(
             "Window-".to_owned()
                 + &window_chr
