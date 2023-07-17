@@ -105,11 +105,15 @@ pub fn pi(
         }
     }
     let vec_pi_across_windows = pi_per_pool_across_windows.mean_axis(Axis(0)).unwrap();
-    println!(
-        "pi_per_pool_across_windows={:?}",
-        pi_per_pool_across_windows
-    );
-    println!("vec_pi_across_windows={:?}", vec_pi_across_windows);
+    // println!("n={}", n);
+    // println!("m={}", m);
+    // println!("l={}", l);
+    // println!("n_windows={}", n_windows);
+    // println!(
+    //     "pi_per_pool_across_windows={:?}",
+    //     pi_per_pool_across_windows
+    // );
+    // println!("vec_pi_across_windows={:?}", vec_pi_across_windows);
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -164,7 +168,7 @@ pub fn pi(
             + ","
             + &vec_pi_across_windows[i].to_string()
             + ","
-            + &pi
+            + &pi_per_pool_across_windows
                 .column(i)
                 .iter()
                 .map(|x| parse_f64_roundup_and_own(*x, 4))
