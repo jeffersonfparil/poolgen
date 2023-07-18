@@ -169,7 +169,7 @@ pub fn pi(
             + &vec_pi_across_windows[i].to_string()
             + ","
             + &pi_per_pool_across_windows
-                .row(i)
+                .column(i)
                 .iter()
                 .map(|x| parse_f64_roundup_and_own(*x, 4))
                 .collect::<Vec<String>>()
