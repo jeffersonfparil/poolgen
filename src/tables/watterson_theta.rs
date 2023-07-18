@@ -4,8 +4,7 @@ use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Unbiased multi-allelic nucleotide diversity per population ($\pi$ or $\theta_{\pi}=4N_{e}\mu$), which is similar to [Korunes & Samuk 2019](https://doi.org/10.1111/1755-0998.13326) which assumes biallelic loci
-pub fn pi(
+pub fn theta_w(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
     fname_input: &String,
@@ -35,41 +34,43 @@ pub fn pi(
     loci_pos.push(genotypes_and_phenotypes.position.last().unwrap()); // last allele of the last locus
     let l = loci_idx.len();
     assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
-    // Each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
-    let mut pi: Array2<f64> = Array2::from_elem((l - 1, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
-    let loci: Array2<usize> = Array2::from_shape_vec(
-        (l - 1, n),
-        (0..(l - 1))
-            .flat_map(|x| std::iter::repeat(x).take(n))
-            .collect(),
-    )
-    .unwrap();
-    let pop: Array2<usize> = Array2::from_shape_vec(
-        (l - 1, n),
-        std::iter::repeat((0..n).collect::<Vec<usize>>())
-            .take(l - 1)
-            .flat_map(|x| x)
-            .collect(),
-    )
-    .unwrap();
-    // Parallel computations
-    Zip::from(&mut pi)
-        .and(&loci)
-        .and(&pop)
-        .par_for_each(|pi_, &i, &j| {
-            let idx_start = loci_idx[i];
-            let idx_end = loci_idx[i + 1];
-            let g = genotypes_and_phenotypes
-                .intercept_and_allele_frequencies
-                .slice(s![.., idx_start..idx_end]);
-            let nj = genotypes_and_phenotypes.coverages[(j, i)];
-            // Nucleotide diversity (~ heterozygosity), where population across rows which means each column is the same value
-            *pi_ = ((g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                * (nj / (nj - 1.00 + f64::EPSILON)))
-                - (nj / (nj - 1.00 + f64::EPSILON)))
-                .abs(); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-        });
-    // Summarize per non-overlapping window
+
+    // // theta is the nucleotide diversity per population, and each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
+    // let mut pi: Array2<f64> = Array2::from_elem((l - 1, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    // let loci: Array2<usize> = Array2::from_shape_vec(
+    //     (l - 1, n),
+    //     (0..(l - 1))
+    //         .flat_map(|x| std::iter::repeat(x).take(n))
+    //         .collect(),
+    // )
+    // .unwrap();
+    // let pop: Array2<usize> = Array2::from_shape_vec(
+    //     (l - 1, n),
+    //     std::iter::repeat((0..n).collect::<Vec<usize>>())
+    //         .take(l - 1)
+    //         .flat_map(|x| x)
+    //         .collect(),
+    // )
+    // .unwrap();
+    // // Parallel computations
+    // Zip::from(&mut pi)
+    //     .and(&loci)
+    //     .and(&pop)
+    //     .par_for_each(|pi_, &i, &j| {
+    //         let idx_start = loci_idx[i];
+    //         let idx_end = loci_idx[i + 1];
+    //         let g = genotypes_and_phenotypes
+    //             .intercept_and_allele_frequencies
+    //             .slice(s![.., idx_start..idx_end]);
+    //         let nj = genotypes_and_phenotypes.coverages[(j, i)];
+    //         // Nucleotide diversity (~ heterozygosity), where population across rows which means each column is the same value
+    //         *pi_ = ((g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+    //             * (nj / (nj - 1.00 + f64::EPSILON)))
+    //             - (nj / (nj - 1.00 + f64::EPSILON)))
+    //             .abs(); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+    //     });
+    // // Summarize per non-overlapping window
+    
     // Find window indices making sure we respect chromosomal boundaries
     let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
@@ -91,7 +92,7 @@ pub fn pi(
     windows_idx.push(m);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap() - 1);
-    // Take the means per window
+    // Calculate Watterson's estimator per window
     let n_windows = windows_idx.len() - 1;
     let mut pi_per_pool_across_windows: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
     for i in 0..n_windows {

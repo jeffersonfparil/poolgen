@@ -4,6 +4,7 @@ use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Unbiased multi-allelic version of Fst similar to [Gautier et al, 2019](https://doi.org/10.1111/1755-0998.13557) which assumes biallelic loci
 pub fn fst(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     fname_input: &String,
@@ -25,7 +26,6 @@ pub fn fst(
     loci_idx.push(p); // last allele of the last locus
     let l = loci_idx.len();
     assert_eq!(l - 1, genotypes_and_phenotypes.coverages.ncols());
-    // Unbiased multi-allelic version of Fst similar to Gautier et al, 2019 which assumes biallelic loci
     let mut fst: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     let loci: Array3<usize> = Array3::from_shape_vec(
         (l - 1, n, n),
