@@ -105,10 +105,10 @@ pub fn pi(
         }
     }
     let vec_pi_across_windows = pi_per_pool_across_windows.mean_axis(Axis(0)).unwrap();
-    println!("n={}", n);
-    println!("m={}", m);
-    println!("l={}", l);
-    println!("n_windows={}", n_windows);
+    // println!("n={}", n);
+    // println!("m={}", m);
+    // println!("l={}", l);
+    // println!("n_windows={}", n_windows);
     // println!(
     //     "pi_per_pool_across_windows={:?}",
     //     pi_per_pool_across_windows
