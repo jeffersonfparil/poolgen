@@ -256,6 +256,6 @@ mod tests {
         assert_eq!(pop2_locus2, 0.0);
         assert_eq!(pop3_locus1, 0.2324);
         assert_eq!(pop3_locus2, 0.2324);
-        // assert_eq!(0, 1);
+        // assert_eq!(0, 2);
     }
 }
