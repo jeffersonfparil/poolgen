@@ -1,96 +1,119 @@
 use crate::base::*;
-use ndarray::{prelude::*, Zip};
+use ndarray::prelude::*;
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-
 /// Watterson's estimator of theta
 /// Simply (naively?) defined as $theta_w = number of segregating sites / \Sigma^{n-1}_{i=1}(1/i)$
 /// For details see [Feretti et al, 2013](https://doi.org/10.1111/mec.12522)
-pub fn theta_w(
+pub fn theta_watterson(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
     window_size_bp: &usize,
-    fname_input: &String,
-    fname_output: &String,
-) -> io::Result<String> {
+) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
     let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
     assert_eq!(p, genotypes_and_phenotypes.chromosome.len(), "The number of entries in the 'chromosome' field and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'chromosome' fields of 'GenotypesAndPhenotypes' struct.");
     assert_eq!(p, genotypes_and_phenotypes.position.len(), "The number of entries in the 'position' field and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'chromosome' fields of 'GenotypesAndPhenotypes' struct.");
     // Count the number of loci (Note: assumes the loci are sorted) and extract the loci coordinates
-    let mut loci_idx: Vec<usize> = vec![];
-    let mut loci_chr: Vec<&String> = vec![];
-    let mut loci_pos: Vec<&u64> = vec![];
-    for i in 1..p {
-        // includes the intercept
-        if (genotypes_and_phenotypes.chromosome[i - 1] != genotypes_and_phenotypes.chromosome[i])
-            | (genotypes_and_phenotypes.position[i - 1] != genotypes_and_phenotypes.position[i])
-        {
-            loci_idx.push(i);
-            loci_chr.push(&genotypes_and_phenotypes.chromosome[i]);
-            loci_pos.push(&genotypes_and_phenotypes.position[i]);
-        }
-    }
-    loci_idx.push(p); // last allele of the last locus
-    loci_chr.push(genotypes_and_phenotypes.chromosome.last().unwrap()); // last allele of the last locus
-    loci_pos.push(genotypes_and_phenotypes.position.last().unwrap()); // last allele of the last locus
-    let l = loci_idx.len();
-    assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
-    // Find window indices making sure we respect chromosomal boundaries
-    let m = loci_idx.len() - 1; // total number of loci x alleles, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
-    let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
-    let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
-    let mut windows_pos: Vec<u64> = vec![*loci_pos[0] as u64];
+    let mut windows_chr: Vec<String> = vec![genotypes_and_phenotypes.chromosome[1].to_owned()];
+    let mut windows_pos: Vec<u64> = vec![genotypes_and_phenotypes.position[1] as u64];
     let mut window_n_sites: Vec<u64> = vec![1 as u64];
     let mut window_n_polymorphic_sites: Vec<Vec<u64>> = vec![vec![]];
-    let idx = windows_chr.len()-1;
+    let idx = windows_chr.len() - 1;
     for j in 0..n {
         window_n_polymorphic_sites[idx].push(0);
-        let freq = genotypes_and_phenotypes.intercept_and_allele_frequencies[(j, 0+1)];
+        let freq = genotypes_and_phenotypes.intercept_and_allele_frequencies[(j, 0 + 1)];
         if (freq > 0.0) & (freq < 1.0) {
             window_n_polymorphic_sites[idx][j] += 1;
         }
     }
-    for i in 1..m {
-        let chr = loci_chr[i];
-        let pos = loci_pos[i];
-        if (chr != windows_chr.last().unwrap())
-            | ((chr == windows_chr.last().unwrap())
-                & (pos > &(windows_pos.last().unwrap() + &(*window_size_bp as u64))))
+    for i in 2..p {
+        if (genotypes_and_phenotypes.chromosome[i - 1] != genotypes_and_phenotypes.chromosome[i])
+            | (genotypes_and_phenotypes.position[i - 1] != genotypes_and_phenotypes.position[i])
         {
-            windows_idx.push(i);
-            windows_chr.push(chr.to_owned());
-            windows_pos.push(*pos);
-            window_n_sites.push(0);
-            window_n_polymorphic_sites.push(vec![]);
+            let chr = &genotypes_and_phenotypes.chromosome[i];
+            let pos = &genotypes_and_phenotypes.position[i];
+            // println!("windows_chr={:?}", windows_chr);
+            // println!("windows_pos={:?}", windows_pos);
+            // println!("chr={:?}", chr);
+            // println!("pos={:?}", pos);
+            if (chr != windows_chr.last().unwrap())
+                | ((chr == windows_chr.last().unwrap())
+                    & (pos > &(windows_pos.last().unwrap() + &(*window_size_bp as u64))))
+            {
+                windows_chr.push(chr.to_owned());
+                windows_pos.push(*pos);
+                window_n_sites.push(0);
+                window_n_polymorphic_sites.push(vec![]);
+                let idx = windows_chr.len() - 1;
+                window_n_sites[idx] += 1;
+                for j in 0..n {
+                    window_n_polymorphic_sites[idx].push(0);
+                    let freq = genotypes_and_phenotypes.intercept_and_allele_frequencies[(j, i)];
+                    if (freq > 0.0) & (freq < 1.0) {
+                        window_n_polymorphic_sites[idx][j] += 1;
+                    }
+                }
+            }
         }
-        let idx = windows_chr.len()-1;
+        let idx = windows_chr.len() - 1;
         window_n_sites[idx] += 1;
         for j in 0..n {
-            window_n_polymorphic_sites[idx].push(0);
-            let freq = genotypes_and_phenotypes.intercept_and_allele_frequencies[(j, i+1)];
+            let freq = genotypes_and_phenotypes.intercept_and_allele_frequencies[(j, i)];
             if (freq > 0.0) & (freq < 1.0) {
                 window_n_polymorphic_sites[idx][j] += 1;
             }
         }
     }
     // Add the last index of the final position
-    windows_idx.push(m);
-    windows_chr.push(windows_chr.last().unwrap().to_owned());
-    windows_pos.push(*loci_pos.last().unwrap() - 1);
+    windows_chr.push(
+        genotypes_and_phenotypes
+            .chromosome
+            .last()
+            .unwrap()
+            .to_owned(),
+    );
+    windows_pos.push(*genotypes_and_phenotypes.position.last().unwrap() - 1);
     // Calculate Watterson's estimator per window
-    let n_windows = windows_idx.len() - 1;
-    let mut watterson_theta_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
+    let n_windows = windows_chr.len() - 1;
+    let mut watterson_theta_per_pool_per_window: Array2<f64> =
+        Array2::from_elem((n_windows, n), f64::NAN);
     for i in 0..n_windows {
         for j in 0..n {
-            let n_segregating_sites = window_n_polymorphic_sites[i][j] as f64;
-            let correction_factor = (1..(pool_sizes[j] as usize)).fold(0.0, |sum, x| sum + 1.0/(x as f64));
+            let n_segregating_sites =
+                (window_n_polymorphic_sites[i][j] as f64) / (window_n_sites[i] as f64);
+
+            // Note: Do we need to account for coverage instead of pool sizes?
+            let correction_factor =
+                (1..(pool_sizes[j] as usize)).fold(0.0, |sum, x| sum + 1.0 / (x as f64));
+
             watterson_theta_per_pool_per_window[(i, j)] = n_segregating_sites / correction_factor;
         }
     }
+    Ok((
+        watterson_theta_per_pool_per_window,
+        windows_chr,
+        windows_pos,
+    ))
+}
+
+/// Estimate and save into a csv file
+pub fn watterson_estimator(
+    genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    pool_sizes: &Vec<f64>,
+    window_size_bp: &usize,
+    fname_input: &String,
+    fname_output: &String,
+) -> io::Result<String> {
+    // Calculate Watterson's estimator
+    let (watterson_theta_per_pool_per_window, windows_chr, windows_pos) =
+        theta_watterson(genotypes_and_phenotypes, pool_sizes, window_size_bp).unwrap();
+    // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
+    let n = watterson_theta_per_pool_per_window.ncols();
+    let n_windows = windows_chr.len() - 1;
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -165,11 +188,8 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
-                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
+                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
             ],
         )
         .unwrap();
@@ -214,7 +234,7 @@ mod tests {
             .unwrap(),
         };
         // Outputs
-        let out = theta_w(
+        let out = watterson_estimator(
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
             &100, // 100-kb windows
@@ -254,7 +274,7 @@ mod tests {
         let pop3_locus2 = watterson[(2, 1)]; // locus at 0.5, i.e. watterson = 50 / (100-1) = 0.5051
         assert_eq!(pop2_locus1, 0.0);
         assert_eq!(pop2_locus2, 0.0);
-        assert_eq!(pop3_locus1, 0.2324);
+        assert_eq!(pop3_locus1, 0.1549);
         assert_eq!(pop3_locus2, 0.2324);
         // assert_eq!(0, 2);
     }

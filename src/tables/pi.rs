@@ -5,12 +5,10 @@ use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unbiased multi-allelic nucleotide diversity per population ($\pi$ or $\theta_{\pi}=4N_{e}\mu$), which is similar to [Korunes & Samuk 2019](https://doi.org/10.1111/1755-0998.13326) which assumes biallelic loci
-pub fn pi(
+pub fn theta_pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
-    fname_input: &String,
-    fname_output: &String,
-) -> io::Result<String> {
+) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
     let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
@@ -93,28 +91,33 @@ pub fn pi(
     windows_pos.push(*loci_pos.last().unwrap() - 1);
     // Take the means per window
     let n_windows = windows_idx.len() - 1;
-    let mut pi_per_pool_across_windows: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
+    let mut pi_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
     for i in 0..n_windows {
         let idx_start = windows_idx[i];
         let idx_end = windows_idx[i + 1];
         for j in 0..n {
-            pi_per_pool_across_windows[(i, j)] = pi
+            pi_per_pool_per_window[(i, j)] = pi
                 .slice(s![idx_start..idx_end, j])
                 .mean_axis(Axis(0))
                 .unwrap()
                 .fold(0.0, |_, &x| x);
         }
     }
-    let vec_pi_across_windows = pi_per_pool_across_windows.mean_axis(Axis(0)).unwrap();
-    // println!("n={}", n);
-    // println!("m={}", m);
-    // println!("l={}", l);
-    // println!("n_windows={}", n_windows);
-    // println!(
-    //     "pi_per_pool_across_windows={:?}",
-    //     pi_per_pool_across_windows
-    // );
-    // println!("vec_pi_across_windows={:?}", vec_pi_across_windows);
+    Ok((pi_per_pool_per_window, windows_chr, windows_pos))
+}
+
+pub fn pi(
+    genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    window_size_bp: &usize,
+    fname_input: &String,
+    fname_output: &String,
+) -> io::Result<String> {
+    // Calculate heterozygosities
+    let (pi_per_pool_per_window, windows_chr, windows_pos) =
+        theta_pi(genotypes_and_phenotypes, window_size_bp).unwrap();
+    let n = pi_per_pool_per_window.ncols();
+    let n_windows = windows_chr.len();
+    let vec_pi_across_windows = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -169,7 +172,7 @@ pub fn pi(
             + ","
             + &vec_pi_across_windows[i].to_string()
             + ","
-            + &pi_per_pool_across_windows
+            + &pi_per_pool_per_window
                 .column(i)
                 .iter()
                 .map(|x| parse_f64_roundup_and_own(*x, 4))

@@ -306,8 +306,8 @@ fn main() {
         } else if args.analysis == String::from("heterozygosity") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             let genotypes_and_phenotypes = file_sync_phen
-                .into_genotypes_and_phenotypes(&filter_stats, args.keep_p_minus_1, &args.n_threads)
-                .unwrap();
+                .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
+                .unwrap(); // we need all alleles in each locus
             output = pi(
                 &genotypes_and_phenotypes,
                 &args.window_size_bp,
