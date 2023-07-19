@@ -67,11 +67,11 @@ pub fn pi(
             *pi_ = ((g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
                 * (nj / (nj - 1.00 + f64::EPSILON)))
                 - (nj / (nj - 1.00 + f64::EPSILON)))
-                .abs(); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+                .abs(); // equivalent to (n/(n-1))*(1-sum(p^2)) with a n/(n-1) factor on the heteroygosity to make it unbiased
         });
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
-    let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
+    let m = loci_idx.len() - 1; // total number of loci x alleles, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![*loci_pos[0] as u64];

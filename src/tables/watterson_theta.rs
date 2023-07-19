@@ -4,8 +4,13 @@ use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+
+/// Watterson's estimator of theta
+/// Simply (naively?) defined as $theta_w = number of segregating sites / \Sigma^{n-1}_{i=1}(1/i)$
+/// For details see [Feretti et al, 2013](https://doi.org/10.1111/mec.12522)
 pub fn theta_w(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    pool_sizes: &Vec<f64>,
     window_size_bp: &usize,
     fname_input: &String,
     fname_output: &String,
@@ -34,48 +39,21 @@ pub fn theta_w(
     loci_pos.push(genotypes_and_phenotypes.position.last().unwrap()); // last allele of the last locus
     let l = loci_idx.len();
     assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
-
-    // // theta is the nucleotide diversity per population, and each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
-    // let mut pi: Array2<f64> = Array2::from_elem((l - 1, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
-    // let loci: Array2<usize> = Array2::from_shape_vec(
-    //     (l - 1, n),
-    //     (0..(l - 1))
-    //         .flat_map(|x| std::iter::repeat(x).take(n))
-    //         .collect(),
-    // )
-    // .unwrap();
-    // let pop: Array2<usize> = Array2::from_shape_vec(
-    //     (l - 1, n),
-    //     std::iter::repeat((0..n).collect::<Vec<usize>>())
-    //         .take(l - 1)
-    //         .flat_map(|x| x)
-    //         .collect(),
-    // )
-    // .unwrap();
-    // // Parallel computations
-    // Zip::from(&mut pi)
-    //     .and(&loci)
-    //     .and(&pop)
-    //     .par_for_each(|pi_, &i, &j| {
-    //         let idx_start = loci_idx[i];
-    //         let idx_end = loci_idx[i + 1];
-    //         let g = genotypes_and_phenotypes
-    //             .intercept_and_allele_frequencies
-    //             .slice(s![.., idx_start..idx_end]);
-    //         let nj = genotypes_and_phenotypes.coverages[(j, i)];
-    //         // Nucleotide diversity (~ heterozygosity), where population across rows which means each column is the same value
-    //         *pi_ = ((g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-    //             * (nj / (nj - 1.00 + f64::EPSILON)))
-    //             - (nj / (nj - 1.00 + f64::EPSILON)))
-    //             .abs(); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-    //     });
-    // // Summarize per non-overlapping window
-    
     // Find window indices making sure we respect chromosomal boundaries
-    let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
+    let m = loci_idx.len() - 1; // total number of loci x alleles, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![*loci_pos[0] as u64];
+    let mut window_n_sites: Vec<u64> = vec![1 as u64];
+    let mut window_n_polymorphic_sites: Vec<Vec<u64>> = vec![vec![]];
+    let idx = windows_chr.len()-1;
+    for j in 0..n {
+        window_n_polymorphic_sites[idx].push(0);
+        let freq = genotypes_and_phenotypes.intercept_and_allele_frequencies[(j, 0+1)];
+        if (freq > 0.0) & (freq < 1.0) {
+            window_n_polymorphic_sites[idx][j] += 1;
+        }
+    }
     for i in 1..m {
         let chr = loci_chr[i];
         let pos = loci_pos[i];
@@ -86,6 +64,17 @@ pub fn theta_w(
             windows_idx.push(i);
             windows_chr.push(chr.to_owned());
             windows_pos.push(*pos);
+            window_n_sites.push(0);
+            window_n_polymorphic_sites.push(vec![]);
+        }
+        let idx = windows_chr.len()-1;
+        window_n_sites[idx] += 1;
+        for j in 0..n {
+            window_n_polymorphic_sites[idx].push(0);
+            let freq = genotypes_and_phenotypes.intercept_and_allele_frequencies[(j, i+1)];
+            if (freq > 0.0) & (freq < 1.0) {
+                window_n_polymorphic_sites[idx][j] += 1;
+            }
         }
     }
     // Add the last index of the final position
@@ -94,28 +83,14 @@ pub fn theta_w(
     windows_pos.push(*loci_pos.last().unwrap() - 1);
     // Calculate Watterson's estimator per window
     let n_windows = windows_idx.len() - 1;
-    let mut pi_per_pool_across_windows: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
+    let mut watterson_theta_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
     for i in 0..n_windows {
-        let idx_start = windows_idx[i];
-        let idx_end = windows_idx[i + 1];
         for j in 0..n {
-            pi_per_pool_across_windows[(i, j)] = pi
-                .slice(s![idx_start..idx_end, j])
-                .mean_axis(Axis(0))
-                .unwrap()
-                .fold(0.0, |_, &x| x);
+            let n_segregating_sites = window_n_polymorphic_sites[i][j] as f64;
+            let correction_factor = (1..(pool_sizes[j] as usize)).fold(0.0, |sum, x| sum + 1.0/(x as f64));
+            watterson_theta_per_pool_per_window[(i, j)] = n_segregating_sites / correction_factor;
         }
     }
-    let vec_pi_across_windows = pi_per_pool_across_windows.mean_axis(Axis(0)).unwrap();
-    // println!("n={}", n);
-    // println!("m={}", m);
-    // println!("l={}", l);
-    // println!("n_windows={}", n_windows);
-    // println!(
-    //     "pi_per_pool_across_windows={:?}",
-    //     pi_per_pool_across_windows
-    // );
-    // println!("vec_pi_across_windows={:?}", vec_pi_across_windows);
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -137,7 +112,7 @@ pub fn theta_w(
             .rev()
             .collect::<Vec<String>>()
             .join(".");
-        fname_output = bname.to_owned() + "-pi-" + &time.to_string() + ".csv";
+        fname_output = bname.to_owned() + "-watterson-" + &time.to_string() + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
@@ -148,7 +123,7 @@ pub fn theta_w(
         .open(&fname_output)
         .expect(&error_writing_file);
     // Header
-    let mut line: Vec<String> = vec!["Pool".to_owned(), "Mean_across_windows".to_owned()];
+    let mut line: Vec<String> = vec!["Pool".to_owned()];
     for i in 0..n_windows {
         let window_chr = windows_chr[i].clone();
         let window_pos_ini = windows_pos[i];
@@ -168,9 +143,7 @@ pub fn theta_w(
     for i in 0..n {
         let line = genotypes_and_phenotypes.pool_names[i].to_owned()
             + ","
-            + &vec_pi_across_windows[i].to_string()
-            + ","
-            + &pi_per_pool_across_windows
+            + &watterson_theta_per_pool_per_window
                 .column(i)
                 .iter()
                 .map(|x| parse_f64_roundup_and_own(*x, 4))
@@ -188,12 +161,15 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     #[test]
-    fn test_pi() {
+    fn test_theta_w() {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
-                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
+                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
+                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
+                1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
             ],
         )
         .unwrap();
@@ -238,8 +214,9 @@ mod tests {
             .unwrap(),
         };
         // Outputs
-        let out = pi(
+        let out = theta_w(
             &genotypes_and_phenotypes,
+            &vec![42.0, 42.0, 42.0, 42.0, 42.0],
             &100, // 100-kb windows
             &"test.something".to_owned(),
             &"".to_owned(),
@@ -249,7 +226,7 @@ mod tests {
         let reader = std::io::BufReader::new(file);
         let mut header: Vec<String> = vec![];
         let mut pop: Vec<String> = vec![];
-        let mut pi: Vec<f64> = vec![];
+        let mut watterson: Vec<f64> = vec![];
         for line in reader.lines() {
             let split = line
                 .unwrap()
@@ -265,19 +242,20 @@ mod tests {
                     .map(|x| x.parse::<f64>().unwrap())
                     .collect::<Vec<f64>>()
                 {
-                    pi.push(f);
+                    watterson.push(f);
                 }
             }
         }
-        let pi: Array2<f64> = Array2::from_shape_vec((5, 3), pi).unwrap();
-        let pop2_locus1 = pi[(1, 1)]; // locus fixed, i.e. pi=0.0
-        let pop2_locus2 = pi[(1, 2)]; // locus fixed, i.e. pi=0.0
-        let pop5_locus1 = pi[(4, 1)]; // locus fixed, i.e. pi=0.0
-        let pop5_locus2 = pi[(4, 2)]; // locus at 0.5, i.e. pi = 50 / (100-1) = 0.5051
+        let watterson: Array2<f64> = Array2::from_shape_vec((5, 2), watterson).unwrap();
+        println!("watterson={:?}", watterson);
+        let pop2_locus1 = watterson[(1, 0)]; // locus fixed, i.e. watterson=0.0
+        let pop2_locus2 = watterson[(1, 1)]; // locus fixed, i.e. watterson=0.0
+        let pop3_locus1 = watterson[(2, 0)]; // locus fixed, i.e. watterson=0.0
+        let pop3_locus2 = watterson[(2, 1)]; // locus at 0.5, i.e. watterson = 50 / (100-1) = 0.5051
         assert_eq!(pop2_locus1, 0.0);
         assert_eq!(pop2_locus2, 0.0);
-        assert_eq!(pop5_locus1, 0.0);
-        assert_eq!(pop5_locus2, 0.5051);
+        assert_eq!(pop3_locus1, 0.2324);
+        assert_eq!(pop3_locus2, 0.2324);
         // assert_eq!(0, 1);
     }
 }
