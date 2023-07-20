@@ -117,6 +117,7 @@ pub fn watterson_estimator(
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let n = watterson_theta_per_pool_per_window.ncols();
     let n_windows = windows_chr.len() - 1;
+    let vec_watterson_theta_across_windows = watterson_theta_per_pool_per_window.mean_axis(Axis(0)).unwrap();
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -169,6 +170,8 @@ pub fn watterson_estimator(
     for i in 0..n {
         let line = genotypes_and_phenotypes.pool_names[i].to_owned()
             + ","
+            + &vec_watterson_theta_across_windows[i].to_string()
+            + ","
             + &watterson_theta_per_pool_per_window
                 .column(i)
                 .iter()
@@ -176,6 +179,7 @@ pub fn watterson_estimator(
                 .collect::<Vec<String>>()
                 .join(",")
             + "\n";
+        println!("line={:?}", line);
         file_out.write_all(line.as_bytes()).unwrap();
     }
     Ok(fname_output)
