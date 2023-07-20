@@ -274,10 +274,10 @@ mod tests {
         }
         let watterson: Array2<f64> = Array2::from_shape_vec((5, 3), watterson).unwrap();
         println!("watterson={:?}", watterson);
-        let pop2_locus1 = watterson[(1, 0)]; // locus fixed, i.e. watterson=0.0
-        let pop2_locus2 = watterson[(1, 1)]; // locus fixed, i.e. watterson=0.0
-        let pop3_locus1 = watterson[(2, 0)]; // locus fixed, i.e. watterson=0.0
-        let pop3_locus2 = watterson[(2, 1)]; // locus at 0.5, i.e. watterson = 50 / (100-1) = 0.5051
+        let pop2_locus1 = watterson[(1, 1)]; // locus fixed, i.e. watterson=0.0
+        let pop2_locus2 = watterson[(1, 2)]; // locus fixed, i.e. watterson=0.0
+        let pop3_locus1 = watterson[(2, 1)]; // locus fixed, i.e. watterson=0.0
+        let pop3_locus2 = watterson[(2, 2)]; // locus at 0.5, i.e. watterson = 50 / (100-1) = 0.5051
         assert_eq!(pop2_locus1, 0.0);
         assert_eq!(pop2_locus2, 0.0);
         assert_eq!(pop3_locus1, 0.1549);
