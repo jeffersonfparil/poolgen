@@ -179,7 +179,6 @@ pub fn watterson_estimator(
                 .collect::<Vec<String>>()
                 .join(",")
             + "\n";
-        println!("line={:?}", line);
         file_out.write_all(line.as_bytes()).unwrap();
     }
     Ok(fname_output)
@@ -273,7 +272,7 @@ mod tests {
                 }
             }
         }
-        let watterson: Array2<f64> = Array2::from_shape_vec((5, 2), watterson).unwrap();
+        let watterson: Array2<f64> = Array2::from_shape_vec((5, 3), watterson).unwrap();
         println!("watterson={:?}", watterson);
         let pop2_locus1 = watterson[(1, 0)]; // locus fixed, i.e. watterson=0.0
         let pop2_locus2 = watterson[(1, 1)]; // locus fixed, i.e. watterson=0.0
