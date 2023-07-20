@@ -116,7 +116,7 @@ pub fn pi(
     let (pi_per_pool_per_window, windows_chr, windows_pos) =
         theta_pi(genotypes_and_phenotypes, window_size_bp).unwrap();
     let n = pi_per_pool_per_window.ncols();
-    let n_windows = windows_chr.len();
+    let n_windows = pi_per_pool_per_window.nrows();
     let vec_pi_across_windows = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
     // Write output
     let mut fname_output = fname_output.to_owned();

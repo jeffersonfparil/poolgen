@@ -116,7 +116,7 @@ pub fn watterson_estimator(
         theta_watterson(genotypes_and_phenotypes, pool_sizes, window_size_bp).unwrap();
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let n = watterson_theta_per_pool_per_window.ncols();
-    let n_windows = windows_chr.len() - 1;
+    let n_windows = watterson_theta_per_pool_per_window.nrows();
     let vec_watterson_theta_across_windows = watterson_theta_per_pool_per_window.mean_axis(Axis(0)).unwrap();
     // Write output
     let mut fname_output = fname_output.to_owned();
