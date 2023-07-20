@@ -214,8 +214,7 @@ impl Filter for LocusCounts {
         while j < p {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i];
-                // We've made sure the pool_sizes sum up to one in phen.rs
+                q += allele_frequencies.matrix[(i, j)] * (filter_stats.pool_sizes[i] as f64 / filter_stats.pool_sizes.iter().sum::<f64>());
             }
             if (q < filter_stats.min_allele_frequency)
                 | (q > (1.00 - filter_stats.min_allele_frequency))
@@ -354,8 +353,7 @@ impl Filter for LocusFrequencies {
         while j < p {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i];
-                // We've made sure the pool_sizes sum up to one in phen.rs
+                q += allele_frequencies.matrix[(i, j)] * (filter_stats.pool_sizes[i] as f64 / filter_stats.pool_sizes.iter().sum::<f64>());
             }
             if (q < filter_stats.min_allele_frequency)
                 | (q > (1.00 - filter_stats.min_allele_frequency))
@@ -1377,7 +1375,7 @@ mod tests {
             min_quality: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.005,
-            pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
+            pool_sizes: vec![20., 20., 20., 20., 20.],
         };
         let mut filtered_counts = counts.clone();
         filtered_counts.filter(&filter_stats).unwrap();

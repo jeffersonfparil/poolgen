@@ -78,6 +78,9 @@ pub fn theta_watterson(
     );
     windows_pos.push(*genotypes_and_phenotypes.position.last().unwrap() - 1);
     // Calculate Watterson's estimator per window
+    // println!("window_n_sites[0]={:?}", window_n_sites[0]);
+    // println!("window_n_polymorphic_sites[0]={:?}", window_n_polymorphic_sites[0]);
+    // println!("pool_sizes={:?}", pool_sizes);
     let n_windows = windows_chr.len() - 1;
     let mut watterson_theta_per_pool_per_window: Array2<f64> =
         Array2::from_elem((n_windows, n), f64::NAN);

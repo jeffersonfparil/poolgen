@@ -121,7 +121,7 @@ mod tests {
             min_quality: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.005,
-            pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
+            pool_sizes: vec![20.0, 20.0, 20.0, 20.0, 20.0],
         };
         let locus_counts = LocusCounts {
             chromosome: "Chromosome1".to_owned(),

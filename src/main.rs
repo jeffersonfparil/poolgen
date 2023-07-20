@@ -14,7 +14,7 @@ use gp::{
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
 use gwas::{mle_with_covariate, ols_with_covariate};
-use tables::{fst, pi};
+use tables::{fst, pi, watterson_estimator, tajima_d};
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -24,7 +24,7 @@ use tables::{fst, pi};
     long_about = "Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust."
 )]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity")
+    /// Analysis to perform (i.e. "pileup2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity", "watterson_estimator", "tajima_d")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -315,7 +315,33 @@ fn main() {
                 &args.output,
             )
             .unwrap();
-        } else if args.analysis == String::from("test") {
+    } else if args.analysis == String::from("watterson_estimator") {
+        let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+        let genotypes_and_phenotypes = file_sync_phen
+            .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
+            .unwrap(); // we need all alleles in each locus
+        output = watterson_estimator(
+            &genotypes_and_phenotypes,
+            &file_sync_phen.pool_sizes,
+            &args.window_size_bp,
+            &args.fname,
+            &args.output,
+        )
+        .unwrap();
+} else if args.analysis == String::from("tajima_d") {
+    let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+    let genotypes_and_phenotypes = file_sync_phen
+        .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
+        .unwrap(); // we need all alleles in each locus
+    output = tajima_d(
+        &genotypes_and_phenotypes,
+        &file_sync_phen.pool_sizes,
+        &args.window_size_bp,
+        &args.fname,
+        &args.output,
+    )
+    .unwrap();
+} else if args.analysis == String::from("test") {
             let output = 0;
             println!("TEST={:?}", output);
         }
