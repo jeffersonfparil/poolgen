@@ -117,7 +117,9 @@ pub fn watterson_estimator(
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let n = watterson_theta_per_pool_per_window.ncols();
     let n_windows = watterson_theta_per_pool_per_window.nrows();
-    let vec_watterson_theta_across_windows = watterson_theta_per_pool_per_window.mean_axis(Axis(0)).unwrap();
+    let vec_watterson_theta_across_windows = watterson_theta_per_pool_per_window
+        .mean_axis(Axis(0))
+        .unwrap();
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -139,7 +141,12 @@ pub fn watterson_estimator(
             .rev()
             .collect::<Vec<String>>()
             .join(".");
-        fname_output = bname.to_owned() + "-watterson-" + &time.to_string() + ".csv";
+        fname_output = bname.to_owned()
+            + "-watterson-"
+            + &window_size_bp.to_string()
+            + "_bp_windows-"
+            + &time.to_string()
+            + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;

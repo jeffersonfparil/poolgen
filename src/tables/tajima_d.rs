@@ -25,40 +25,49 @@ pub fn tajima_d(
         theta_pi(genotypes_and_phenotypes, window_size_bp).unwrap();
     // let vec_pi_across_windows = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
 
-    println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
+    println!(
+        "watterson_theta_per_pool_per_window={:?}",
+        watterson_theta_per_pool_per_window
+    );
     println!("pi_per_pool_per_window={:?}", pi_per_pool_per_window);
 
-    // Sanity checks    
+    // Sanity checks
     assert_eq!(n_pools, pi_per_pool_per_window.ncols(), "The number of pools extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
     assert_eq!(n_windows, pi_per_pool_per_window.nrows(), "The number of windows extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
     assert_eq!(windows_chr, windows_chr_pi, "The chromosome names per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
     assert_eq!(windows_pos, windows_pos_pi, "The SNP positions per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
-    
+
     // Calculate Tajima's D
-    let mut tajimas_d_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n_pools), f64::NAN);
+    let mut tajimas_d_per_pool_per_window: Array2<f64> =
+        Array2::from_elem((n_windows, n_pools), f64::NAN);
     for j in 0..n_pools {
         let n = pool_sizes[j] as usize;
-        let a1 = (1..n).fold(0.0, |sum, x| sum + (1.00/(x as f64)));
-        let a2 = (1..n).fold(0.0, |sum, x| sum + (1.00/(x as f64).powf(2.00)));
+        let a1 = (1..n).fold(0.0, |sum, x| sum + (1.00 / (x as f64)));
+        let a2 = (1..n).fold(0.0, |sum, x| sum + (1.00 / (x as f64).powf(2.00)));
         let n = n as f64;
-        let b1 = (n+1.0) / (3.0*(n-1.0));
-        let b2 = (2.0*(n.powf(2.0)+n+3.0)) / (9.0*n*(n-1.0));
-        let c1 = b1 - (1.0/a1);
-        let c2 = b2 - ((n+2.0)/(a1*n)) + (a2/a1.powf(2.0));
-        let e1 = c1/a1;
-        let e2 = c2/(a1.powf(2.0)+a2);
-            for i in 0..n_windows {
-                let s = if watterson_theta_per_pool_per_window[(i, j)] <= f64::EPSILON {
-                    0.0
-                } else {
-                    watterson_theta_per_pool_per_window[(i, j)] / a1
-                };
-                let vd = e1*s + e2*s*(s-1.0);
-                tajimas_d_per_pool_per_window[(i, j)] = if ((pi_per_pool_per_window[(i, j)] - watterson_theta_per_pool_per_window[(i, j)])).abs() <= f64::EPSILON {
-                    0.0
-                } else {(pi_per_pool_per_window[(i, j)] - watterson_theta_per_pool_per_window[(i, j)])
+        let b1 = (n + 1.0) / (3.0 * (n - 1.0));
+        let b2 = (2.0 * (n.powf(2.0) + n + 3.0)) / (9.0 * n * (n - 1.0));
+        let c1 = b1 - (1.0 / a1);
+        let c2 = b2 - ((n + 2.0) / (a1 * n)) + (a2 / a1.powf(2.0));
+        let e1 = c1 / a1;
+        let e2 = c2 / (a1.powf(2.0) + a2);
+        for i in 0..n_windows {
+            let s = if watterson_theta_per_pool_per_window[(i, j)] <= f64::EPSILON {
+                0.0
+            } else {
+                watterson_theta_per_pool_per_window[(i, j)] / a1
+            };
+            let vd = e1 * s + e2 * s * (s - 1.0);
+            tajimas_d_per_pool_per_window[(i, j)] = if (pi_per_pool_per_window[(i, j)]
+                - watterson_theta_per_pool_per_window[(i, j)])
+                .abs()
+                <= f64::EPSILON
+            {
+                0.0
+            } else {
+                (pi_per_pool_per_window[(i, j)] - watterson_theta_per_pool_per_window[(i, j)])
                     / vd.sqrt()
-                };
+            };
         }
     }
     let vec_tajimas_d_across_windows = tajimas_d_per_pool_per_window.mean_axis(Axis(0)).unwrap();
@@ -84,7 +93,12 @@ pub fn tajima_d(
             .rev()
             .collect::<Vec<String>>()
             .join(".");
-        fname_output = bname.to_owned() + "-Tajimas_D-" + &time.to_string() + ".csv";
+        fname_output = bname.to_owned()
+            + "-Tajimas_D-"
+            + &window_size_bp.to_string()
+            + "_bp_windows-"
+            + &time.to_string()
+            + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
@@ -138,11 +152,8 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
-                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
-                1.0, 0.01, 0.01, 0.98, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
+                0.9, 0.1, 1.0, 0.01, 0.01, 0.98, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
             ],
         )
         .unwrap();

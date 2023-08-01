@@ -14,7 +14,7 @@ use gp::{
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
 use gwas::{mle_with_covariate, ols_with_covariate};
-use tables::{fst, pi, watterson_estimator, tajima_d};
+use tables::{fst, pi, tajima_d, watterson_estimator};
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -302,7 +302,14 @@ fn main() {
             let genotypes_and_phenotypes = file_sync_phen
                 .into_genotypes_and_phenotypes(&filter_stats, args.keep_p_minus_1, &args.n_threads)
                 .unwrap();
-            output = fst(&genotypes_and_phenotypes, &args.fname, &args.output).unwrap();
+            let (genome_wide, per_window) = fst(
+                &genotypes_and_phenotypes,
+                &args.window_size_bp,
+                &args.fname,
+                &args.output,
+            )
+            .unwrap();
+            output = genome_wide + " and " + &per_window[..];
         } else if args.analysis == String::from("heterozygosity") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             let genotypes_and_phenotypes = file_sync_phen
@@ -315,33 +322,33 @@ fn main() {
                 &args.output,
             )
             .unwrap();
-    } else if args.analysis == String::from("watterson_estimator") {
-        let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
-        let genotypes_and_phenotypes = file_sync_phen
-            .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
-            .unwrap(); // we need all alleles in each locus
-        output = watterson_estimator(
-            &genotypes_and_phenotypes,
-            &file_sync_phen.pool_sizes,
-            &args.window_size_bp,
-            &args.fname,
-            &args.output,
-        )
-        .unwrap();
-} else if args.analysis == String::from("tajima_d") {
-    let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
-    let genotypes_and_phenotypes = file_sync_phen
-        .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
-        .unwrap(); // we need all alleles in each locus
-    output = tajima_d(
-        &genotypes_and_phenotypes,
-        &file_sync_phen.pool_sizes,
-        &args.window_size_bp,
-        &args.fname,
-        &args.output,
-    )
-    .unwrap();
-} else if args.analysis == String::from("test") {
+        } else if args.analysis == String::from("watterson_estimator") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            let genotypes_and_phenotypes = file_sync_phen
+                .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
+                .unwrap(); // we need all alleles in each locus
+            output = watterson_estimator(
+                &genotypes_and_phenotypes,
+                &file_sync_phen.pool_sizes,
+                &args.window_size_bp,
+                &args.fname,
+                &args.output,
+            )
+            .unwrap();
+        } else if args.analysis == String::from("tajima_d") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            let genotypes_and_phenotypes = file_sync_phen
+                .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
+                .unwrap(); // we need all alleles in each locus
+            output = tajima_d(
+                &genotypes_and_phenotypes,
+                &file_sync_phen.pool_sizes,
+                &args.window_size_bp,
+                &args.fname,
+                &args.output,
+            )
+            .unwrap();
+        } else if args.analysis == String::from("test") {
             let output = 0;
             println!("TEST={:?}", output);
         }

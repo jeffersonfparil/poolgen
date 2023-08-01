@@ -214,7 +214,9 @@ impl Filter for LocusCounts {
         while j < p {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i, j)] * (filter_stats.pool_sizes[i] as f64 / filter_stats.pool_sizes.iter().sum::<f64>());
+                q += allele_frequencies.matrix[(i, j)]
+                    * (filter_stats.pool_sizes[i] as f64
+                        / filter_stats.pool_sizes.iter().sum::<f64>());
             }
             if (q < filter_stats.min_allele_frequency)
                 | (q > (1.00 - filter_stats.min_allele_frequency))
@@ -353,7 +355,9 @@ impl Filter for LocusFrequencies {
         while j < p {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i, j)] * (filter_stats.pool_sizes[i] as f64 / filter_stats.pool_sizes.iter().sum::<f64>());
+                q += allele_frequencies.matrix[(i, j)]
+                    * (filter_stats.pool_sizes[i] as f64
+                        / filter_stats.pool_sizes.iter().sum::<f64>());
             }
             if (q < filter_stats.min_allele_frequency)
                 | (q > (1.00 - filter_stats.min_allele_frequency))

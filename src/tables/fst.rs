@@ -1,5 +1,5 @@
 use crate::base::*;
-use ndarray::prelude::*;
+use ndarray::{prelude::*, Zip};
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -7,24 +7,33 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Unbiased multi-allelic version of Fst similar to [Gautier et al, 2019](https://doi.org/10.1111/1755-0998.13557) which assumes biallelic loci
 pub fn fst(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    window_size_bp: &usize,
     fname_input: &String,
     fname_output: &String,
-) -> io::Result<String> {
+) -> io::Result<(String, String)> {
     let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
-    // Count the number of loci (Note: assumes the loci are sorted)
+    // Count the number of loci (Note: assumes the loci are sorted) and extract the loci coordinates
     let mut loci_idx: Vec<usize> = vec![];
+    let mut loci_chr: Vec<&String> = vec![];
+    let mut loci_pos: Vec<&u64> = vec![];
     for i in 1..p {
         // includes the intercept
         if (genotypes_and_phenotypes.chromosome[i - 1] != genotypes_and_phenotypes.chromosome[i])
             | (genotypes_and_phenotypes.position[i - 1] != genotypes_and_phenotypes.position[i])
         {
             loci_idx.push(i);
+            loci_chr.push(&genotypes_and_phenotypes.chromosome[i]);
+            loci_pos.push(&genotypes_and_phenotypes.position[i]);
         }
     }
     loci_idx.push(p); // last allele of the last locus
+    loci_chr.push(genotypes_and_phenotypes.chromosome.last().unwrap()); // last allele of the last locus
+    loci_pos.push(genotypes_and_phenotypes.position.last().unwrap()); // last allele of the last locus
     let l = loci_idx.len();
+    assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
+
     assert_eq!(l - 1, genotypes_and_phenotypes.coverages.ncols());
     let mut fst: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     let loci: Array3<usize> = Array3::from_shape_vec(
@@ -59,58 +68,58 @@ pub fn fst(
         .collect::<Vec<usize>>(),
     )
     .unwrap();
-    // Parallel computations
-    // Zip::from(&mut fst)
-    //     .and(&loci)
-    //     .and(&pop1)
-    //     .and(&pop2)
-    //     .par_for_each(|f, &i, &j, &k| {
-    for i in 0..(l - 1) {
-        for j in 0..n {
-            for k in 0..n {
-                if j != k {
-                    let idx_start = loci_idx[i];
-                    let idx_end = loci_idx[i + 1];
-                    let g = genotypes_and_phenotypes
-                        .intercept_and_allele_frequencies
-                        .slice(s![.., idx_start..idx_end]);
-                    let nj = genotypes_and_phenotypes.coverages[(j, i)];
-                    let nk = genotypes_and_phenotypes.coverages[(k, i)];
-                    let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                        * (nj / (nj - 1.00 + f64::EPSILON)))
-                        + (1.00 - (nj / (nj - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-                    let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                        * (nk / (nk - 1.00 + f64::EPSILON)))
-                        + (1.00 - (nk / (nk - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-                    let q2_jk = g
-                        .slice(s![j, ..])
-                        .iter()
-                        .zip(&g.slice(s![k, ..]))
-                        .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-                    let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
-                                                                                                    // *f = if f_unbiased < 0.0 {
-                    fst[(i, j, k)] = if f_unbiased < 0.0 {
-                        0.0
-                    } else if f_unbiased > 1.0 {
-                        1.0
-                    } else {
-                        f_unbiased
-                    };
-                } else {
-                    // *f = 0.0; // Fst within itself is zero
-                    fst[(i, j, k)] = 0.0; // Fst within itself is zero
-                }
-            }
-        }
-    }
-    // });
-    println!("loci={:?}", loci);
-    println!("pop1={:?}", pop1);
-    println!("pop2={:?}", pop2);
-    println!("fst={:?}", fst);
-    // println!("fst.mean_axis(Axis(0))={:?}", fst.mean_axis(Axis(0)));
-    // Write output
+    // Parallel computations (NOTE: Not efficient yet. Compute only the upper or lower triangular in the future.)
+    Zip::from(&mut fst)
+        .and(&loci)
+        .and(&pop1)
+        .and(&pop2)
+        .par_for_each(|f, &i, &j, &k| {
+            let idx_start = loci_idx[i];
+            let idx_end = loci_idx[i + 1];
+            let g = genotypes_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![.., idx_start..idx_end]);
+            let nj = genotypes_and_phenotypes.coverages[(j, i)];
+            let nk = genotypes_and_phenotypes.coverages[(k, i)];
+            let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                * (nj / (nj - 1.00 + f64::EPSILON)))
+                + (1.00 - (nj / (nj - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+            let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                * (nk / (nk - 1.00 + f64::EPSILON)))
+                + (1.00 - (nk / (nk - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+            let q2_jk = g
+                .slice(s![j, ..])
+                .iter()
+                .zip(&g.slice(s![k, ..]))
+                .fold(0.0, |sum, (&x, &y)| sum + (x * y));
+            let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
+            *f = if f_unbiased < 0.0 {
+                // fst[(i, j, k)] = if f_unbiased < 0.0 {
+                0.0
+            } else if f_unbiased > 1.0 {
+                1.0
+            } else {
+                f_unbiased
+            };
+        });
+    // Write output (Fst averaged across all loci)
     let mut fname_output = fname_output.to_owned();
+    let mut fname_output_per_window = fname_output
+        .split(".")
+        .collect::<Vec<&str>>()
+        .into_iter()
+        .map(|a| a.to_owned())
+        .collect::<Vec<String>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<String>>()[1..]
+        .to_owned()
+        .into_iter()
+        .rev()
+        .collect::<Vec<String>>()
+        .join(".");
+    fname_output_per_window =
+        fname_output_per_window + "-fst-" + &window_size_bp.to_string() + "_bp_windows.csv";
     if fname_output == "".to_owned() {
         let time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -130,7 +139,14 @@ pub fn fst(
             .rev()
             .collect::<Vec<String>>()
             .join(".");
-        fname_output = bname.to_owned() + "-fst-" + &time.to_string() + ".csv";
+        fname_output =
+            bname.to_owned() + "-fst-averaged_across_genome-" + &time.to_string() + ".csv";
+        fname_output_per_window = bname.to_owned()
+            + "-fst-"
+            + &window_size_bp.to_string()
+            + "_bp_windows-"
+            + &time.to_string()
+            + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
@@ -161,7 +177,92 @@ pub fn fst(
             + "\n";
         file_out.write_all(line.as_bytes()).unwrap();
     }
-    Ok(fname_output)
+    ///////////////////////////////////////////////////////////////////////
+    // Additional output: Fst per window per population
+    // Summarize per non-overlapping window
+    // Find window indices making sure we respect chromosomal boundaries
+    let m = loci_idx.len() - 1; // total number of loci x alleles, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
+    let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
+    let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
+    let mut windows_pos: Vec<u64> = vec![*loci_pos[0] as u64];
+    for i in 1..m {
+        let chr = loci_chr[i];
+        let pos = loci_pos[i];
+        if (chr != windows_chr.last().unwrap())
+            | ((chr == windows_chr.last().unwrap())
+                & (pos > &(windows_pos.last().unwrap() + &(*window_size_bp as u64))))
+        {
+            windows_idx.push(i);
+            windows_chr.push(chr.to_owned());
+            windows_pos.push(*pos);
+        }
+    }
+    // Add the last index of the final position
+    windows_idx.push(m);
+    windows_chr.push(windows_chr.last().unwrap().to_owned());
+    windows_pos.push(*loci_pos.last().unwrap() - 1);
+    // Take the means per window
+    let n_windows = windows_idx.len() - 1;
+    let mut fst_per_pool_x_pool_per_window: Array2<f64> =
+        Array2::from_elem((n_windows, n * n), f64::NAN);
+    for i in 0..n_windows {
+        let idx_start = windows_idx[i];
+        let idx_end = windows_idx[i + 1];
+        for j in 0..n {
+            for k in 0..n {
+                let l = (j * n) + k;
+                fst_per_pool_x_pool_per_window[(i, l)] = fst
+                    .slice(s![idx_start..idx_end, j, k])
+                    .mean_axis(Axis(0))
+                    .unwrap()
+                    .fold(0.0, |_, &x| x);
+            }
+        }
+    }
+    // Write output (Fst averaged per window)
+    // Instatiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &fname_output_per_window;
+    let mut file_out = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .append(false)
+        .open(&fname_output_per_window)
+        .expect(&error_writing_file);
+    // Header
+    let mut line: Vec<String> = vec!["chr".to_owned(), "pos_ini".to_owned(), "pos_fin".to_owned()];
+    for j in 0..n {
+        for k in 0..n {
+            line.push(
+                genotypes_and_phenotypes.pool_names[j].to_owned()
+                    + "_vs_"
+                    + &genotypes_and_phenotypes.pool_names[k],
+            );
+        }
+    }
+    let line = line.join(",") + "\n";
+    file_out.write_all(line.as_bytes()).unwrap();
+    // Per line
+    for i in 0..n_windows {
+        let window_pos_ini = windows_pos[i];
+        let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
+        let coordinate = windows_chr[i].clone()
+            + ","
+            + &window_pos_ini.to_string()
+            + ","
+            + &window_pos_fin.to_string()
+            + ",";
+        let fst_string = fst_per_pool_x_pool_per_window
+            .slice(s![i, ..])
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .join(",");
+        let line = coordinate + &fst_string[..] + "\n";
+        file_out.write_all(line.as_bytes()).unwrap();
+    }
+    ///////////////////////////////////////////////////////////////////////
+
+    Ok((fname_output, fname_output_per_window))
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -220,13 +321,14 @@ mod tests {
             .unwrap(),
         };
         // Outputs
-        let out = fst(
+        let (out_genomewide, out_per_window) = fst(
             &genotypes_and_phenotypes,
+            &100,
             &"test.something".to_owned(),
             &"".to_owned(),
         )
         .unwrap();
-        let file = std::fs::File::open(&out).unwrap();
+        let file = std::fs::File::open(&out_genomewide).unwrap();
         let reader = std::io::BufReader::new(file);
         let mut header: Vec<String> = vec![];
         let mut pop: Vec<String> = vec![];

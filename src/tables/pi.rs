@@ -139,7 +139,12 @@ pub fn pi(
             .rev()
             .collect::<Vec<String>>()
             .join(".");
-        fname_output = bname.to_owned() + "-pi-" + &time.to_string() + ".csv";
+        fname_output = bname.to_owned()
+            + "-pi-"
+            + &window_size_bp.to_string()
+            + "_bp_windows-"
+            + &time.to_string()
+            + ".csv";
     }
     // Instatiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
