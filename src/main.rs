@@ -85,7 +85,7 @@ struct Args {
     /// Genomic prediction cross-validation: number of replicates of k-fold cross-validation
     #[clap(long, default_value_t = 3)]
     n_reps: usize,
-    /// Estimation of intra-population nucleotide diversity per window, i.e. pi or simply heterozygosiy of loci per population per window: window size in terms of number of bases
+    /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: window size in terms of number of bases
     #[clap(long, default_value_t = 100)]
     window_size_bp: usize,
 }
