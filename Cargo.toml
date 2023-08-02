@@ -16,7 +16,6 @@ argmin-math = "0.3.0"
 rand = "0.8.5"
 function_name = "0.3.0"
 rayon = "1.7.0"
-plotlib = "0.5.1"
 
 [profile.dev]
 opt-level = 3

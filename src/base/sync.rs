@@ -920,13 +920,10 @@ impl LoadAll for FileSyncPhen {
                 Ok(x) => x,
                 Err(_) => continue,
             };
-            let mut locus_frequencies = *locus_counts.to_frequencies().unwrap();
-            // let mut locus_frequencies = *locus_counts.to_frequencies().unwrap();
-            // // println!("locus_frequencies={:?}", locus_frequencies);
-            // match locus_frequencies.filter(filter_stats) {
-            //     Ok(x) => x,
-            //     Err(_) => continue,
-            // };
+            let mut locus_frequencies = match locus_counts.to_frequencies() {
+                Ok(x) => *x,
+                Err(_) => continue,
+            };
             // Remove minimum allele
             if keep_p_minus_1 {
                 locus_frequencies.sort_by_allele_freq(true).unwrap();
