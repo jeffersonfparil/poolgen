@@ -2,97 +2,108 @@ use crate::base::*;
 use crate::gp::*;
 use crate::gwas::*;
 use ndarray::{prelude::*, Zip};
+use ndarray_linalg::*;
+use approx::*;
 use rand::prelude::*;
 
 use std::io::{self, Error, ErrorKind};
 
-// // From https://github.com/rust-ml/linfa/blob/master/algorithms/linfa-elasticnet/src/algorithm.rs#L266
-// fn duality_gap<'a>(
-//     x: ArrayView2<'a, f64>,
-//     y: ArrayView1<'a, f64>,
-//     w: ArrayView1<'a, f64>,
-//     r: ArrayView1<'a, f64>,
-//     l1_ratio: f64,
-//     penalty: f64,
-// ) -> f64 {
-//     let half = 0.50;
-//     let n_samples = x.nrows() as f64;
-//     let l1_reg = l1_ratio * penalty * n_samples;
-//     let l2_reg = (1.00 - l1_ratio) * penalty * n_samples;
-//     let xta = x.t().dot(&r) - &w * l2_reg;
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////
 
-//     let dual_norm_xta = xta.norm_max();
-//     let r_norm2 = r.dot(&r);
-//     let w_norm2 = w.dot(&w);
-//     let (const_, mut gap) = if dual_norm_xta > l1_reg {
-//         let const_ = l1_reg / dual_norm_xta;
-//         let a_norm2 = r_norm2 * const_ * const_;
-//         (const_, half * (r_norm2 + a_norm2))
-//     } else {
-//         (f64::one(), r_norm2)
-//     };
-//     let l1_norm = w.norm_l1();
-//     gap += l1_reg * l1_norm - const_ * r.dot(&y)
-//         + half * l2_reg * (f64::one() + const_ * const_) * w_norm2;
-//     gap
-// }
+// From https://github.com/rust-ml/linfa/blob/master/algorithms/linfa-elasticnet/src/algorithm.rs#L266
+fn duality_gap<'a>(
+    x: ArrayView2<'a, f64>,
+    y: ArrayView1<'a, f64>,
+    w: ArrayView1<'a, f64>,
+    r: ArrayView1<'a, f64>,
+    l1_ratio: f64,
+    penalty: f64,
+) -> f64 {
+    let half = 0.50;
+    let n_samples = x.nrows() as f64;
+    let l1_reg = l1_ratio * penalty * n_samples;
+    let l2_reg = (1.00 - l1_ratio) * penalty * n_samples;
+    let xta = x.t().dot(&r) - &w * l2_reg;
 
-// #[function_name::named]
-// fn coordinate_descent<'a, F>(
-//     x: ArrayView2<'a, f64>,
-//     y: ArrayView1<'a, f64>,
-//     tol: F,
-//     max_steps: u32,
-//     l1_ratio: F,
-//     penalty: F,
-// ) -> (Array1<F>, F, u32) {
-//     let n_samples = F::cast(x.nrows());
-//     let n_features = x.ncols();
-//     // the parameters of the model
-//     let mut w = Array1::<F>::zeros(n_features);
-//     // the residuals: `y - X*w` (since w=0, this is just `y` for now),
-//     // the residuals are updated during the algorithm as the parameters change
-//     let mut r = y.to_owned();
-//     let mut n_steps = 0u32;
-//     let norm_cols_x = x.map_axis(Axis(0), |col| col.dot(&col));
-//     let mut gap = F::one() + tol;
-//     let d_w_tol = tol;
-//     let tol = tol * y.dot(&y);
-//     while n_steps < max_steps {
-//         let mut w_max = F::zero();
-//         let mut d_w_max = F::zero();
-//         for j in 0..n_features {
-//             if abs_diff_eq!(norm_cols_x[j], F::zero()) {
-//                 continue;
-//             }
-//             let old_w_j = w[j];
-//             let x_j: ArrayView1<F> = x.slice(s![.., j]);
-//             if abs_diff_ne!(old_w_j, F::zero()) {
-//                 r.scaled_add(old_w_j, &x_j);
-//             }
-//             let tmp: F = x_j.dot(&r);
-//             w[j] = tmp.signum() * F::max(tmp.abs() - n_samples * l1_ratio * penalty, F::zero())
-//                 / (norm_cols_x[j] + n_samples * (F::one() - l1_ratio) * penalty);
-//             if abs_diff_ne!(w[j], F::zero()) {
-//                 r.scaled_add(-w[j], &x_j);
-//             }
-//             let d_w_j = (w[j] - old_w_j).abs();
-//             d_w_max = F::max(d_w_max, d_w_j);
-//             w_max = F::max(w_max, w[j].abs());
-//         }
-//         n_steps += 1;
+    let dual_norm_xta = xta.norm_max();
+    let r_norm2 = r.dot(&r);
+    let w_norm2 = w.dot(&w);
+    let (const_, mut gap) = if dual_norm_xta > l1_reg {
+        let const_ = l1_reg / dual_norm_xta;
+        let a_norm2 = r_norm2 * const_ * const_;
+        (const_, half * (r_norm2 + a_norm2))
+    } else {
+        (1.00, r_norm2)
+    };
+    let l1_norm = w.norm_l1();
+    gap += l1_reg * l1_norm - const_ * r.dot(&y)
+        + half * l2_reg * (1.00 + const_ * const_) * w_norm2;
+    gap
+}
 
-//         if n_steps == max_steps - 1 || abs_diff_eq!(w_max, F::zero()) || d_w_max / w_max < d_w_tol {
-//             // We've hit one potential stopping criteria
-//             // check duality gap for ultimate stopping criterion
-//             gap = duality_gap(x.view(), y.view(), w.view(), r.view(), l1_ratio, penalty);
-//             if gap < tol {
-//                 break;
-//             }
-//         }
-//     }
-//     (w, gap, n_steps)
-// }
+fn coordinate_descent<'a>(
+    x: ArrayView2<'a, f64>,
+    y: ArrayView1<'a, f64>,
+    tol: f64,
+    max_steps: u32,
+    l1_ratio: f64,
+    penalty: f64,
+) -> (Array1<f64>, f64, u32) {
+    let n_samples = x.nrows() as f64;
+    let n_features = x.ncols();
+    // the parameters of the model
+    let mut w = Array1::<f64>::zeros(n_features);
+    // the residuals: `y - X*w` (since w=0, this is just `y` for now),
+    // the residuals are updated during the algorithm as the parameters change
+    let mut r = y.to_owned();
+    let mut n_steps = 0u32;
+    let norm_cols_x = x.map_axis(Axis(0), |col| col.dot(&col));
+    let mut gap = 1.00 + tol;
+    let d_w_tol = tol;
+    let tol = tol * y.dot(&y);
+    while n_steps < max_steps {
+        let mut w_max = 0.00;
+        let mut d_w_max = 0.00;
+        for j in 0..n_features {
+            if abs_diff_eq!(norm_cols_x[j], 0.00) {
+                continue;
+            }
+            let old_w_j = w[j];
+            let x_j: ArrayView1<f64> = x.slice(s![.., j]);
+            if abs_diff_ne!(old_w_j, 0.00) {
+                r.scaled_add(old_w_j, &x_j);
+            }
+            let tmp: f64 = x_j.dot(&r);
+            w[j] = tmp.signum() * f64::max(tmp.abs() - n_samples * l1_ratio * penalty, 0.00)
+                / (norm_cols_x[j] + n_samples * (1.00 - l1_ratio) * penalty);
+            if abs_diff_ne!(w[j], 0.00) {
+                r.scaled_add(-w[j], &x_j);
+            }
+            let d_w_j = (w[j] - old_w_j).abs();
+            d_w_max = f64::max(d_w_max, d_w_j);
+            w_max = f64::max(w_max, w[j].abs());
+        }
+        n_steps += 1;
+
+        if n_steps == max_steps - 1 || abs_diff_eq!(w_max, 0.00) || d_w_max / w_max < d_w_tol {
+            // We've hit one potential stopping criteria
+            // check duality gap for ultimate stopping criterion
+            gap = duality_gap(x.view(), y.view(), w.view(), r.view(), l1_ratio, penalty);
+            if gap < tol {
+                break;
+            }
+        }
+    }
+    (w, gap, n_steps)
+}
+
+
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////
+
 
 #[function_name::named]
 pub fn penalise_lasso_like(
@@ -684,7 +695,7 @@ mod tests {
         let row_idx: Vec<usize> = (0..50).collect();
 
         let (b_hat, name) = penalise_lasso_like(&x, &y, &row_idx).unwrap();
-        assert_eq!(0.0, b_hat[(0,0)]);
+        assert_eq!(0.009667742247346768, b_hat[(0,0)]);
 
 
 
