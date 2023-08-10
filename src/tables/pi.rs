@@ -281,10 +281,10 @@ mod tests {
         let pop2_locus2 = pi[(1, 2)]; // locus fixed, i.e. pi=0.0
         let pop5_locus1 = pi[(4, 1)]; // locus fixed, i.e. pi=0.0
         let pop5_locus2 = pi[(4, 2)]; // locus at 0.5, i.e. pi = 50 / (100-1) = 0.5051
-        assert_eq!(pop2_locus1, 0.0);
-        assert_eq!(pop2_locus2, 0.0);
-        assert_eq!(pop5_locus1, 0.0);
-        assert_eq!(pop5_locus2, 0.5051);
+        assert_eq!(parse_f64_roundup_and_own(pop2_locus1, 4), "0".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop2_locus2, 4), "0".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop5_locus1, 4), "0".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop5_locus2, 4), "0.5051".to_owned());
         // assert_eq!(0, 1);
     }
 }

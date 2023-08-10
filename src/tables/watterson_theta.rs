@@ -285,10 +285,10 @@ mod tests {
         let pop2_locus2 = watterson[(1, 2)]; // locus fixed, i.e. watterson=0.0
         let pop3_locus1 = watterson[(2, 1)]; // locus fixed, i.e. watterson=0.0
         let pop3_locus2 = watterson[(2, 2)]; // locus at 0.5, i.e. watterson = 50 / (100-1) = 0.5051
-        assert_eq!(pop2_locus1, 0.0);
-        assert_eq!(pop2_locus2, 0.0);
-        assert_eq!(pop3_locus1, 0.1549);
-        assert_eq!(pop3_locus2, 0.2324);
+        assert_eq!(parse_f64_roundup_and_own(pop2_locus1, 4), "0".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop2_locus2, 4), "0".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop3_locus1, 4), "0.1549".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop3_locus2, 4), "0.2324".to_owned());
         // assert_eq!(0, 2);
     }
 }

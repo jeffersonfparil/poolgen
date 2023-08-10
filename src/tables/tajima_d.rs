@@ -236,10 +236,10 @@ mod tests {
         let pop2_locus2 = d[(1, 2)]; // locus fixed - neutral, i.e. d=0.0
         let pop4_locus1 = d[(3, 1)]; // excess rare alleles - selective sweep, i.e. d<0.0
         let pop4_locus2 = d[(3, 2)]; // scarce rare alleles - balancing selection, i.e. d>0.0
-        assert_eq!(pop2_locus1, 0.0);
-        assert_eq!(pop2_locus2, 0.0);
-        assert_eq!(pop4_locus1, -5.3954);
-        assert_eq!(pop4_locus2, 7.072);
+        assert_eq!(parse_f64_roundup_and_own(pop2_locus1, 4), "0".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop2_locus2, 4), "0".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop4_locus1, 4), "-5.3954".to_owned());
+        assert_eq!(parse_f64_roundup_and_own(pop4_locus2, 4), "7.072".to_owned());
         // assert_eq!(0, 2);
     }
 }
