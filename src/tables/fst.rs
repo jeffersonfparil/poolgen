@@ -171,7 +171,7 @@ pub fn fst(
             + &fst_means
                 .row(i)
                 .iter()
-                .map(|x| parse_f64_roundup_and_own(*x, 4))
+                .map(|x| parse_f64_roundup_and_own(*x, 8))
                 .collect::<Vec<String>>()
                 .join(",")
             + "\n";

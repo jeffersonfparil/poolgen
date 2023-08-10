@@ -133,7 +133,7 @@ pub fn tajima_d(
             + &tajimas_d_per_pool_per_window
                 .column(i)
                 .iter()
-                .map(|x| parse_f64_roundup_and_own(*x, 4))
+                .map(|x| parse_f64_roundup_and_own(*x, 8))
                 .collect::<Vec<String>>()
                 .join(",")
             + "\n";
