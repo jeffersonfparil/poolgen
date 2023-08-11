@@ -12,92 +12,23 @@ use std::io::{self, Error, ErrorKind};
 ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////
 
-// From https://github.com/rust-ml/linfa/blob/master/algorithms/linfa-elasticnet/src/algorithm.rs#L266
-fn duality_gap<'a>(
-    x: ArrayView2<'a, f64>,
-    y: ArrayView1<'a, f64>,
-    w: ArrayView1<'a, f64>,
-    r: ArrayView1<'a, f64>,
-    l1_ratio: f64,
-    penalty: f64,
-) -> f64 {
-    let half = 0.50;
-    let n_samples = x.nrows() as f64;
-    let l1_reg = l1_ratio * penalty * n_samples;
-    let l2_reg = (1.00 - l1_ratio) * penalty * n_samples;
-    let xta = x.t().dot(&r) - &w * l2_reg;
-
-    let dual_norm_xta = xta.norm_max();
-    let r_norm2 = r.dot(&r);
-    let w_norm2 = w.dot(&w);
-    let (const_, mut gap) = if dual_norm_xta > l1_reg {
-        let const_ = l1_reg / dual_norm_xta;
-        let a_norm2 = r_norm2 * const_ * const_;
-        (const_, half * (r_norm2 + a_norm2))
-    } else {
-        (1.00, r_norm2)
-    };
-    let l1_norm = w.norm_l1();
-    gap += l1_reg * l1_norm - const_ * r.dot(&y)
-        + half * l2_reg * (1.00 + const_ * const_) * w_norm2;
-    gap
-}
-
-fn coordinate_descent<'a>(
-    x: ArrayView2<'a, f64>,
-    y: ArrayView1<'a, f64>,
-    tol: f64,
-    max_steps: u32,
-    l1_ratio: f64,
-    penalty: f64,
-) -> (Array1<f64>, f64, u32) {
-    let n_samples = x.nrows() as f64;
-    let n_features = x.ncols();
-    // the parameters of the model
-    let mut w = Array1::<f64>::zeros(n_features);
-    // the residuals: `y - X*w` (since w=0, this is just `y` for now),
-    // the residuals are updated during the algorithm as the parameters change
-    let mut r = y.to_owned();
-    let mut n_steps = 0u32;
-    let norm_cols_x = x.map_axis(Axis(0), |col| col.dot(&col));
-    let mut gap = 1.00 + tol;
-    let d_w_tol = tol;
-    let tol = tol * y.dot(&y);
-    while n_steps < max_steps {
-        let mut w_max = 0.00;
-        let mut d_w_max = 0.00;
-        for j in 0..n_features {
-            if abs_diff_eq!(norm_cols_x[j], 0.00) {
-                continue;
-            }
-            let old_w_j = w[j];
-            let x_j: ArrayView1<f64> = x.slice(s![.., j]);
-            if abs_diff_ne!(old_w_j, 0.00) {
-                r.scaled_add(old_w_j, &x_j);
-            }
-            let tmp: f64 = x_j.dot(&r);
-            w[j] = tmp.signum() * f64::max(tmp.abs() - n_samples * l1_ratio * penalty, 0.00)
-                / (norm_cols_x[j] + n_samples * (1.00 - l1_ratio) * penalty);
-            if abs_diff_ne!(w[j], 0.00) {
-                r.scaled_add(-w[j], &x_j);
-            }
-            let d_w_j = (w[j] - old_w_j).abs();
-            d_w_max = f64::max(d_w_max, d_w_j);
-            w_max = f64::max(w_max, w[j].abs());
-        }
-        n_steps += 1;
-
-        if n_steps == max_steps - 1 || abs_diff_eq!(w_max, 0.00) || d_w_max / w_max < d_w_tol {
-            // We've hit one potential stopping criteria
-            // check duality gap for ultimate stopping criterion
-            gap = duality_gap(x.view(), y.view(), w.view(), r.view(), l1_ratio, penalty);
-            if gap < tol {
-                break;
-            }
+fn soft_thresholding(xj_dot_e: f64, alpha_times_n: f64) -> io::Result<f64> {
+    if alpha_times_n < xj_dot_e.abs() {
+        if xj_dot_e > 0.0 {
+            return Ok(xj_dot_e - alpha_times_n)
+        } else {
+            return Ok(xj_dot_e + alpha_times_n)
         }
     }
-    (w, gap, n_steps)
+    Ok(0.0)
 }
+
+fn coordinate_descent(x: &Array2<f64>,
+    y: &Array2<f64>,
+    row_idx: &Vec<usize>,
+    alpha: f64,) -> io::Result<Array2<f64>> {
+        Ok(Array2::from_elem((1,1), f64::NAN))
+    }
 
 
 ///////////////////////////////////////////////////
