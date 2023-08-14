@@ -1,9 +1,9 @@
 use crate::base::*;
 use crate::gp::*;
 use crate::gwas::*;
+use approx::*;
 use ndarray::{prelude::*, Zip};
 use ndarray_linalg::*;
-use approx::*;
 use rand::prelude::*;
 
 use std::io::{self, Error, ErrorKind};
@@ -12,29 +12,66 @@ use std::io::{self, Error, ErrorKind};
 ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////
 
-fn soft_thresholding(xj_dot_e: f64, alpha_times_n: f64) -> io::Result<f64> {
-    if alpha_times_n < xj_dot_e.abs() {
-        if xj_dot_e > 0.0 {
-            return Ok(xj_dot_e - alpha_times_n)
-        } else {
-            return Ok(xj_dot_e + alpha_times_n)
-        }
+fn soft_thresholding(rho_j: f64, z_j: f64, lambda: f64) -> io::Result<f64> {
+    if rho_j < -lambda {
+        return Ok((rho_j + lambda) / z_j);
+    } else if rho_j > lambda {
+        return Ok((rho_j - lambda) / z_j);
+    } else {
+        return Ok(0.0);
     }
-    Ok(0.0)
 }
 
-fn coordinate_descent(x: &Array2<f64>,
+fn coordinate_descent(
+    x: &Array2<f64>,
     y: &Array2<f64>,
     row_idx: &Vec<usize>,
-    alpha: f64,) -> io::Result<Array2<f64>> {
-        Ok(Array2::from_elem((1,1), f64::NAN))
+    lambda: f64,
+    convergence_threshold: f64,
+    max_iterations: usize,
+) -> io::Result<Array2<f64>> {
+    let (_n, p) = x.dim();
+    let n = row_idx.len();
+    let mut y_true = Array2::from_elem((n, 1), f64::NAN);
+    for i in 0..n {
+        y_true[(i, 0)] = y[(row_idx[i], 0)];
     }
-
+    let mut beta = Array2::from_elem((p, 1), 0.0);
+    beta[(0, 0)] = y_true.mean().unwrap();
+    for _ in 0..max_iterations {
+        let mut change_in_beta = 0.0;
+        for j in 0..p {
+            let col_idx = (0..p).filter(|&i| i != j).collect::<Vec<usize>>();
+            let beta_idx = (0..p).filter(|&i| i != j).collect::<Vec<usize>>();
+            let yhat_notj =
+                multiply_views_xx(x, &beta, row_idx, &col_idx, &beta_idx, &vec![0]).unwrap();
+            let error = &y_true - &yhat_notj;
+            let rho_j = multiply_views_xtx(
+                x,
+                &error,
+                row_idx,
+                &vec![j],
+                &(0..error.len()).collect::<Vec<usize>>(),
+                &vec![0],
+            )
+            .unwrap()[(0, 0)];
+            let z_j =
+                multiply_views_xtx(x, x, row_idx, &vec![j], row_idx, &vec![j]).unwrap()[(0, 0)];
+            let new_b_j = soft_thresholding(rho_j, z_j, lambda).unwrap();
+            beta[(j, 0)] = new_b_j;
+            change_in_beta += (new_b_j - beta[(j, 0)]).abs();
+        }
+        // if change_in_beta <= convergence_threshold {
+        //     break;
+        // }
+        println!("beta = {:?}", beta);
+    }
+    Ok(beta)
+}
 
 ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////
-
 
 #[function_name::named]
 pub fn penalise_lasso_like(
@@ -609,8 +646,6 @@ mod tests {
 
     #[test]
     fn test_penalised() {
-
-
         let intercept: Array2<f64> = Array2::ones((50, 1));
 
         let frequencies = Array2::from_shape_vec(
@@ -618,17 +653,25 @@ mod tests {
             (1..50001).map(|x| x as f64 / 5.0e4).collect::<Vec<f64>>(),
         )
         .unwrap();
-        let x: Array2<f64> =
-            concatenate(Axis(1), &[intercept.view(), frequencies.view()]).unwrap();
-        let y: Array2<f64> =
-            Array2::from_shape_vec((50, 1), (1..51).map(|x| x as f64 / 50.0).collect::<Vec<f64>>())
-                .unwrap();
+        let x: Array2<f64> = concatenate(Axis(1), &[intercept.view(), frequencies.view()]).unwrap();
+        let mut b: Array2<f64> = Array2::from_elem((1000, 1), 0.0);
+        b[(1, 0)] = 1.0;
+        b[(10, 0)] = 1.0;
+        b[(100, 0)] = 1.0;
+        b[(500, 0)] = 1.0;
+        let y: Array2<f64> = multiply_views_xx(
+            &x,
+            &b,
+            &(0..50).collect::<Vec<usize>>(),
+            &(0..1000).collect::<Vec<usize>>(),
+            &(0..1000).collect::<Vec<usize>>(),
+            &vec![0],
+        )
+        .unwrap();
         let row_idx: Vec<usize> = (0..50).collect();
 
         let (b_hat, name) = penalise_lasso_like(&x, &y, &row_idx).unwrap();
         // assert_eq!(0.009667742247346768, b_hat[(0,0)]);
-
-
 
         let b: Array2<f64> =
             Array2::from_shape_vec((7, 1), vec![5.0, -0.4, 0.0, 1.0, -0.1, 1.0, 0.0]).unwrap();
@@ -642,5 +685,23 @@ mod tests {
             Array2::from_shape_vec((7, 1), vec![5.0, 0.0, 0.0, -0.75, 0.0, -0.75, 0.0]).unwrap();
         assert_eq!(expected_output1, new_b);
         assert_eq!(expected_output2, new_c);
+
+        let b_hat = coordinate_descent(
+            &x,
+            &y,
+            &(0..50).collect::<Vec<usize>>(),
+            10.0,
+            0.001,
+            1e4 as usize,
+        )
+        .unwrap();
+
+        println!("b_hat={:?}", b_hat);
+        println!("b_hat[(1, 0)]={:?}", b_hat[(1, 0)]);
+        println!("b_hat[(10, 0)]={:?}", b_hat[(10, 0)]);
+        println!("b_hat[(100, 0)]={:?}", b_hat[(100, 0)]);
+        println!("b_ha500[(500, 0)]={:?}", b_hat[(500, 0)]);
+
+        // assert_eq!(0, 1);
     }
 }

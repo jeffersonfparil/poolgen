@@ -284,7 +284,10 @@ mod tests {
         assert_eq!(parse_f64_roundup_and_own(pop2_locus1, 4), "0".to_owned());
         assert_eq!(parse_f64_roundup_and_own(pop2_locus2, 4), "0".to_owned());
         assert_eq!(parse_f64_roundup_and_own(pop5_locus1, 4), "0".to_owned());
-        assert_eq!(parse_f64_roundup_and_own(pop5_locus2, 4), "0.5051".to_owned());
+        assert_eq!(
+            parse_f64_roundup_and_own(pop5_locus2, 4),
+            "0.5051".to_owned()
+        );
         // assert_eq!(0, 1);
     }
 }

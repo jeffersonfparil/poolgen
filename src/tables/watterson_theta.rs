@@ -287,8 +287,14 @@ mod tests {
         let pop3_locus2 = watterson[(2, 2)]; // locus at 0.5, i.e. watterson = 50 / (100-1) = 0.5051
         assert_eq!(parse_f64_roundup_and_own(pop2_locus1, 4), "0".to_owned());
         assert_eq!(parse_f64_roundup_and_own(pop2_locus2, 4), "0".to_owned());
-        assert_eq!(parse_f64_roundup_and_own(pop3_locus1, 4), "0.1549".to_owned());
-        assert_eq!(parse_f64_roundup_and_own(pop3_locus2, 4), "0.2324".to_owned());
+        assert_eq!(
+            parse_f64_roundup_and_own(pop3_locus1, 4),
+            "0.1549".to_owned()
+        );
+        assert_eq!(
+            parse_f64_roundup_and_own(pop3_locus2, 4),
+            "0.2324".to_owned()
+        );
         // assert_eq!(0, 2);
     }
 }
