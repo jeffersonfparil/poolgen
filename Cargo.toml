@@ -17,8 +17,6 @@ rand = "0.8.5"
 function_name = "0.3.0"
 rayon = "1.7.0"
 
-approx = "0.4"
-
 [profile.dev]
 opt-level = 3
 

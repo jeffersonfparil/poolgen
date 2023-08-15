@@ -1,7 +1,6 @@
 use crate::base::*;
 use crate::gp::*;
 use crate::gwas::*;
-use approx::*;
 use ndarray::{prelude::*, Zip};
 use ndarray_linalg::*;
 use rand::prelude::*;
@@ -36,8 +35,30 @@ fn coordinate_descent(
     for i in 0..n {
         y_true[(i, 0)] = y[(row_idx[i], 0)];
     }
-    let mut beta = Array2::from_elem((p, 1), 0.0);
-    beta[(0, 0)] = y_true.mean().unwrap();
+    // let mut beta = Array2::from_elem((p, 1), 0.0);
+    // beta[(0, 0)] = y_true.mean().unwrap();
+    let col_idx = (0..p).collect::<Vec<usize>>();
+    let row_new_idx = (0..row_idx.len()).collect::<Vec<usize>>();
+    let mut beta = multiply_views_xx(
+        &multiply_views_xtx(
+            x,
+            &multiply_views_xxt(x, x, row_idx, &col_idx, row_idx, &col_idx)
+                .unwrap()
+                .pinv()
+                .unwrap(),
+            row_idx,
+            &col_idx,
+            &row_new_idx,
+            &row_new_idx,
+        )
+        .unwrap(),
+        y,
+        &col_idx,
+        &row_new_idx,
+        row_idx,
+        &vec![0],
+    )
+    .unwrap();
     for _ in 0..max_iterations {
         let mut change_in_beta = 0.0;
         for j in 0..p {
@@ -58,13 +79,12 @@ fn coordinate_descent(
             let z_j =
                 multiply_views_xtx(x, x, row_idx, &vec![j], row_idx, &vec![j]).unwrap()[(0, 0)];
             let new_b_j = soft_thresholding(rho_j, z_j, lambda).unwrap();
-            beta[(j, 0)] = new_b_j;
             change_in_beta += (new_b_j - beta[(j, 0)]).abs();
+            beta[(j, 0)] = new_b_j;
         }
-        // if change_in_beta <= convergence_threshold {
-        //     break;
-        // }
-        println!("beta = {:?}", beta);
+        if change_in_beta <= convergence_threshold {
+            break;
+        }
     }
     Ok(beta)
 }
@@ -643,17 +663,19 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
 mod tests {
     use super::*;
     use ndarray::concatenate;
+    use rand::distributions::{Bernoulli, Distribution};
 
     #[test]
     fn test_penalised() {
+        let n: usize = 100 as usize;
+        let p: usize = 10_000 as usize + 1;
         let intercept: Array2<f64> = Array2::ones((50, 1));
-
-        let frequencies = Array2::from_shape_vec(
-            (50, 1000),
-            (1..50001).map(|x| x as f64 / 5.0e4).collect::<Vec<f64>>(),
-        )
-        .unwrap();
-        let x: Array2<f64> = concatenate(Axis(1), &[intercept.view(), frequencies.view()]).unwrap();
+        let d = Bernoulli::new(0.5).unwrap();
+        let frequencies = d.sample(&mut rand::thread_rng()) as u64;
+        let mut x = Array2::from_shape_fn((n, p), |(i, j)| d.sample(&mut rand::thread_rng()) as u64 as f64);
+        for i in 0..n {
+            x[(i, 0)] = 1.00
+        }
         let mut b: Array2<f64> = Array2::from_elem((1000, 1), 0.0);
         b[(1, 0)] = 1.0;
         b[(10, 0)] = 1.0;
@@ -691,12 +713,13 @@ mod tests {
             &y,
             &(0..50).collect::<Vec<usize>>(),
             10.0,
-            0.001,
-            1e4 as usize,
+            1e-3,
+            100 as usize,
         )
         .unwrap();
 
         println!("b_hat={:?}", b_hat);
+        println!("n_non_zero={:?}", b_hat.fold(0, |sum, x| if x.abs() > 1e-7 {sum + 1}else{sum + 0}));
         println!("b_hat[(1, 0)]={:?}", b_hat[(1, 0)]);
         println!("b_hat[(10, 0)]={:?}", b_hat[(10, 0)]);
         println!("b_hat[(100, 0)]={:?}", b_hat[(100, 0)]);
