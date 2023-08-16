@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn test_ols() {
         // Expected
-        let expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.233580810533\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.679766861832\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.102562400822\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.800757277168\n".to_owned();
+        let expected_output: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.233580810533\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.679766861832\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.102562400822\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.800757277168\n".to_owned();
         // Inputs
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 3),
@@ -503,7 +503,6 @@ mod tests {
             "test-iterative_ols_with_xxt_eigens.csv".to_owned()
         );
         // Outputs
-
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 3),
             vec![
@@ -532,6 +531,6 @@ mod tests {
         assert_eq!(p1, p2);
         assert_eq!(k1, 2);
         assert_eq!(k1, k2);
-        assert_eq!(expected_output7, ols_line);
+        assert_eq!(expected_output, ols_line);
     }
 }

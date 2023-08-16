@@ -729,6 +729,6 @@ mod tests {
         println!("b_hat[(100, 0)]={:?}", b_hat[(100, 0)]);
         println!("b_ha500[(500, 0)]={:?}", b_hat[(500, 0)]);
 
-        assert_eq!(0, 1);
+        // assert_eq!(0, 1);
     }
 }

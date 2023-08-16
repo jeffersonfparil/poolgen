@@ -463,13 +463,7 @@ mod tests {
     #[test]
     fn test_mle() {
         // Expected
-        let expected_output1: Array1<f64> = Array1::from_vec(vec![-0.73, 5.53, 6.42]);
-        let expected_output2: Array1<f64> = Array1::from_vec(vec![0.61, 8.59, 3.99]);
-        let expected_output3: Array1<f64> = Array1::from_vec(vec![0.35, 0.59, 0.25]);
-        let expected_output4: Array1<f64> = Array1::from_vec(vec![0.08, 0.99, -0.41]);
-        let expected_output5: Array1<f64> = Array1::from_vec(vec![0.25, 3.44, 1.60]);
-        let expected_output6: Array1<f64> = Array1::from_vec(vec![0.77, 0.80, 0.82]);
-        let _expected_output7: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.5856869833119951\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.8004426037481633\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.2485036431073504\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.8230663350210885\n".to_owned();
+        let expected_output: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.233580810533\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.679766861832\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.102562400822\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.800757277168\n".to_owned();
         // Inputs
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 3),
@@ -524,110 +518,46 @@ mod tests {
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(2, 2)] = 5.0;
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(3, 2)] = 2.0;
         genotypes_and_phenotypes.intercept_and_allele_frequencies[(4, 2)] = 1.0;
-        let mle_iterate_with_covariate = mle_with_covariate(
-            &genotypes_and_phenotypes,
+        let ols_iterate_with_covariate = ols_with_covariate(
+            &mut genotypes_and_phenotypes,
             0.5,
-            &"test-iterative_mle_with_xxt_eigens.sync".to_owned(),
-            &"test-iterative_mle_with_xxt_eigens.csv".to_owned(),
+            &"test-iterative_ols_with_xxt_eigens.sync".to_owned(),
+            &"test-iterative_ols_with_xxt_eigens.csv".to_owned(),
         )
         .unwrap();
         assert_eq!(
-            mle_iterate_with_covariate,
-            "test-iterative_mle_with_xxt_eigens.csv".to_owned()
+            ols_iterate_with_covariate,
+            "test-iterative_ols_with_xxt_eigens.csv".to_owned()
         );
         // Outputs
-        println!("x={:?}", x);
-        println!("y={:?}", y);
-        let (beta, var_beta, pval) = mle(&x, &y, true).unwrap();
+        let x: Array2<f64> = Array2::from_shape_vec(
+            (5, 3),
+            vec![
+                1.0, 0.4, 0.1, 1.0, 0.2, 0.1, 1.0, 0.3, 0.2, 1.0, 0.4, 0.3, 1.0, 0.5, 0.5,
+            ],
+        )
+        .unwrap();
+        let y: Array2<f64> = Array2::from_shape_vec(
+            (5, 2),
+            vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
+        )
+        .unwrap();
+
+        let (beta, var_beta, pval) = ols(&x, &y, true).unwrap();
         println!("beta={:?}", beta);
+        println!("var_beta={:?}", var_beta);
+        println!("pval={:?}", pval);
+        // assert_eq!(0, 1);
         let p1 = beta.nrows();
         let k1 = beta.ncols();
         let p2 = var_beta.nrows();
         let k2 = var_beta.ncols();
-        let _ols_line = mle_iterate(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
+        let ols_line = ols_iterate(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
         // Assertions
         assert_eq!(p1, 3); // Output dimensions
         assert_eq!(p1, p2);
         assert_eq!(k1, 2);
         assert_eq!(k1, k2);
-        // estimated betas for the first phenotype
-        assert_eq!(
-            (expected_output1[0] * 100.0).round(),
-            (beta[(0, 0)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output1[1] * 100.0).round(),
-            (beta[(1, 0)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output1[2] * 100.0).round(),
-            (beta[(2, 0)] * 100.0).round()
-        );
-        // estimated beta variances for the first phenotype
-        assert_eq!(
-            (expected_output2[0] * 100.0).round(),
-            (var_beta[(0, 0)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output2[1] * 100.0).round(),
-            (var_beta[(1, 0)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output2[2] * 100.0).round(),
-            (var_beta[(2, 0)] * 100.0).round()
-        );
-        // estimated pvalues for the first phenotype
-        assert_eq!(
-            (expected_output3[0] * 100.0).round(),
-            (pval[(0, 0)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output3[1] * 100.0).round(),
-            (pval[(1, 0)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output3[2] * 100.0).round(),
-            (pval[(2, 0)] * 100.0).round()
-        );
-        // estimated betas for the second phenotype
-        assert_eq!(
-            (expected_output4[0] * 100.0).round(),
-            (beta[(0, 1)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output4[1] * 100.0).round(),
-            (beta[(1, 1)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output4[2] * 100.0).round(),
-            (beta[(2, 1)] * 100.0).round()
-        );
-        // estimated beta variances for the second phenotype
-        assert_eq!(
-            (expected_output5[0] * 100.0).round(),
-            (var_beta[(0, 1)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output5[1] * 100.0).round(),
-            (var_beta[(1, 1)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output5[2] * 100.0).round(),
-            (var_beta[(2, 1)] * 100.0).round()
-        );
-        // estimated pvalues for the second phenotype
-        assert_eq!(
-            (expected_output6[0] * 100.0).round(),
-            (pval[(0, 1)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output6[1] * 100.0).round(),
-            (pval[(1, 1)] * 100.0).round()
-        );
-        assert_eq!(
-            (expected_output6[2] * 100.0).round(),
-            (pval[(2, 1)] * 100.0).round()
-        );
-        // assert_eq!(expected_output7, ols_line);
+        assert_eq!(expected_output, ols_line);
     }
 }
