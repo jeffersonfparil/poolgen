@@ -59,9 +59,13 @@ fn coordinate_descent(
         &vec![0],
     )
     .unwrap();
-    for _ in 0..max_iterations {
+    for iter in 0..max_iterations {
         let mut change_in_beta = 0.0;
         for j in 0..p {
+            if (iter > 5) & (beta[(j, 0)].abs() <= 1e-9) {
+                beta[(j, 0)] = 0.0;
+                continue;
+            }
             let col_idx = (0..p).filter(|&i| i != j).collect::<Vec<usize>>();
             let beta_idx = (0..p).filter(|&i| i != j).collect::<Vec<usize>>();
             let yhat_notj =
@@ -713,7 +717,7 @@ mod tests {
             &y,
             &(0..50).collect::<Vec<usize>>(),
             10.0,
-            1e-3,
+            0.1,
             100 as usize,
         )
         .unwrap();
@@ -725,6 +729,6 @@ mod tests {
         println!("b_hat[(100, 0)]={:?}", b_hat[(100, 0)]);
         println!("b_ha500[(500, 0)]={:?}", b_hat[(500, 0)]);
 
-        // assert_eq!(0, 1);
+        assert_eq!(0, 1);
     }
 }

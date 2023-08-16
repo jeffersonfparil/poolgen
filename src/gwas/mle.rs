@@ -18,12 +18,12 @@ fn negative_likelihood_normal_distribution_sigma_and_beta(
     let n = x.nrows();
     let p = x.ncols();
     assert_eq!(n, y.len());
-    assert_eq!(p + 1, params.len()); // including sigma or error variance in the list of parameters
-                                     // bound sigma with logit
-    let sigma = bound_parameters_with_logit(&vec![params[0]], f64::EPSILON, 1e9)[0];
+    assert_eq!(p + 1, params.len()); // including sigma2 or error variance in the list of parameters
+                                     // bound sigma2 with logit
+    let sigma2 = bound_parameters_with_logit(&vec![params[0]], f64::EPSILON, 1e9)[0];
     let betas = Array1::from_vec((&params[1..(p + 1)]).to_owned());
-    (n as f64 / 2.00) * (2.00 * PI * sigma).ln()
-        + (1.00 / sigma)
+    (n as f64 / 2.00) * (2.00 * PI * sigma2).ln()
+        + (1.00 / sigma2)
             * (y - x.dot(&betas))
                 .iter()
                 .fold(0.0, |sum_squared, &x| sum_squared + x.powf(2.0))
