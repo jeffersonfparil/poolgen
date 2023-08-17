@@ -433,104 +433,133 @@ pub fn ols_with_covariate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::distributions::{Bernoulli, Distribution};
     #[test]
     fn test_ols() {
-        // Expected
-        let expected_output: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.233580810533\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.679766861832\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.102562400822\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.800757277168\n".to_owned();
-        // Inputs
-        let x: Array2<f64> = Array2::from_shape_vec(
-            (5, 3),
-            vec![
-                1.0, 0.4, 0.1, 1.0, 0.2, 0.1, 1.0, 0.3, 0.2, 1.0, 0.4, 0.3, 1.0, 0.5, 0.5,
-            ],
+        let n: usize = 100 as usize;
+        let p: usize = 50 as usize + 1;
+        let d = Bernoulli::new(0.5).unwrap();
+        let frequencies = d.sample(&mut rand::thread_rng()) as u64;
+        let mut x = Array2::from_shape_fn((n, p), |(i, j)| d.sample(&mut rand::thread_rng()) as u64 as f64);
+        for i in 0..n {
+            x[(i, 0)] = 1.00 // intercept
+        }
+        let mut b: Array2<f64> = Array2::from_elem((p, 1), 0.0);
+        b[(1, 0)] = 1.0;
+        b[(10, 0)] = 1.0;
+        let y: Array2<f64> = multiply_views_xx(
+            &x,
+            &b,
+            &(0..n).collect::<Vec<usize>>(),
+            &(0..p).collect::<Vec<usize>>(),
+            &(0..p).collect::<Vec<usize>>(),
+            &vec![0],
         )
         .unwrap();
-        let y: Array2<f64> = Array2::from_shape_vec(
-            (5, 2),
-            vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
-        )
-        .unwrap();
-        let counts: Array2<u64> =
-            Array2::from_shape_vec((5, 3), vec![4, 1, 5, 2, 1, 7, 3, 2, 5, 4, 3, 3, 5, 5, 0])
-                .unwrap();
-        let filter_stats = FilterStats {
-            remove_ns: true,
-            min_quality: 0.005,
-            min_coverage: 1,
-            min_allele_frequency: 0.005,
-            pool_sizes: vec![20.0, 20.0, 20.0, 20.0, 20.0],
-        };
-        let locus_counts = LocusCounts {
-            chromosome: "Chromosome1".to_owned(),
-            position: 12345,
-            alleles_vector: vec!["A".to_owned(), "T".to_owned(), "D".to_owned()],
-            matrix: counts,
-        };
-        let phenotypes: Array2<f64> = y.clone();
-        let mut locus_counts_and_phenotypes = LocusCountsAndPhenotypes {
-            locus_counts: locus_counts,
-            phenotypes: phenotypes,
-            pool_names: vec!["pool1", "pool2", "pool3", "pool4", "pool5"]
-                .into_iter()
-                .map(|x| x.to_owned())
-                .collect::<Vec<String>>(),
-        };
-        let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
-            chromosome: vec!["intercept".to_owned(), "X".to_owned(), "Y".to_owned()],
-            position: vec![0, 123, 987],
-            allele: vec!["intercept".to_owned(), "a".to_owned(), "g".to_owned()],
-            intercept_and_allele_frequencies: x.clone(),
-            phenotypes: y.clone(),
-            pool_names: (0..5)
-                .map(|x| "pool-".to_owned() + &x.to_string()[..])
-                .collect(),
-            coverages: Array2::from_elem((5, 2), 100.0),
-        };
-        genotypes_and_phenotypes.intercept_and_allele_frequencies[(0, 2)] = 10.0;
-        genotypes_and_phenotypes.intercept_and_allele_frequencies[(1, 2)] = 8.0;
-        genotypes_and_phenotypes.intercept_and_allele_frequencies[(2, 2)] = 5.0;
-        genotypes_and_phenotypes.intercept_and_allele_frequencies[(3, 2)] = 2.0;
-        genotypes_and_phenotypes.intercept_and_allele_frequencies[(4, 2)] = 1.0;
-        let ols_iterate_with_covariate = ols_with_covariate(
-            &mut genotypes_and_phenotypes,
-            0.5,
-            &"test-iterative_ols_with_xxt_eigens.sync".to_owned(),
-            &"test-iterative_ols_with_xxt_eigens.csv".to_owned(),
-        )
-        .unwrap();
-        assert_eq!(
-            ols_iterate_with_covariate,
-            "test-iterative_ols_with_xxt_eigens.csv".to_owned()
-        );
-        // Outputs
-        let x: Array2<f64> = Array2::from_shape_vec(
-            (5, 3),
-            vec![
-                1.0, 0.4, 0.1, 1.0, 0.2, 0.1, 1.0, 0.3, 0.2, 1.0, 0.4, 0.3, 1.0, 0.5, 0.5,
-            ],
-        )
-        .unwrap();
-        let y: Array2<f64> = Array2::from_shape_vec(
-            (5, 2),
-            vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
-        )
-        .unwrap();
+        let row_idx: Vec<usize> = (0..50).collect();
+        println!("x={:?}", x);
+        println!("b={:?}", b);
+        println!("y={:?}", y);
+        let out1 = ols(&x, &y, false).unwrap();
+        println!("out1={:?}", out1);
+        assert_eq!(0, 1);
 
-        let (beta, var_beta, pval) = ols(&x, &y, true).unwrap();
-        println!("beta={:?}", beta);
-        println!("var_beta={:?}", var_beta);
-        println!("pval={:?}", pval);
-        // assert_eq!(0, 1);
-        let p1 = beta.nrows();
-        let k1 = beta.ncols();
-        let p2 = var_beta.nrows();
-        let k2 = var_beta.ncols();
-        let ols_line = ols_iterate(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
-        // Assertions
-        assert_eq!(p1, 3); // Output dimensions
-        assert_eq!(p1, p2);
-        assert_eq!(k1, 2);
-        assert_eq!(k1, k2);
-        assert_eq!(expected_output, ols_line);
+        // // Expected
+        // let expected_output: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.233580810533\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.679766861832\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.102562400822\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.800757277168\n".to_owned();
+        // // Inputs
+        // let x: Array2<f64> = Array2::from_shape_vec(
+        //     (5, 3),
+        //     vec![
+        //         1.0, 0.4, 0.1, 1.0, 0.2, 0.1, 1.0, 0.3, 0.2, 1.0, 0.4, 0.3, 1.0, 0.5, 0.5,
+        //     ],
+        // )
+        // .unwrap();
+        // let y: Array2<f64> = Array2::from_shape_vec(
+        //     (5, 2),
+        //     vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
+        // )
+        // .unwrap();
+        // let counts: Array2<u64> =
+        //     Array2::from_shape_vec((5, 3), vec![4, 1, 5, 2, 1, 7, 3, 2, 5, 4, 3, 3, 5, 5, 0])
+        //         .unwrap();
+        // let filter_stats = FilterStats {
+        //     remove_ns: true,
+        //     min_quality: 0.005,
+        //     min_coverage: 1,
+        //     min_allele_frequency: 0.005,
+        //     pool_sizes: vec![20.0, 20.0, 20.0, 20.0, 20.0],
+        // };
+        // let locus_counts = LocusCounts {
+        //     chromosome: "Chromosome1".to_owned(),
+        //     position: 12345,
+        //     alleles_vector: vec!["A".to_owned(), "T".to_owned(), "D".to_owned()],
+        //     matrix: counts,
+        // };
+        // let phenotypes: Array2<f64> = y.clone();
+        // let mut locus_counts_and_phenotypes = LocusCountsAndPhenotypes {
+        //     locus_counts: locus_counts,
+        //     phenotypes: phenotypes,
+        //     pool_names: vec!["pool1", "pool2", "pool3", "pool4", "pool5"]
+        //         .into_iter()
+        //         .map(|x| x.to_owned())
+        //         .collect::<Vec<String>>(),
+        // };
+        // let mut genotypes_and_phenotypes = GenotypesAndPhenotypes {
+        //     chromosome: vec!["intercept".to_owned(), "X".to_owned(), "Y".to_owned()],
+        //     position: vec![0, 123, 987],
+        //     allele: vec!["intercept".to_owned(), "a".to_owned(), "g".to_owned()],
+        //     intercept_and_allele_frequencies: x.clone(),
+        //     phenotypes: y.clone(),
+        //     pool_names: (0..5)
+        //         .map(|x| "pool-".to_owned() + &x.to_string()[..])
+        //         .collect(),
+        //     coverages: Array2::from_elem((5, 2), 100.0),
+        // };
+        // genotypes_and_phenotypes.intercept_and_allele_frequencies[(0, 2)] = 10.0;
+        // genotypes_and_phenotypes.intercept_and_allele_frequencies[(1, 2)] = 8.0;
+        // genotypes_and_phenotypes.intercept_and_allele_frequencies[(2, 2)] = 5.0;
+        // genotypes_and_phenotypes.intercept_and_allele_frequencies[(3, 2)] = 2.0;
+        // genotypes_and_phenotypes.intercept_and_allele_frequencies[(4, 2)] = 1.0;
+        // let ols_iterate_with_covariate = ols_with_covariate(
+        //     &mut genotypes_and_phenotypes,
+        //     0.5,
+        //     &"test-iterative_ols_with_xxt_eigens.sync".to_owned(),
+        //     &"test-iterative_ols_with_xxt_eigens.csv".to_owned(),
+        // )
+        // .unwrap();
+        // assert_eq!(
+        //     ols_iterate_with_covariate,
+        //     "test-iterative_ols_with_xxt_eigens.csv".to_owned()
+        // );
+        // // Outputs
+        // let x: Array2<f64> = Array2::from_shape_vec(
+        //     (5, 3),
+        //     vec![
+        //         1.0, 0.4, 0.1, 1.0, 0.2, 0.1, 1.0, 0.3, 0.2, 1.0, 0.4, 0.3, 1.0, 0.5, 0.5,
+        //     ],
+        // )
+        // .unwrap();
+        // let y: Array2<f64> = Array2::from_shape_vec(
+        //     (5, 2),
+        //     vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
+        // )
+        // .unwrap();
+
+        // let (beta, var_beta, pval) = ols(&x, &y, true).unwrap();
+        // println!("beta={:?}", beta);
+        // println!("var_beta={:?}", var_beta);
+        // println!("pval={:?}", pval);
+        // // assert_eq!(0, 1);
+        // let p1 = beta.nrows();
+        // let k1 = beta.ncols();
+        // let p2 = var_beta.nrows();
+        // let k2 = var_beta.ncols();
+        // let ols_line = ols_iterate(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
+        // // Assertions
+        // assert_eq!(p1, 3); // Output dimensions
+        // assert_eq!(p1, p2);
+        // assert_eq!(k1, 2);
+        // assert_eq!(k1, k2);
+        // assert_eq!(expected_output, ols_line);
     }
 }
