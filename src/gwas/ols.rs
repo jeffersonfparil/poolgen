@@ -433,20 +433,27 @@ pub fn ols_with_covariate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::distributions::{Bernoulli, Distribution};
+    use rand::{prelude::*, distributions::{Bernoulli, Distribution}};
+    use std::slice::Iter;
     #[test]
     fn test_ols() {
-        let n: usize = 100 as usize;
-        let p: usize = 50 as usize + 1;
+        // Simulate
+        let n = 100 as usize;       // number of observations
+        let np = 10 as usize;       // number of pools
+        let sp = n / np;            // size of each pools
+        let p = 50 as usize + 1;    // number of predictors including the intercept
+        let q = 10 as usize;        // number of predictors with non-zero effects
         let d = Bernoulli::new(0.5).unwrap();
-        let frequencies = d.sample(&mut rand::thread_rng()) as u64;
         let mut x = Array2::from_shape_fn((n, p), |(i, j)| d.sample(&mut rand::thread_rng()) as u64 as f64);
         for i in 0..n {
             x[(i, 0)] = 1.00 // intercept
         }
         let mut b: Array2<f64> = Array2::from_elem((p, 1), 0.0);
-        b[(1, 0)] = 1.0;
-        b[(10, 0)] = 1.0;
+        let idx_b = (0..p).choose_multiple(&mut rand::thread_rng(), q);
+        for i in &idx_b {
+            let sign = vec![-1.0, 1.0].iter().choose_multiple(&mut rand::thread_rng(), 1)[0].to_owned();
+            b[(*i, 0)] = 1.0 * sign;
+        }
         let y: Array2<f64> = multiply_views_xx(
             &x,
             &b,
@@ -456,13 +463,63 @@ mod tests {
             &vec![0],
         )
         .unwrap();
-        let row_idx: Vec<usize> = (0..50).collect();
-        println!("x={:?}", x);
-        println!("b={:?}", b);
-        println!("y={:?}", y);
-        let out1 = ols(&x, &y, false).unwrap();
-        println!("out1={:?}", out1);
-        assert_eq!(0, 1);
+
+        // Pool
+        
+        // sort individuals by phenotype first...
+        let mut vec_sorter: Vec<(usize, f64)> = vec![];
+        for i in 0..n {
+            vec_sorter.push((i, y[(i, 0)]));
+        }
+        vec_sorter.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+
+        let mut y_pool = Array2::from_elem((np, 1), f64::NAN);
+        let mut x_pool = Array2::from_elem((np, p), f64::NAN);
+        for i in 0..np {
+            let mut idx_sorted = vec![];
+            for j in (i*sp)..((i+1)*sp) {
+                idx_sorted.push(vec_sorter[j].0);
+            }
+            let mut y_pool_i = Array2::from_elem((sp, 1), f64::NAN);
+            let mut x_pool_i = Array2::from_elem((sp, p), f64::NAN);
+            for j in 0..sp {
+                y_pool_i[(j, 0)] = y[(idx_sorted[j], 0)];
+                for k in 0..p {
+                    x_pool_i[(j, k)] = x[(idx_sorted[j], k)];
+                }
+            }
+            y_pool[(i, 0)] = y_pool_i.column(0).mean().unwrap();
+            for j in 0..p {
+                x_pool[(i, j)] = x_pool_i.column(j).sum();
+            }
+        }
+
+        println!("y_pool={:?}", y_pool);
+        println!("x_pool={:?}", x_pool);
+
+
+        // Test ols()
+        let (b_hat, _var, pval) = ols(&x, &y, false).unwrap();
+        let q_hat = b_hat.fold(0, |sum, &x| if x.abs()>1e-7{sum+1}else{sum+0});
+        let mut pval_q_sum = 0.0;
+        for i in &idx_b {
+            pval_q_sum += pval[(*i, 0)];
+        }
+        println!("x={:?}; y={:?}", x, y);
+        println!("b={:?}; b_hat={:?}", b, b_hat);
+        println!("pval={:?}; pval_q_sum={}", pval, pval_q_sum);
+        assert_eq!(q, q_hat);                           // We are recapturing the simulated predictors with non-zero effects, and ...
+        assert_eq!(sensible_round(pval_q_sum, 7), 0.0); // the p-values are significant.
+
+        // Test ols_iterate()
+        
+
+
+        // Test ols_with_covariate()
+
+
+        // assert_eq!(0, 1);
 
         // // Expected
         // let expected_output: String = "Chromosome1,12345,A,0.36,Pheno_0,5.528455,0.233580810533\nChromosome1,12345,A,0.36,Pheno_1,0.99187,0.679766861832\nChromosome1,12345,T,0.24,Pheno_0,6.422764,0.102562400822\nChromosome1,12345,T,0.24,Pheno_1,-0.406504,0.800757277168\n".to_owned();
