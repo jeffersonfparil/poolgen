@@ -433,25 +433,33 @@ pub fn ols_with_covariate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{prelude::*, distributions::{Bernoulli, Distribution}};
+    use rand::{
+        distributions::{Bernoulli, Distribution},
+        prelude::*,
+    };
     use std::slice::Iter;
     #[test]
     fn test_ols() {
         // Simulate
-        let n = 100 as usize;       // number of observations
-        let np = 10 as usize;       // number of pools
-        let sp = n / np;            // size of each pools
-        let p = 50 as usize + 1;    // number of predictors including the intercept
-        let q = 10 as usize;        // number of predictors with non-zero effects
+        let n = 100 as usize; // number of observations
+        let np = 10 as usize; // number of pools
+        let sp = n / np; // size of each pools
+        let p = 50 as usize + 1; // number of predictors including the intercept
+        let q = 10 as usize; // number of predictors with non-zero effects
         let d = Bernoulli::new(0.5).unwrap();
-        let mut x = Array2::from_shape_fn((n, p), |(i, j)| d.sample(&mut rand::thread_rng()) as u64 as f64);
+        let mut x = Array2::from_shape_fn((n, p), |(i, j)| {
+            d.sample(&mut rand::thread_rng()) as u64 as f64
+        });
         for i in 0..n {
             x[(i, 0)] = 1.00 // intercept
         }
         let mut b: Array2<f64> = Array2::from_elem((p, 1), 0.0);
         let idx_b = (0..p).choose_multiple(&mut rand::thread_rng(), q);
         for i in &idx_b {
-            let sign = vec![-1.0, 1.0].iter().choose_multiple(&mut rand::thread_rng(), 1)[0].to_owned();
+            let sign = vec![-1.0, 1.0]
+                .iter()
+                .choose_multiple(&mut rand::thread_rng(), 1)[0]
+                .to_owned();
             b[(*i, 0)] = 1.0 * sign;
         }
         let y: Array2<f64> = multiply_views_xx(
@@ -465,7 +473,7 @@ mod tests {
         .unwrap();
 
         // Pool
-        
+
         // sort individuals by phenotype first...
         let mut vec_sorter: Vec<(usize, f64)> = vec![];
         for i in 0..n {
@@ -473,12 +481,11 @@ mod tests {
         }
         vec_sorter.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-
         let mut y_pool = Array2::from_elem((np, 1), f64::NAN);
         let mut x_pool = Array2::from_elem((np, p), f64::NAN);
         for i in 0..np {
             let mut idx_sorted = vec![];
-            for j in (i*sp)..((i+1)*sp) {
+            for j in (i * sp)..((i + 1) * sp) {
                 idx_sorted.push(vec_sorter[j].0);
             }
             let mut y_pool_i = Array2::from_elem((sp, 1), f64::NAN);
@@ -498,10 +505,9 @@ mod tests {
         println!("y_pool={:?}", y_pool);
         println!("x_pool={:?}", x_pool);
 
-
         // Test ols()
         let (b_hat, _var, pval) = ols(&x, &y, false).unwrap();
-        let q_hat = b_hat.fold(0, |sum, &x| if x.abs()>1e-7{sum+1}else{sum+0});
+        let q_hat = b_hat.fold(0, |sum, &x| if x.abs() > 1e-7 { sum + 1 } else { sum + 0 });
         let mut pval_q_sum = 0.0;
         for i in &idx_b {
             pval_q_sum += pval[(*i, 0)];
@@ -509,15 +515,12 @@ mod tests {
         println!("x={:?}; y={:?}", x, y);
         println!("b={:?}; b_hat={:?}", b, b_hat);
         println!("pval={:?}; pval_q_sum={}", pval, pval_q_sum);
-        assert_eq!(q, q_hat);                           // We are recapturing the simulated predictors with non-zero effects, and ...
+        assert_eq!(q, q_hat); // We are recapturing the simulated predictors with non-zero effects, and ...
         assert_eq!(sensible_round(pval_q_sum, 7), 0.0); // the p-values are significant.
 
         // Test ols_iterate()
-        
-
 
         // Test ols_with_covariate()
-
 
         // assert_eq!(0, 1);
 

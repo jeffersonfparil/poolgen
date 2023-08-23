@@ -676,7 +676,9 @@ mod tests {
         let intercept: Array2<f64> = Array2::ones((50, 1));
         let d = Bernoulli::new(0.5).unwrap();
         let frequencies = d.sample(&mut rand::thread_rng()) as u64;
-        let mut x = Array2::from_shape_fn((n, p), |(i, j)| d.sample(&mut rand::thread_rng()) as u64 as f64);
+        let mut x = Array2::from_shape_fn((n, p), |(i, j)| {
+            d.sample(&mut rand::thread_rng()) as u64 as f64
+        });
         for i in 0..n {
             x[(i, 0)] = 1.00
         }
@@ -723,7 +725,10 @@ mod tests {
         .unwrap();
 
         println!("b_hat={:?}", b_hat);
-        println!("n_non_zero={:?}", b_hat.fold(0, |sum, x| if x.abs() > 1e-7 {sum + 1}else{sum + 0}));
+        println!(
+            "n_non_zero={:?}",
+            b_hat.fold(0, |sum, x| if x.abs() > 1e-7 { sum + 1 } else { sum + 0 })
+        );
         println!("b_hat[(1, 0)]={:?}", b_hat[(1, 0)]);
         println!("b_hat[(10, 0)]={:?}", b_hat[(10, 0)]);
         println!("b_hat[(100, 0)]={:?}", b_hat[(100, 0)]);

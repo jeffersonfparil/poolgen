@@ -156,7 +156,7 @@ impl Parse<Phen> for FilePhen {
         } else {
             return Err(Error::new(
                 ErrorKind::Other,
-                "Invalid phenotype format. PLease select: 'default' or 'gwalpha_fmt'",
+                "Invalid phenotype format. Please select: 'default' or 'gwalpha_fmt'",
             ));
         }
     }
@@ -194,7 +194,7 @@ impl Parse<FileSyncPhen> for (FileSync, FilePhen) {
         } else {
             return Err(Error::new(
                 ErrorKind::Other,
-                "Invalid phenotype format. PLease select: 'default' or 'gwalpha_fmt'",
+                "Invalid phenotype format. Please select: 'default' or 'gwalpha_fmt'",
             ));
         }
     }

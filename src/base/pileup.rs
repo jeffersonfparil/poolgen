@@ -239,6 +239,11 @@ impl Filter for PileupLine {
     /// 2. removing allele/s if the minor allele frequency is less than `min_allele_frequency`
     /// 3. removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after previous filterings
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
+        // First, make sure we have the correct the correct number of expected pools as the phenotype file
+        // TODO: Make the error pop-out because it's currently being consumed as None in the only function calling it below.
+        if self.coverages.len() != filter_stats.pool_sizes.len() {
+            return Err(Error::new(ErrorKind::Other, "The number of pools in the pileup file does not correspond to the number of pools in the phenotype file."));
+        }
         // Convert low quality bases into Ns
         let n = self.read_qualities.len();
         for i in 0..n {

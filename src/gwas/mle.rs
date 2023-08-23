@@ -461,7 +461,5 @@ pub fn mle_with_covariate(
 mod tests {
     use super::*;
     #[test]
-    fn test_mle() {
-       
-    }
+    fn test_mle() {}
 }
