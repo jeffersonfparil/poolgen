@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn fst(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
+    min_snps_per_window: &usize,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<(String, String)> {
@@ -181,26 +182,45 @@ pub fn fst(
     // Additional output: Fst per window per population
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
+    // while filtering out windows with less than min_snps_per_window SNPs
     let m = loci_idx.len() - 1; // total number of loci x alleles, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![*loci_pos[0] as u64];
+    let mut windows_snp_counts: Vec<usize> = vec![0];
     for i in 1..m {
         let chr = loci_chr[i];
         let pos = loci_pos[i];
+        let j = windows_snp_counts.len()-1;
+        windows_snp_counts[j] += 1;
         if (chr != windows_chr.last().unwrap())
             | ((chr == windows_chr.last().unwrap())
                 & (pos > &(windows_pos.last().unwrap() + &(*window_size_bp as u64))))
         {
-            windows_idx.push(i);
-            windows_chr.push(chr.to_owned());
-            windows_pos.push(*pos);
+            if windows_snp_counts[j] < *min_snps_per_window {
+                windows_idx[j] = i;
+                windows_chr[j] = chr.to_owned();
+                windows_pos[j] = *pos;
+                windows_snp_counts[j] = 1;
+            } else {
+                windows_idx.push(i);
+                windows_chr.push(chr.to_owned());
+                windows_pos.push(*pos);
+                windows_snp_counts.push(0);
+            }
         }
     }
     // Add the last index of the final position
     windows_idx.push(m);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap() - 1);
+    if windows_snp_counts.last().unwrap() < min_snps_per_window {
+        windows_snp_counts.pop();
+    }
+    if windows_snp_counts.len() < 1 {
+        let error_message = "No window with at least ".to_owned() + &min_snps_per_window.to_string() + " SNPs.";
+        return Ok((fname_output, error_message))
+    }
     // Take the means per window
     let n_windows = windows_idx.len() - 1;
     let mut fst_per_pool_x_pool_per_window: Array2<f64> =
@@ -324,6 +344,7 @@ mod tests {
         let (out_genomewide, out_per_window) = fst(
             &genotypes_and_phenotypes,
             &100,
+            &1,
             &"test.something".to_owned(),
             &"".to_owned(),
         )
@@ -360,12 +381,13 @@ mod tests {
         let pop5_2 = fst[(4, 1)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
         println!("pop={:?}", pop);
         println!("fst={:?}", fst);
+        println!("out_per_window={:?}", out_per_window);
         // Assertions
         assert_eq!(diag, Array1::from_elem(pop.len(), 0.0));
         assert_eq!(pop1_4, 0.0);
         assert_eq!(pop4_1, 0.0);
         assert_eq!(pop2_5, 0.5);
         assert_eq!(pop5_2, 0.5);
-        // assert_eq!(0, 1);
+        assert_eq!(0, 1);
     }
 }

@@ -34,8 +34,8 @@ pub fn xpclr_per_window(
     loci_pos.push(genotypes_and_phenotypes.position.last().unwrap()); // last allele of the last locus
     let l = loci_idx.len();
     assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
-    // Each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
-    let mut pi: Array2<f64> = Array2::from_elem((l - 1, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    // Each xpclr across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
+    let mut xpclr: Array2<f64> = Array2::from_elem((l - 1, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     let loci: Array2<usize> = Array2::from_shape_vec(
         (l - 1, n),
         (0..(l - 1))
@@ -97,7 +97,7 @@ pub fn xpclr(
             .collect::<Vec<String>>()
             .join(".");
         fname_output = bname.to_owned()
-            + "-pi-"
+            + "-xpclr-"
             + &window_size_bp.to_string()
             + "_bp_windows-"
             + &time.to_string()
@@ -202,7 +202,7 @@ mod tests {
             .unwrap(),
         };
         // Outputs
-        // let out = pi(
+        // let out = xpclr(
         //     &genotypes_and_phenotypes,
         //     &100, // 100-kb windows
         //     &"test.something".to_owned(),
@@ -213,7 +213,7 @@ mod tests {
         // let reader = std::io::BufReader::new(file);
         // let mut header: Vec<String> = vec![];
         // let mut pop: Vec<String> = vec![];
-        // let mut pi: Vec<f64> = vec![];
+        // let mut xpclr: Vec<f64> = vec![];
         // for line in reader.lines() {
         //     let split = line
         //         .unwrap()
@@ -229,15 +229,15 @@ mod tests {
         //             .map(|x| x.parse::<f64>().unwrap())
         //             .collect::<Vec<f64>>()
         //         {
-        //             pi.push(f);
+        //             xpclr.push(f);
         //         }
         //     }
         // }
-        // let pi: Array2<f64> = Array2::from_shape_vec((5, 3), pi).unwrap();
-        // let pop2_locus1 = pi[(1, 1)]; // locus fixed, i.e. pi=0.0
-        // let pop2_locus2 = pi[(1, 2)]; // locus fixed, i.e. pi=0.0
-        // let pop5_locus1 = pi[(4, 1)]; // locus fixed, i.e. pi=0.0
-        // let pop5_locus2 = pi[(4, 2)]; // locus at 0.5, i.e. pi = 50 / (100-1) = 0.5051
+        // let xpclr: Array2<f64> = Array2::from_shape_vec((5, 3), xpclr).unwrap();
+        // let pop2_locus1 = xpclr[(1, 1)]; // locus fixed, i.e. xpclr=0.0
+        // let pop2_locus2 = xpclr[(1, 2)]; // locus fixed, i.e. xpclr=0.0
+        // let pop5_locus1 = xpclr[(4, 1)]; // locus fixed, i.e. xpclr=0.0
+        // let pop5_locus2 = xpclr[(4, 2)]; // locus at 0.5, i.e. xpclr = 50 / (100-1) = 0.5051
         // assert_eq!(parse_f64_roundup_and_own(pop2_locus1, 4), "0".to_owned());
         // assert_eq!(parse_f64_roundup_and_own(pop2_locus2, 4), "0".to_owned());
         // assert_eq!(parse_f64_roundup_and_own(pop5_locus1, 4), "0".to_owned());

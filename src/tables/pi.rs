@@ -2,12 +2,14 @@ use crate::base::*;
 use ndarray::{prelude::*, Zip};
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
+use std::io::{Error, ErrorKind};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unbiased multi-allelic nucleotide diversity per population ($\pi$ or $\theta_{\pi}=4N_{e}\mu$), which is similar to [Korunes & Samuk 2019](https://doi.org/10.1111/1755-0998.13326) which assumes biallelic loci
 pub fn theta_pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
+    min_snps_per_window: &usize
 ) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
     let (n, p) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
@@ -73,22 +75,42 @@ pub fn theta_pi(
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![*loci_pos[0] as u64];
+    let mut windows_snp_counts: Vec<usize> = vec![0];
     for i in 1..m {
         let chr = loci_chr[i];
         let pos = loci_pos[i];
+        let j = windows_snp_counts.len()-1;
+        windows_snp_counts[j] += 1;
         if (chr != windows_chr.last().unwrap())
             | ((chr == windows_chr.last().unwrap())
                 & (pos > &(windows_pos.last().unwrap() + &(*window_size_bp as u64))))
         {
-            windows_idx.push(i);
-            windows_chr.push(chr.to_owned());
-            windows_pos.push(*pos);
+            if windows_snp_counts[j] < *min_snps_per_window {
+                windows_idx[j] = i;
+                windows_chr[j] = chr.to_owned();
+                windows_pos[j] = *pos;
+                windows_snp_counts[j] = 1;
+            } else {
+                windows_idx.push(i);
+                windows_chr.push(chr.to_owned());
+                windows_pos.push(*pos);
+                windows_snp_counts.push(0);
+            }
         }
     }
     // Add the last index of the final position
     windows_idx.push(m);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap() - 1);
+    if windows_snp_counts.last().unwrap() < min_snps_per_window {
+        windows_snp_counts.pop();
+    }
+    if windows_snp_counts.len() < 1 {
+        return Err(Error::new(
+            ErrorKind::Other,
+            "The two matrices are incompatible.",
+        ));
+    }
     // Take the means per window
     let n_windows = windows_idx.len() - 1;
     let mut pi_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
@@ -109,12 +131,13 @@ pub fn theta_pi(
 pub fn pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
+    min_snps_per_window: &usize,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate heterozygosities
     let (pi_per_pool_per_window, windows_chr, windows_pos) =
-        theta_pi(genotypes_and_phenotypes, window_size_bp).unwrap();
+        theta_pi(genotypes_and_phenotypes, window_size_bp, min_snps_per_window).unwrap();
     let n = pi_per_pool_per_window.ncols();
     let n_windows = pi_per_pool_per_window.nrows();
     let vec_pi_across_windows = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
@@ -248,6 +271,7 @@ mod tests {
         let out = pi(
             &genotypes_and_phenotypes,
             &100, // 100-kb windows
+            &1, // minimum of 1 SNP per window
             &"test.something".to_owned(),
             &"".to_owned(),
         )
