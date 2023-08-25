@@ -190,6 +190,10 @@ pub trait CheckStruct {
     fn check(&self) -> io::Result<()>;
 }
 
+pub trait Count {
+    fn count_loci(&self) -> io::Result<(Vec<usize>, Vec<String>, Vec<u64>)>;
+}
+
 pub trait Parse<T> {
     fn lparse(&self) -> io::Result<Box<T>>;
 }

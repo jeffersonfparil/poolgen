@@ -90,7 +90,7 @@ struct Args {
     window_size_bp: usize,
     /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: minimum number of SNPs per window
     #[clap(long, default_value_t = 10)]
-    min_snps_per_window: usize
+    min_snps_per_window: usize,
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
@@ -336,6 +336,7 @@ fn main() {
                 &genotypes_and_phenotypes,
                 &file_sync_phen.pool_sizes,
                 &args.window_size_bp,
+                &args.min_snps_per_window,
                 &args.fname,
                 &args.output,
             )
@@ -349,6 +350,7 @@ fn main() {
                 &genotypes_and_phenotypes,
                 &file_sync_phen.pool_sizes,
                 &args.window_size_bp,
+                &args.min_snps_per_window,
                 &args.fname,
                 &args.output,
             )

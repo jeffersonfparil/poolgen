@@ -1,5 +1,5 @@
 pub use self::{
-    chisq_test::*, fisher_exact_test::*, fst::*, pi::*, tajima_d::*, watterson_theta::*, xpclr::*
+    chisq_test::*, fisher_exact_test::*, fst::*, pi::*, tajima_d::*, watterson_theta::*, xpclr::*,
 };
 
 mod chisq_test;

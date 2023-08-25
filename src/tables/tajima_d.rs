@@ -10,19 +10,24 @@ pub fn tajima_d(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
     window_size_bp: &usize,
+    min_snps_per_window: &usize,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate Watterson's estimator
     let (watterson_theta_per_pool_per_window, windows_chr, windows_pos) =
-        theta_watterson(genotypes_and_phenotypes, pool_sizes, window_size_bp).unwrap();
+        theta_watterson(genotypes_and_phenotypes, pool_sizes, window_size_bp, min_snps_per_window).unwrap();
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let n_pools = watterson_theta_per_pool_per_window.ncols();
     let n_windows = watterson_theta_per_pool_per_window.nrows();
 
     // Calculate heterozygosities
-    let (pi_per_pool_per_window, windows_chr_pi, windows_pos_pi) =
-        theta_pi(genotypes_and_phenotypes, window_size_bp).unwrap();
+    let (pi_per_pool_per_window, windows_chr_pi, windows_pos_pi) = theta_pi(
+        genotypes_and_phenotypes,
+        window_size_bp,
+        min_snps_per_window,
+    )
+    .unwrap();
     // let vec_pi_across_windows = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
 
     println!(
@@ -202,6 +207,7 @@ mod tests {
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
             &100, // 100-kb windows
+            &1,
             &"test.something".to_owned(),
             &"".to_owned(),
         )

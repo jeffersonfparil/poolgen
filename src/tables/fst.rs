@@ -12,30 +12,11 @@ pub fn fst(
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<(String, String)> {
-    let (n, p) = genotypes_and_phenotypes
+    let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
-    // Count the number of loci (Note: assumes the loci are sorted) and extract the loci coordinates
-    let mut loci_idx: Vec<usize> = vec![];
-    let mut loci_chr: Vec<&String> = vec![];
-    let mut loci_pos: Vec<&u64> = vec![];
-    for i in 1..p {
-        // includes the intercept
-        if (genotypes_and_phenotypes.chromosome[i - 1] != genotypes_and_phenotypes.chromosome[i])
-            | (genotypes_and_phenotypes.position[i - 1] != genotypes_and_phenotypes.position[i])
-        {
-            loci_idx.push(i);
-            loci_chr.push(&genotypes_and_phenotypes.chromosome[i]);
-            loci_pos.push(&genotypes_and_phenotypes.position[i]);
-        }
-    }
-    loci_idx.push(p); // last allele of the last locus
-    loci_chr.push(genotypes_and_phenotypes.chromosome.last().unwrap()); // last allele of the last locus
-    loci_pos.push(genotypes_and_phenotypes.position.last().unwrap()); // last allele of the last locus
+    let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
     let l = loci_idx.len();
-    assert_eq!(l-1, genotypes_and_phenotypes.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
-
-    assert_eq!(l - 1, genotypes_and_phenotypes.coverages.ncols());
     let mut fst: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     let loci: Array3<usize> = Array3::from_shape_vec(
         (l - 1, n, n),
@@ -183,44 +164,57 @@ pub fn fst(
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
     // while filtering out windows with less than min_snps_per_window SNPs
-    let m = loci_idx.len() - 1; // total number of loci x alleles, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
+    let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
-    let mut windows_pos: Vec<u64> = vec![*loci_pos[0] as u64];
-    let mut windows_snp_counts: Vec<usize> = vec![0];
-    for i in 1..m {
-        let chr = loci_chr[i];
-        let pos = loci_pos[i];
-        let j = windows_snp_counts.len()-1;
-        windows_snp_counts[j] += 1;
-        if (chr != windows_chr.last().unwrap())
-            | ((chr == windows_chr.last().unwrap())
-                & (pos > &(windows_pos.last().unwrap() + &(*window_size_bp as u64))))
+    let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
+    let mut windows_n_sites: Vec<usize> = vec![0];
+    let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
+    for i in 0..m {
+        let chr = loci_chr[i].to_owned(); // skipping the intercept at position 0
+        let pos = loci_pos[i]; // skipping the intercept at position 0
+        if (chr != windows_chr.last().unwrap().to_owned())
+            | ((chr == windows_chr.last().unwrap().to_owned())
+                & (pos > windows_pos.last().unwrap() + &(*window_size_bp as u64)))
         {
-            if windows_snp_counts[j] < *min_snps_per_window {
+            if windows_n_sites[j] < *min_snps_per_window {
                 windows_idx[j] = i;
                 windows_chr[j] = chr.to_owned();
-                windows_pos[j] = *pos;
-                windows_snp_counts[j] = 1;
+                windows_pos[j] = pos;
+                windows_n_sites[j] = 1;
             } else {
                 windows_idx.push(i);
                 windows_chr.push(chr.to_owned());
-                windows_pos.push(*pos);
-                windows_snp_counts.push(0);
+                windows_pos.push(pos);
+                windows_n_sites.push(1);
             }
+        } else {
+            windows_n_sites[j] += 1;
         }
+        j = windows_n_sites.len() - 1;
     }
     // Add the last index of the final position
     windows_idx.push(m);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
-    windows_pos.push(*loci_pos.last().unwrap() - 1);
-    if windows_snp_counts.last().unwrap() < min_snps_per_window {
-        windows_snp_counts.pop();
+    windows_pos.push(*loci_pos.last().unwrap());
+    if windows_n_sites.last().unwrap() < min_snps_per_window {
+        windows_idx.pop();
+        windows_chr.pop();
+        windows_pos.pop();
+        windows_n_sites.pop();
     }
-    if windows_snp_counts.len() < 1 {
-        let error_message = "No window with at least ".to_owned() + &min_snps_per_window.to_string() + " SNPs.";
-        return Ok((fname_output, error_message))
+    if windows_n_sites.len() < 1 {
+        let error_message =
+            "No window with at least ".to_owned() + &min_snps_per_window.to_string() + " SNPs.";
+        return Ok((fname_output, error_message));
     }
+    // println!("loci_chr={:?}", loci_chr);
+    // println!("loci_pos={:?}", loci_pos);
+    // println!("m={:?}", m);
+    // println!("windows_idx={:?}", windows_idx);
+    // println!("windows_chr={:?}", windows_chr);
+    // println!("windows_pos={:?}", windows_pos);
+    // println!("windows_n_sites={:?}", windows_n_sites);
     // Take the means per window
     let n_windows = windows_idx.len() - 1;
     let mut fst_per_pool_x_pool_per_window: Array2<f64> =
@@ -388,6 +382,6 @@ mod tests {
         assert_eq!(pop4_1, 0.0);
         assert_eq!(pop2_5, 0.5);
         assert_eq!(pop5_2, 0.5);
-        assert_eq!(0, 1);
+        // assert_eq!(0, 1);
     }
 }

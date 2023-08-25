@@ -69,6 +69,34 @@ impl CheckStruct for GenotypesAndPhenotypes {
     }
 }
 
+impl Count for GenotypesAndPhenotypes {
+    fn count_loci(&self) -> io::Result<(Vec<usize>, Vec<String>, Vec<u64>)> {
+        let (_, p) = self.intercept_and_allele_frequencies.dim();
+        assert_eq!(p, self.chromosome.len(), "The number of entries in the 'chromosome' field and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'chromosome' fields of 'GenotypesAndPhenotypes' struct.");
+        assert_eq!(p, self.position.len(), "The number of entries in the 'position' field and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'chromosome' fields of 'GenotypesAndPhenotypes' struct.");
+        // Count the number of loci (Note: assumes the loci are sorted) and extract the loci coordinates
+        let mut loci_idx: Vec<usize> = vec![];
+        let mut loci_chr: Vec<String> = vec![];
+        let mut loci_pos: Vec<u64> = vec![];
+        for i in 1..p {
+            // excludes the intercept
+            if (self.chromosome[i - 1] != self.chromosome[i])
+                | (self.position[i - 1] != self.position[i])
+            {
+                loci_idx.push(i);
+                loci_chr.push(self.chromosome[i].to_owned());
+                loci_pos.push(self.position[i]);
+            }
+        }
+        loci_idx.push(p); // last allele of the last locus
+        loci_chr.push(self.chromosome.last().unwrap().to_owned()); // last allele of the last locus
+        loci_pos.push(self.position.last().unwrap().to_owned()); // last allele of the last locus
+        let l = loci_idx.len();
+        assert_eq!(l-1, self.coverages.ncols(), "The number of loci with coverage information and the total number of loci are incompatible. Please check the 'intercept_and_allele_frequencies' and 'coverages' fields of 'GenotypesAndPhenotypes' struct.");
+        Ok((loci_idx, loci_chr, loci_pos))
+    }
+}
+
 impl Parse<LocusCounts> for String {
     // Parse a line of pileup into PileupLine struct
     fn lparse(&self) -> io::Result<Box<LocusCounts>> {
