@@ -20,7 +20,6 @@ pub fn tajima_d(
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let n_pools = watterson_theta_per_pool_per_window.ncols();
     let n_windows = watterson_theta_per_pool_per_window.nrows();
-
     // Calculate heterozygosities
     let (pi_per_pool_per_window, windows_chr_pi, windows_pos_pi) = theta_pi(
         genotypes_and_phenotypes,
@@ -28,20 +27,14 @@ pub fn tajima_d(
         min_snps_per_window,
     )
     .unwrap();
-    // let vec_pi_across_windows = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
-
-    println!(
-        "watterson_theta_per_pool_per_window={:?}",
-        watterson_theta_per_pool_per_window
-    );
-    println!("pi_per_pool_per_window={:?}", pi_per_pool_per_window);
-
+    // println!("genotypes_and_phenotypes={:?}", genotypes_and_phenotypes);
+    // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
+    // println!("pi_per_pool_per_window={:?}", pi_per_pool_per_window);
     // Sanity checks
     assert_eq!(n_pools, pi_per_pool_per_window.ncols(), "The number of pools extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
     assert_eq!(n_windows, pi_per_pool_per_window.nrows(), "The number of windows extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
     assert_eq!(windows_chr, windows_chr_pi, "The chromosome names per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
     assert_eq!(windows_pos, windows_pos_pi, "The SNP positions per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
-
     // Calculate Tajima's D
     let mut tajimas_d_per_pool_per_window: Array2<f64> =
         Array2::from_elem((n_windows, n_pools), f64::NAN);
@@ -75,8 +68,8 @@ pub fn tajima_d(
             };
         }
     }
+    // Mean Tajima's D across all the windows
     let vec_tajimas_d_across_windows = tajimas_d_per_pool_per_window.mean_axis(Axis(0)).unwrap();
-
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -252,6 +245,6 @@ mod tests {
             parse_f64_roundup_and_own(pop4_locus2, 4),
             "7.072".to_owned()
         );
-        // assert_eq!(0, 2);
+        // assert_eq!(0, 1);
     }
 }

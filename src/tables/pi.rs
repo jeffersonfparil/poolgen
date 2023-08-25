@@ -87,6 +87,9 @@ pub fn theta_pi(
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap());
     if windows_n_sites.last().unwrap() < min_snps_per_window {
+        windows_idx.pop();
+        windows_chr.pop();
+        windows_pos.pop();
         windows_n_sites.pop();
     }
     if windows_n_sites.len() < 1 {
