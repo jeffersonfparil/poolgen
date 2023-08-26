@@ -34,7 +34,7 @@ jobs:
       - name: Setup | Checkout
         uses: actions/checkout@v3
       - name: Setup | Rust
-        uses: ATiltedTree/setup-rust@v2
+        uses: ATiltedTree/setup-rust@v1
         with:
           rust-version: ${{ matrix.rust }}
       - name: Tests | Rust
