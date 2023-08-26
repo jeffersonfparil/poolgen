@@ -25,9 +25,9 @@ jobs:
           - windows-latest
           # - macOS-latest
         rust:
-          # - stable
+          - stable
           # - beta
-          - nightly
+          # - nightly
     runs-on: ${{ matrix.os }}
     needs: [compile]
     steps:
