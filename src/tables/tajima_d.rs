@@ -67,6 +67,7 @@ pub fn tajima_d(
                     / vd.sqrt()
             };
             if tajimas_d_per_pool_per_window[(i, j)].is_infinite() {
+                println!("pi_per_pool_per_window[(i, j)]={:?}", pi_per_pool_per_window[(i, j)]);
                 println!("watterson_theta_per_pool_per_window[(i, j)]={:?}", watterson_theta_per_pool_per_window[(i, j)]);
                 println!("vd={:?}", vd);
                 println!("a1={:?}", a1);
