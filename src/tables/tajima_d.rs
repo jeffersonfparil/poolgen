@@ -66,6 +66,18 @@ pub fn tajima_d(
                 (pi_per_pool_per_window[(i, j)] - watterson_theta_per_pool_per_window[(i, j)])
                     / vd.sqrt()
             };
+            if tajimas_d_per_pool_per_window[(i, j)].is_infinite() {
+                println!("watterson_theta_per_pool_per_window[(i, j)]={:?}", watterson_theta_per_pool_per_window[(i, j)]);
+                println!("vd={:?}", vd);
+                println!("a1={:?}", a1);
+                println!("a2={:?}", a2);
+                println!("b1={:?}", b1);
+                println!("b2={:?}", b2);
+                println!("c1={:?}", c1);
+                println!("c2={:?}", c2);
+                println!("e1={:?}", e1);
+                println!("e2={:?}", e2);
+            }
         }
     }
     // Mean Tajima's D across all the windows
@@ -150,8 +162,11 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
-                0.9, 0.1, 1.0, 0.01, 0.01, 0.98, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
+                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
+                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
+                1.0, 0.01, 0.01, 0.98, 0.6, 0.4, 
+                1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
             ],
         )
         .unwrap();
