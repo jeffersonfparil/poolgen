@@ -62,6 +62,9 @@ pub fn tajima_d(
                 <= f64::EPSILON
             {
                 0.0
+            } else if vd <= f64::EPSILON {
+                // If heterozygosity - expected and observed are very low in the window set Tajima's D to zero to avoid infinities
+                0.0
             } else {
                 (pi_per_pool_per_window[(i, j)] - watterson_theta_per_pool_per_window[(i, j)])
                     / vd.sqrt()
