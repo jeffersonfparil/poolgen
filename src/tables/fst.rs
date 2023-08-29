@@ -16,36 +16,36 @@ pub fn fst(
         .intercept_and_allele_frequencies
         .dim();
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
-    let l = loci_idx.len();
-    let mut fst: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    let l = loci_idx.len() - 1; // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    let mut fst: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN);
     let loci: Array3<usize> = Array3::from_shape_vec(
-        (l - 1, n, n),
-        (0..(l - 1))
+        (l, n, n),
+        (0..(l))
             .flat_map(|x| std::iter::repeat(x).take(n * n))
             .collect(),
     )
     .unwrap();
     let pop1: Array3<usize> = Array3::from_shape_vec(
-        (l - 1, n, n),
+        (l, n, n),
         std::iter::repeat(
             (0..n)
                 .flat_map(|x| std::iter::repeat(x).take(n))
                 .collect::<Vec<usize>>(),
         )
-        .take(l - 1)
+        .take(l)
         .flat_map(|x| x)
         .collect::<Vec<usize>>(),
     )
     .unwrap();
     let pop2: Array3<usize> = Array3::from_shape_vec(
-        (l - 1, n, n),
+        (l, n, n),
         std::iter::repeat(
             std::iter::repeat((0..n).collect::<Vec<usize>>())
                 .take(n)
                 .flat_map(|x| x)
                 .collect::<Vec<usize>>(),
         )
-        .take(l - 1)
+        .take(l)
         .flat_map(|x| x)
         .collect::<Vec<usize>>(),
     )
@@ -164,13 +164,12 @@ pub fn fst(
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
     // while filtering out windows with less than min_snps_per_window SNPs
-    let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
     let mut windows_n_sites: Vec<usize> = vec![0];
     let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
-    for i in 0..m {
+    for i in 0..l {
         let chr = loci_chr[i].to_owned(); // skipping the intercept at position 0
         let pos = loci_pos[i]; // skipping the intercept at position 0
         if (chr != windows_chr.last().unwrap().to_owned())
@@ -194,7 +193,7 @@ pub fn fst(
         j = windows_n_sites.len() - 1;
     }
     // Add the last index of the final position
-    windows_idx.push(m);
+    windows_idx.push(l);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap());
     if windows_n_sites.last().unwrap() < min_snps_per_window {
@@ -210,7 +209,7 @@ pub fn fst(
     }
     // println!("loci_chr={:?}", loci_chr);
     // println!("loci_pos={:?}", loci_pos);
-    // println!("m={:?}", m);
+    // println!("l={:?}", l);
     // println!("windows_idx={:?}", windows_idx);
     // println!("windows_chr={:?}", windows_chr);
     // println!("windows_pos={:?}", windows_pos);
@@ -224,8 +223,8 @@ pub fn fst(
         let idx_end = windows_idx[i + 1];
         for j in 0..n {
             for k in 0..n {
-                let l = (j * n) + k;
-                fst_per_pool_x_pool_per_window[(i, l)] = fst
+                let idx = (j * n) + k;
+                fst_per_pool_x_pool_per_window[(i, idx)] = fst
                     .slice(s![idx_start..idx_end, j, k])
                     .mean_axis(Axis(0))
                     .unwrap()

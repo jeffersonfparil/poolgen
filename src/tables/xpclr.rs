@@ -1,11 +1,13 @@
 use crate::base::*;
 use ndarray::{prelude::*, Zip};
+use ndarray_linalg::Scalar;
+use std::f32::consts::LOG10_2;
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// XP-CLR from https://www.ncbi.nlm.nih.gov/pubmed/20086244
-/// Implement code from: https://github.com/hardingnj/xpclr/blob/master/xpclr/methods.py
+/// Implementation and modifications (improvements, I hope) of https://github.com/hardingnj/xpclr/blob/master/xpclr/methods.py
 pub fn xpclr_per_window(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
@@ -17,73 +19,110 @@ pub fn xpclr_per_window(
         .intercept_and_allele_frequencies
         .dim();
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
-    let l = loci_idx.len();
-    let mut xpclr: Array3<f64> = Array3::from_elem((l - 1, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    let l = loci_idx.len() - 1; // the number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+
+    // Prepare 3-dimensional arrays for parallel computations
     let loci: Array3<usize> = Array3::from_shape_vec(
-        (l - 1, n, n),
-        (0..(l - 1))
+        (l, n, n),
+        (0..l)
             .flat_map(|x| std::iter::repeat(x).take(n * n))
             .collect(),
     )
     .unwrap();
     let pop1: Array3<usize> = Array3::from_shape_vec(
-        (l - 1, n, n),
+        (l, n, n),
         std::iter::repeat(
             (0..n)
                 .flat_map(|x| std::iter::repeat(x).take(n))
                 .collect::<Vec<usize>>(),
         )
-        .take(l - 1)
+        .take(l)
         .flat_map(|x| x)
         .collect::<Vec<usize>>(),
     )
     .unwrap();
     let pop2: Array3<usize> = Array3::from_shape_vec(
-        (l - 1, n, n),
+        (l, n, n),
         std::iter::repeat(
             std::iter::repeat((0..n).collect::<Vec<usize>>())
                 .take(n)
                 .flat_map(|x| x)
                 .collect::<Vec<usize>>(),
         )
-        .take(l - 1)
+        .take(l)
         .flat_map(|x| x)
         .collect::<Vec<usize>>(),
     )
     .unwrap();
-    // Parallel computations (NOTE: Not efficient yet. Compute only the upper or lower triangular in the future.)
-    Zip::from(&mut xpclr)
+
+    // Estimate the effect of population histories between pairs of populations, i.e. omega (representing demography, splits, drift, bottleneck...)
+    // where if the allele frequency at the base population, q0 is zero then we skip as we assume that the base population is the ancestral population
+    // Generate an l x n x n array which is non-symmetric at nxn because of the reason above, i.e. allele frequencies cannot be fixed in the base (ancestral) population
+    let mut squared_differences: Array3<f64> = Array3::from_elem((n, n, l), f64::NAN);
+    let mut sum_half_heterozygotes: Array3<f64> = Array3::from_elem((n, n, l), f64::NAN);
+    Zip::from(&mut squared_differences)
+        .and(&mut sum_half_heterozygotes)
         .and(&loci)
         .and(&pop1)
         .and(&pop2)
-        .par_for_each(|f, &i, &j, &k| {
+        .par_for_each(|d, h, &i, &j, &k| {
             let idx_start = loci_idx[i];
             let idx_end = loci_idx[i + 1];
             let g = genotypes_and_phenotypes
                 .intercept_and_allele_frequencies
                 .slice(s![.., idx_start..idx_end]);
-            let nj = genotypes_and_phenotypes.coverages[(j, i)];
-            let nk = genotypes_and_phenotypes.coverages[(k, i)];
-            let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                * (nj / (nj - 1.00 + f64::EPSILON)))
-                + (1.00 - (nj / (nj - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-            let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                * (nk / (nk - 1.00 + f64::EPSILON)))
-                + (1.00 - (nk / (nk - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-            let q2_jk = g
-                .slice(s![j, ..])
-                .iter()
-                .zip(&g.slice(s![k, ..]))
-                .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-            let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
-            *f = if f_unbiased < 0.0 {
-                // xpclr[(i, j, k)] = if f_unbiased < 0.0 {
-                0.0
-            } else if f_unbiased > 1.0 {
-                1.0
+            let (_, a) = g.dim();
+            let mut denom = 0.0;
+            for allele_a in 0..(a-1){
+                for allele_b in 1..a {
+                    denom += g[(i, allele_a)] * g[(i, allele_b)];
+                }
+            }
+            (*d, *h) = if denom < f64::EPSILON {
+                // Catch where the allele frequency in the base population is zero and skip
+                // where if the denominator is zero then the locus is fixed
+                (f64::NAN, f64::NAN)
             } else {
-                f_unbiased
+                // Compute CV-ish thingy: squared diff / allele freq var in base pop
+                let mut squared_diff: f64 = 0.0;
+                for allele in 0..a {
+                    let q0 = g[(j, allele)];
+                    let q1 = g[(k, allele)];
+                    squared_diff += (q1-q0).powf(2.0);
+                }
+                (squared_diff, denom) // just use these as sums across alleles or average so we have means per locus not sums across alleles per locus????
             };
+        });
+
+    // Selection-recombination
+    let s = 0.5;
+    let r = 1.0e-7;
+    let r_min = 1.0e-9;
+    let ne = 100_000;
+    let c = if s <= f64::EPSILON {
+        0.0
+    } else {
+        1.00 - f64::exp(-(2.00 * ne as f64).ln() * vec![r, r_min]
+            .iter()
+            .fold(r, |max, &x| if x>max{x}else{max})
+        )
+    };
+
+    // Compute likelihood ratios per SNP
+    // Instantiate an l x n x n array
+    let mut xpclr: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    Zip::from(&mut xpclr)
+        .and(&loci)
+        .and(&pop1)
+        .and(&pop2)
+        .par_for_each(|r, &i, &j, &k| {
+            let idx_start = loci_idx[i];
+            let idx_end = loci_idx[i + 1];
+            let g = genotypes_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![.., idx_start..idx_end]);
+            let omega = 
+            *r = 0.0;
         });
     // Write output (Fst averaged across all loci)
     let mut fname_output = fname_output.to_owned();
@@ -225,8 +264,8 @@ pub fn xpclr_per_window(
         let idx_end = windows_idx[i + 1];
         for j in 0..n {
             for k in 0..n {
-                let l = (j * n) + k;
-                fst_per_pool_x_pool_per_window[(i, l)] = xpclr
+                let idx = (j * n) + k;
+                fst_per_pool_x_pool_per_window[(i, idx)] = xpclr
                     .slice(s![idx_start..idx_end, j, k])
                     .mean_axis(Axis(0))
                     .unwrap()

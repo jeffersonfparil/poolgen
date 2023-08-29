@@ -15,20 +15,20 @@ pub fn theta_pi(
         .intercept_and_allele_frequencies
         .dim();
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
-    let l = loci_idx.len();
+    let l = loci_idx.len() - 1; // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     // Each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
-    let mut pi: Array2<f64> = Array2::from_elem((l - 1, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    let mut pi: Array2<f64> = Array2::from_elem((l, n), f64::NAN);
     let loci: Array2<usize> = Array2::from_shape_vec(
-        (l - 1, n),
-        (0..(l - 1))
+        (l, n),
+        (0..(l))
             .flat_map(|x| std::iter::repeat(x).take(n))
             .collect(),
     )
     .unwrap();
     let pop: Array2<usize> = Array2::from_shape_vec(
-        (l - 1, n),
+        (l, n),
         std::iter::repeat((0..n).collect::<Vec<usize>>())
-            .take(l - 1)
+            .take(l)
             .flat_map(|x| x)
             .collect(),
     )
@@ -53,13 +53,12 @@ pub fn theta_pi(
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
     // while filtering out windows with less than min_snps_per_window SNPs
-    let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
     let mut windows_n_sites: Vec<usize> = vec![0];
     let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
-    for i in 0..m {
+    for i in 0..l {
         let chr = loci_chr[i].to_owned(); // skipping the intercept at position 0
         let pos = loci_pos[i]; // skipping the intercept at position 0
         if (chr != windows_chr.last().unwrap().to_owned())
@@ -83,7 +82,7 @@ pub fn theta_pi(
         j = windows_n_sites.len() - 1;
     }
     // Add the last index of the final position
-    windows_idx.push(m);
+    windows_idx.push(l);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap());
     if windows_n_sites.last().unwrap() < min_snps_per_window {

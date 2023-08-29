@@ -69,19 +69,19 @@ pub fn tajima_d(
                 (pi_per_pool_per_window[(i, j)] - watterson_theta_per_pool_per_window[(i, j)])
                     / vd.sqrt()
             };
-            if tajimas_d_per_pool_per_window[(i, j)].is_infinite() {
-                println!("pi_per_pool_per_window[(i, j)]={:?}", pi_per_pool_per_window[(i, j)]);
-                println!("watterson_theta_per_pool_per_window[(i, j)]={:?}", watterson_theta_per_pool_per_window[(i, j)]);
-                println!("vd={:?}", vd);
-                println!("a1={:?}", a1);
-                println!("a2={:?}", a2);
-                println!("b1={:?}", b1);
-                println!("b2={:?}", b2);
-                println!("c1={:?}", c1);
-                println!("c2={:?}", c2);
-                println!("e1={:?}", e1);
-                println!("e2={:?}", e2);
-            }
+            // if tajimas_d_per_pool_per_window[(i, j)].is_infinite() {
+            //     println!("pi_per_pool_per_window[(i, j)]={:?}", pi_per_pool_per_window[(i, j)]);
+            //     println!("watterson_theta_per_pool_per_window[(i, j)]={:?}", watterson_theta_per_pool_per_window[(i, j)]);
+            //     println!("vd={:?}", vd);
+            //     println!("a1={:?}", a1);
+            //     println!("a2={:?}", a2);
+            //     println!("b1={:?}", b1);
+            //     println!("b2={:?}", b2);
+            //     println!("c1={:?}", c1);
+            //     println!("c2={:?}", c2);
+            //     println!("e1={:?}", e1);
+            //     println!("e2={:?}", e2);
+            // }
         }
     }
     // Mean Tajima's D across all the windows

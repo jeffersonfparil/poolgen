@@ -19,14 +19,14 @@ pub fn theta_watterson(
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
     // Find window indices making sure we respect chromosomal boundaries
     // while filtering out windows with less than min_snps_per_window SNPs
-    let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
+    let l = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
     let mut windows_n_sites: Vec<usize> = vec![0];
     let mut windows_n_polymorphic_sites: Vec<Vec<u64>> = vec![std::iter::repeat(0).take(n).collect()];
     let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
-    for i in 0..m {
+    for i in 0..l {
         let chr = loci_chr[i].to_owned(); // skipping the intercept at position 0
         let pos = loci_pos[i]; // skipping the intercept at position 0
         if (chr != windows_chr.last().unwrap().to_owned())
@@ -66,7 +66,7 @@ pub fn theta_watterson(
         
     }
     // Add the last index of the final position
-    windows_idx.push(m);
+    windows_idx.push(l);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap());
     if windows_n_sites.last().unwrap() < min_snps_per_window {
@@ -77,7 +77,7 @@ pub fn theta_watterson(
     }
     // println!("loci_chr={:?}", loci_chr);
     // println!("loci_pos={:?}", loci_pos);
-    // println!("m={:?}", m);
+    // println!("l={:?}", l);
     // println!("windows_idx={:?}", windows_idx);
     // println!("windows_chr={:?}", windows_chr);
     // println!("windows_pos={:?}", windows_pos);
