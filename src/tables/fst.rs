@@ -130,7 +130,7 @@ pub fn fst(
             + &time.to_string()
             + ".csv";
     }
-    // Instatiate output file
+    // Instantiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
     let mut file_out = OpenOptions::new()
         .create_new(true)

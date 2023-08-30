@@ -1,27 +1,76 @@
 use crate::base::*;
 use ndarray::{prelude::*, Zip};
-use ndarray_linalg::Scalar;
-use std::f32::consts::LOG10_2;
+use std::f64::consts::PI;
+use statrs::distribution::{Binomial, Discrete};
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::gwas::*;
 
 /// XP-CLR from https://www.ncbi.nlm.nih.gov/pubmed/20086244
 /// Implementation and modifications (improvements, I hope) of https://github.com/hardingnj/xpclr/blob/master/xpclr/methods.py
+
+fn pdf_p1(p1: f64, other_params: &Vec<f64>) -> io::Result<f64> {
+    let q0 = other_params[0];
+    let s2 = other_params[1];
+    let c = other_params[2];
+    Ok(
+        if (p1 < c) & (p1 < (1.0-c)) {
+            (1.0 / (2.0*PI*s2).sqrt()) 
+            * ((c-p1)/c.powf(2.0)) 
+            * f64::exp(-( ((p1-q0).powf(2.0)) / (2.0*c.powf(2.0)*s2) ))
+        } else if p1 > (1.0-c) {
+            (1.0 / (2.0*PI*s2).sqrt()) 
+            * ((p1+c-1.0)/c.powf(2.0)) 
+            * f64::exp(-( ((p1+c-1.0-(c*q0)).powf(2.0)) / (2.0*c.powf(2.0)*s2) ))
+        } else {
+            0.0
+        }
+    )
+}
+
+fn cdf_p1(p1: f64, other_params: &Vec<f64>) -> io::Result<f64> {
+    let q0 = other_params[0];
+    let s2 = other_params[1];
+    let c = other_params[2];
+    let k = other_params[3] as u64;
+    let m = other_params[4] as u64;
+    let mut dist_binomial = Binomial::new(p1, m).unwrap();
+    Ok(pdf_p1(p1, &vec![q0, s2, c]).unwrap() * dist_binomial.pmf(k))
+}
+
+// Modification of https://codereview.stackexchange.com/a/161366
+fn simple_reimann_sum_integration<F>(a: f64, b: f64, func: F, precision: u64, other_params: &Vec<f64>) -> io::Result<f64>
+    where F: Fn(f64, &Vec<f64>) -> io::Result<f64>
+{
+    let delta: f64 = (b - a) / precision as f64;
+    let sum: f64 = (0..precision).map(|trapezoid| {
+        let left_side = a + (delta * trapezoid as f64);
+        let right_size = left_side + delta;
+        0.5 * (func(left_side, other_params).unwrap() + func(right_size, other_params).unwrap()) * delta
+        }).sum();
+    Ok (
+        if a > b {
+            -sum
+        } else {
+            sum
+        }
+    )
+}
+
 pub fn xpclr_per_window(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
     min_snps_per_window: &usize,
-    fname_input: &String,
     fname_output: &String,
-) -> io::Result<(String, String)> {
+) -> io::Result<String> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
     let l = loci_idx.len() - 1; // the number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
 
-    // Prepare 3-dimensional arrays for parallel computations
+    // Prepare 3-dimensional (l x n x n) input arrays for parallel computations
     let loci: Array3<usize> = Array3::from_shape_vec(
         (l, n, n),
         (0..l)
@@ -58,149 +107,117 @@ pub fn xpclr_per_window(
     // Estimate the effect of population histories between pairs of populations, i.e. omega (representing demography, splits, drift, bottleneck...)
     // where if the allele frequency at the base population, q0 is zero then we skip as we assume that the base population is the ancestral population
     // Generate an l x n x n array which is non-symmetric at nxn because of the reason above, i.e. allele frequencies cannot be fixed in the base (ancestral) population
-    let mut squared_differences: Array3<f64> = Array3::from_elem((n, n, l), f64::NAN);
-    let mut sum_half_heterozygotes: Array3<f64> = Array3::from_elem((n, n, l), f64::NAN);
+    let mut squared_differences: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN);
+    let mut denom_binomial_var: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN);
     Zip::from(&mut squared_differences)
-        .and(&mut sum_half_heterozygotes)
+        .and(&mut denom_binomial_var)
         .and(&loci)
         .and(&pop1)
         .and(&pop2)
-        .par_for_each(|d, h, &i, &j, &k| {
+        .par_for_each(|d, v, &i, &j, &k| {
             let idx_start = loci_idx[i];
             let idx_end = loci_idx[i + 1];
             let g = genotypes_and_phenotypes
                 .intercept_and_allele_frequencies
                 .slice(s![.., idx_start..idx_end]);
-            let (_, a) = g.dim();
-            let mut denom = 0.0;
-            for allele_a in 0..(a-1){
-                for allele_b in 1..a {
-                    denom += g[(i, allele_a)] * g[(i, allele_b)];
-                }
-            }
-            (*d, *h) = if denom < f64::EPSILON {
+            // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
+            let (idx_allele, _) = g.sum_axis(Axis(0))
+                .iter()
+                .enumerate()
+                .fold((0, 0.0), |(idx_max, max), (idx, &x)| if x>max{(idx, x)}else{(idx_max, max)});
+            let q0 = g[(j, idx_allele)];
+            let q1 = g[(k, idx_allele)];
+            (*d, *v) = if (q0<f64::EPSILON) | (q0==1.00) {
                 // Catch where the allele frequency in the base population is zero and skip
                 // where if the denominator is zero then the locus is fixed
                 (f64::NAN, f64::NAN)
             } else {
-                // Compute CV-ish thingy: squared diff / allele freq var in base pop
-                let mut squared_diff: f64 = 0.0;
-                for allele in 0..a {
-                    let q0 = g[(j, allele)];
-                    let q1 = g[(k, allele)];
-                    squared_diff += (q1-q0).powf(2.0);
-                }
-                (squared_diff, denom) // just use these as sums across alleles or average so we have means per locus not sums across alleles per locus????
+                ((q1-q0).powf(2.0), (q0*(1.00-q0)))
             };
-        });
-
-    // Selection-recombination
-    let s = 0.5;
-    let r = 1.0e-7;
+        }
+    );
+    println!("squared_differences={:?}", squared_differences);
+    println!("denom_binomial_var={:?}", denom_binomial_var);
+    // Population history factor (omega) across all loci (n x n)
+    let omega: Array2<f64> = (&squared_differences / &denom_binomial_var).mean_axis(Axis(0)).unwrap();
+    // Neutral allele frequency variance across time (sigma2) per locus (l x n x n)
+    let mut sigma2: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN);
+    for i in 0..l {
+        for j in 0..n {
+            for k in 0..n {
+                sigma2[(i, j, k)] = omega[(j, k)] * denom_binomial_var[(i, j, k)];
+            }
+        }
+    }
+    println!("omega={:?}", omega);
+    println!("sigma2={:?}", sigma2);
+    // Joint effects of selection and recombination (c) across all loci and populations (scalar)
+    let s = 0.05;
+    let r = 1.0e-5;
+    // let r = 1.0e-7;
     let r_min = 1.0e-9;
-    let ne = 100_000;
+    let ne = 10_000;
+    let precision = 100_000;
+    let corr_cutoff = 0.5;
     let c = if s <= f64::EPSILON {
         0.0
     } else {
         1.00 - f64::exp(-(2.00 * ne as f64).ln() * vec![r, r_min]
             .iter()
-            .fold(r, |max, &x| if x>max{x}else{max})
+            .fold(r, |max, &x| if x>max{x}else{max}) / s
         )
     };
-
+    // let c = 0.50;
+    println!("c={:?}", c);
+    let params_of_pdf_p1 = vec![0.5, 0.1, c];
+    let q = simple_reimann_sum_integration(0.001, 0.999, pdf_p1, precision, &params_of_pdf_p1).unwrap();
+    println!("q={:?}", q);
+    let q_001 = pdf_p1(0.001, &params_of_pdf_p1).unwrap();
+    let q_500 = pdf_p1(0.500, &params_of_pdf_p1).unwrap();
+    let q_999 = pdf_p1(0.999, &params_of_pdf_p1).unwrap();
+    println!("q_001={:?}", q_001);
+    println!("q_500={:?}", q_500);
+    println!("q_999={:?}", q_999);
+    println!("f64::EPSILON={:?}", f64::EPSILON);
     // Compute likelihood ratios per SNP
     // Instantiate an l x n x n array
     let mut xpclr: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     Zip::from(&mut xpclr)
+        .and(&sigma2)
         .and(&loci)
         .and(&pop1)
         .and(&pop2)
-        .par_for_each(|r, &i, &j, &k| {
+        .par_for_each(|ratio, &s2, &i, &j, &k| {
             let idx_start = loci_idx[i];
             let idx_end = loci_idx[i + 1];
             let g = genotypes_and_phenotypes
                 .intercept_and_allele_frequencies
                 .slice(s![.., idx_start..idx_end]);
-            let omega = 
-            *r = 0.0;
-        });
-    // Write output (Fst averaged across all loci)
-    let mut fname_output = fname_output.to_owned();
-    let mut fname_output_per_window = fname_output
-        .split(".")
-        .collect::<Vec<&str>>()
-        .into_iter()
-        .map(|a| a.to_owned())
-        .collect::<Vec<String>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<String>>()[1..]
-        .to_owned()
-        .into_iter()
-        .rev()
-        .collect::<Vec<String>>()
-        .join(".");
-    fname_output_per_window =
-        fname_output_per_window + "-xpclr-" + &window_size_bp.to_string() + "_bp_windows.csv";
-    if fname_output == "".to_owned() {
-        let time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs_f64();
-        let bname = fname_input
-            .split(".")
-            .collect::<Vec<&str>>()
-            .into_iter()
-            .map(|a| a.to_owned())
-            .collect::<Vec<String>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<String>>()[1..]
-            .to_owned()
-            .into_iter()
-            .rev()
-            .collect::<Vec<String>>()
-            .join(".");
-        fname_output =
-            bname.to_owned() + "-xpclr-averaged_across_genome-" + &time.to_string() + ".csv";
-        fname_output_per_window = bname.to_owned()
-            + "-xpclr-"
-            + &window_size_bp.to_string()
-            + "_bp_windows-"
-            + &time.to_string()
-            + ".csv";
-    }
-    // Instatiate output file
-    let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
-    let mut file_out = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .append(false)
-        .open(&fname_output)
-        .expect(&error_writing_file);
-    // Header
-    let mut line: Vec<String> = vec!["".to_owned()];
-    for pool in &genotypes_and_phenotypes.pool_names {
-        line.push(pool.to_owned());
-    }
-    let line = line.join(",") + "\n";
-    file_out.write_all(line.as_bytes()).unwrap();
-    // Write the mean Fst across loci
-    let fst_means: Array2<f64> = xpclr.mean_axis(Axis(0)).unwrap();
-    for i in 0..n {
-        let line = genotypes_and_phenotypes.pool_names[i].to_owned()
-            + ","
-            + &fst_means
-                .row(i)
+            // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
+            let (idx_allele, _) = g.sum_axis(Axis(0))
                 .iter()
-                .map(|x| parse_f64_roundup_and_own(*x, 8))
-                .collect::<Vec<String>>()
-                .join(",")
-            + "\n";
-        file_out.write_all(line.as_bytes()).unwrap();
-    }
+                .enumerate()
+                .fold((0, 0.0), |(idx_max, max), (idx, &x)| if x>max{(idx, x)}else{(idx_max, max)});
+            let q0 = g[(j, idx_allele)];
+            let q1 = g[(k, idx_allele)];
+
+            let m = genotypes_and_phenotypes.coverages[(k, i)];
+            let k = (q1 * m).round();
+
+            let params_of_pdf_p1 = vec![q0, s2, c];
+            let params_of_cdf_p1 = vec![q0, s2, c, k, m];
+            let likelihood_b = simple_reimann_sum_integration(0.001, 0.999, pdf_p1, precision, &params_of_pdf_p1).unwrap();
+            let likelihood_a = simple_reimann_sum_integration(0.001, 0.999, cdf_p1, precision, &params_of_cdf_p1).unwrap();
+            *ratio = if (likelihood_a < f64::EPSILON) | (likelihood_b < f64::EPSILON) {
+                f64::EPSILON.ln()
+            } else {
+                likelihood_a.ln() - likelihood_b.ln()
+            };
+        }
+    );
+    println!("xpclr={:?}", xpclr);
     ///////////////////////////////////////////////////////////////////////
-    // Additional output: Fst per window per population
+    // Output: XP-CLR per window per population pair
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
     // while filtering out windows with less than min_snps_per_window SNPs
@@ -246,41 +263,89 @@ pub fn xpclr_per_window(
     if windows_n_sites.len() < 1 {
         let error_message =
             "No window with at least ".to_owned() + &min_snps_per_window.to_string() + " SNPs.";
-        return Ok((fname_output, error_message));
+        return Ok(error_message);
     }
-    // println!("loci_chr={:?}", loci_chr);
-    // println!("loci_pos={:?}", loci_pos);
-    // println!("m={:?}", m);
-    // println!("windows_idx={:?}", windows_idx);
-    // println!("windows_chr={:?}", windows_chr);
-    // println!("windows_pos={:?}", windows_pos);
-    // println!("windows_n_sites={:?}", windows_n_sites);
-    // Take the means per window
+    println!("loci_chr={:?}", loci_chr);
+    println!("loci_pos={:?}", loci_pos);
+    println!("m={:?}", m);
+    println!("windows_idx={:?}", windows_idx);
+    println!("windows_chr={:?}", windows_chr);
+    println!("windows_pos={:?}", windows_pos);
+    println!("windows_n_sites={:?}", windows_n_sites);
+    // Estimate weights per locus
+    // Computing the correlation between SNPs across pools instead of between 2 populations and using individual genotypes because we have Pool-seq data, i.e. individual genotypes are not available
+    let mut weights: Array1<f64> = Array1::from_elem(l, 0.0);
+    for i in 0..l {
+        let idx_start = loci_idx[i];
+        let idx_end = loci_idx[i + 1];
+        let g = genotypes_and_phenotypes
+            .intercept_and_allele_frequencies
+            .slice(s![.., idx_start..idx_end]);
+        // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
+        let (idx_allele, _) = g.sum_axis(Axis(0))
+            .iter()
+            .enumerate()
+            .fold((0, 0.0), |(idx_max, max), (idx, &x)| if x>max{(idx, x)}else{(idx_max, max)});
+        let qi = g.column(idx_allele);
+        for j in 0..l {
+            let idx_start = loci_idx[j];
+            let idx_end = loci_idx[j + 1];
+            let g = genotypes_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![.., idx_start..idx_end]);
+            // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
+            let (idx_allele, _) = g.sum_axis(Axis(0))
+                .iter()
+                .enumerate()
+                .fold((0, 0.0), |(idx_max, max), (idx, &x)| if x>max{(idx, x)}else{(idx_max, max)});
+            let qj = g.column(idx_allele);    
+            let (corr, _) = pearsons_correlation(&qi, &qj).unwrap();
+            // println!("qi={:?}", qi);
+            // println!("qj={:?}", qj);
+            // println!("corr={:?}", corr);
+            weights[i] += if corr < corr_cutoff {
+                0.0
+            } else {
+                1.0
+            };
+        }
+        // println!("weights={:?}", weights);
+        weights[i] = 1.0 / weights[i];
+    }
+    // Compute the cross-population composite likelihood ratio weighted by the inverse of the level of correlation between loci per window
     let n_windows = windows_idx.len() - 1;
-    let mut fst_per_pool_x_pool_per_window: Array2<f64> =
-        Array2::from_elem((n_windows, n * n), f64::NAN);
+    let mut xpclr_per_window_per_pop_pair: Array2<f64> =
+        Array2::from_elem((n_windows, n * n), 0.0);
     for i in 0..n_windows {
         let idx_start = windows_idx[i];
         let idx_end = windows_idx[i + 1];
         for j in 0..n {
             for k in 0..n {
                 let idx = (j * n) + k;
-                fst_per_pool_x_pool_per_window[(i, idx)] = xpclr
-                    .slice(s![idx_start..idx_end, j, k])
-                    .mean_axis(Axis(0))
-                    .unwrap()
-                    .fold(0.0, |_, &x| x);
+                let mut n_non_nan = 0;
+                for locus_idx in idx_start..idx_end {
+                    xpclr_per_window_per_pop_pair[(i, idx)] += if xpclr[(locus_idx, j, k)].is_nan() == false {
+                        n_non_nan += 1;
+                        weights[locus_idx] * xpclr[(locus_idx, j, k)]
+                    } else {
+                        0.0
+                    };
+                }
+                if n_non_nan == 0 {
+                    xpclr_per_window_per_pop_pair[(i, idx)] = f64::NAN;
+                }
             }
         }
     }
-    // Write output (Fst averaged per window)
-    // Instatiate output file
-    let error_writing_file = "Unable to create file: ".to_owned() + &fname_output_per_window;
+    println!("weights={:?}", weights);
+    println!("xpclr_per_window_per_pop_pair={:?}", xpclr_per_window_per_pop_pair);
+    // Instantiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
     let mut file_out = OpenOptions::new()
         .create_new(true)
         .write(true)
         .append(false)
-        .open(&fname_output_per_window)
+        .open(&fname_output)
         .expect(&error_writing_file);
     // Header
     let mut line: Vec<String> = vec!["chr".to_owned(), "pos_ini".to_owned(), "pos_fin".to_owned()];
@@ -305,18 +370,18 @@ pub fn xpclr_per_window(
             + ","
             + &window_pos_fin.to_string()
             + ",";
-        let fst_string = fst_per_pool_x_pool_per_window
+        let xpclr_string = xpclr_per_window_per_pop_pair
             .slice(s![i, ..])
             .iter()
             .map(|x| x.to_string())
             .collect::<Vec<String>>()
             .join(",");
-        let line = coordinate + &fst_string[..] + "\n";
+        let line = coordinate + &xpclr_string[..] + "\n";
         file_out.write_all(line.as_bytes()).unwrap();
     }
     ///////////////////////////////////////////////////////////////////////
 
-    Ok((fname_output, fname_output_per_window))
+    Ok(fname_output.to_owned())
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -329,8 +394,11 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
-                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4,
+                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
+                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
+                1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
             ],
         )
         .unwrap();
@@ -374,15 +442,15 @@ mod tests {
             )
             .unwrap(),
         };
-        // // Outputs
-        // let (out_genomewide, out_per_window) = xpclr_per_window(
-        //     &genotypes_and_phenotypes,
-        //     &100,
-        //     &1,
-        //     &"test.something".to_owned(),
-        //     &"".to_owned(),
-        // )
-        // .unwrap();
+        // Outputs
+        let out = xpclr_per_window(
+            &genotypes_and_phenotypes,
+            &100,
+            &1,
+            &"test-something.csv".to_owned(),
+        )
+        .unwrap();
+    assert_eq!(0, 1);
         // let file = std::fs::File::open(&out_genomewide).unwrap();
         // let reader = std::io::BufReader::new(file);
         // let mut header: Vec<String> = vec![];
