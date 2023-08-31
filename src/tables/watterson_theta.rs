@@ -11,14 +11,14 @@ pub fn theta_watterson(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
     window_size_bp: &usize,
-    min_snps_per_window: &usize,
+    min_loci_per_window: &usize,
 ) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
     // Find window indices making sure we respect chromosomal boundaries
-    // while filtering out windows with less than min_snps_per_window SNPs
+    // while filtering out windows with less than min_loci_per_window SNPs
     let l = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
@@ -33,7 +33,7 @@ pub fn theta_watterson(
             | ((chr == windows_chr.last().unwrap().to_owned())
                 & (pos > windows_pos.last().unwrap() + &(*window_size_bp as u64)))
         {
-            if windows_n_sites[j] < *min_snps_per_window {
+            if windows_n_sites[j] < *min_loci_per_window {
                 windows_idx[j] = i;
                 windows_chr[j] = chr.to_owned();
                 windows_pos[j] = pos;
@@ -69,7 +69,7 @@ pub fn theta_watterson(
     windows_idx.push(l);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap());
-    if windows_n_sites.last().unwrap() < min_snps_per_window {
+    if windows_n_sites.last().unwrap() < min_loci_per_window {
         windows_idx.pop();
         windows_chr.pop();
         windows_pos.pop();
@@ -85,7 +85,7 @@ pub fn theta_watterson(
     // println!("windows_n_polymorphic_sites={:?}", windows_n_polymorphic_sites);
     if windows_n_sites.len() < 1 {
         let error_message =
-            "No window with at least ".to_owned() + &min_snps_per_window.to_string() + " SNPs.";
+            "No window with at least ".to_owned() + &min_loci_per_window.to_string() + " SNPs.";
         return Err(Error::new(ErrorKind::Other, error_message))
     }
     // Calculate Watterson's estimator per window
@@ -116,13 +116,13 @@ pub fn watterson_estimator(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
     window_size_bp: &usize,
-    min_snps_per_window: &usize,
+    min_loci_per_window: &usize,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate Watterson's estimator
     let (watterson_theta_per_pool_per_window, windows_chr, windows_pos) =
-        theta_watterson(genotypes_and_phenotypes, pool_sizes, window_size_bp, min_snps_per_window).unwrap();
+        theta_watterson(genotypes_and_phenotypes, pool_sizes, window_size_bp, min_loci_per_window).unwrap();
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let (n_windows, n) = watterson_theta_per_pool_per_window.dim();
     // println!("n={}; n_windows={}", n, n_windows);

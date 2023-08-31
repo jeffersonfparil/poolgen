@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn theta_pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
-    min_snps_per_window: &usize,
+    min_loci_per_window: &usize,
 ) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
@@ -52,7 +52,7 @@ pub fn theta_pi(
         });
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
-    // while filtering out windows with less than min_snps_per_window SNPs
+    // while filtering out windows with less than min_loci_per_window SNPs
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
@@ -65,7 +65,7 @@ pub fn theta_pi(
             | ((chr == windows_chr.last().unwrap().to_owned())
                 & (pos > windows_pos.last().unwrap() + &(*window_size_bp as u64)))
         {
-            if windows_n_sites[j] < *min_snps_per_window {
+            if windows_n_sites[j] < *min_loci_per_window {
                 windows_idx[j] = i;
                 windows_chr[j] = chr.to_owned();
                 windows_pos[j] = pos;
@@ -85,7 +85,7 @@ pub fn theta_pi(
     windows_idx.push(l);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap());
-    if windows_n_sites.last().unwrap() < min_snps_per_window {
+    if windows_n_sites.last().unwrap() < min_loci_per_window {
         windows_idx.pop();
         windows_chr.pop();
         windows_pos.pop();
@@ -117,7 +117,7 @@ pub fn theta_pi(
 pub fn pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
-    min_snps_per_window: &usize,
+    min_loci_per_window: &usize,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
@@ -125,7 +125,7 @@ pub fn pi(
     let (pi_per_pool_per_window, windows_chr, windows_pos) = theta_pi(
         genotypes_and_phenotypes,
         window_size_bp,
-        min_snps_per_window,
+        min_loci_per_window,
     )
     .unwrap();
     let n = pi_per_pool_per_window.ncols();

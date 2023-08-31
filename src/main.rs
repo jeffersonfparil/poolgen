@@ -14,7 +14,7 @@ use gp::{
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
 use gwas::{mle_with_covariate, ols_with_covariate};
-use tables::{fst, pi, tajima_d, watterson_estimator};
+use tables::{fst, pi, watterson_estimator, tajima_d, xpclr};
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -88,9 +88,28 @@ struct Args {
     /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: window size in terms of number of bases
     #[clap(long, default_value_t = 100)]
     window_size_bp: usize,
-    /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: minimum number of SNPs per window
+    /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: minimum number of loci per window
     #[clap(long, default_value_t = 10)]
-    min_snps_per_window: usize,
+    min_loci_per_window: usize,
+    /// Estimating cross-population composite likelihood ratio
+    #[clap(long, default_value_t = 100_000)]
+    integration_precision:u64,
+    #[clap(long, default_value_t = 0.9)]
+    correlation_threshold_between_loci:f64,
+    #[clap(long, default_value_t = 0.0)]
+    selection_coefficient_min:f64,
+    #[clap(long, default_value_t = 1.0)]
+    selection_coefficient_max:f64,
+    #[clap(long, default_value_t = 10)]
+    selection_coefficient_n_steps:u64,
+    #[clap(long, default_value_t = 1.0e-8)]
+    recombination_rate_min:f64,
+    #[clap(long, default_value_t = 1.0e-4)]
+    recombination_rate_max:f64,
+    #[clap(long, default_value_t = 10)]
+    recombination_rate_n_steps:u64,
+    #[clap(long, default_value_t = 1.0e-9)]
+    mutation_rate:f64,
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
@@ -308,7 +327,7 @@ fn main() {
             let (genome_wide, per_window) = fst(
                 &genotypes_and_phenotypes,
                 &args.window_size_bp,
-                &args.min_snps_per_window,
+                &args.min_loci_per_window,
                 &args.fname,
                 &args.output,
             )
@@ -322,7 +341,7 @@ fn main() {
             output = pi(
                 &genotypes_and_phenotypes,
                 &args.window_size_bp,
-                &args.min_snps_per_window,
+                &args.min_loci_per_window,
                 &args.fname,
                 &args.output,
             )
@@ -336,7 +355,7 @@ fn main() {
                 &genotypes_and_phenotypes,
                 &file_sync_phen.pool_sizes,
                 &args.window_size_bp,
-                &args.min_snps_per_window,
+                &args.min_loci_per_window,
                 &args.fname,
                 &args.output,
             )
@@ -350,10 +369,38 @@ fn main() {
                 &genotypes_and_phenotypes,
                 &file_sync_phen.pool_sizes,
                 &args.window_size_bp,
-                &args.min_snps_per_window,
+                &args.min_loci_per_window,
                 &args.fname,
                 &args.output,
             )
+            .unwrap();
+        } else if args.analysis == String::from("xpclr") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            let genotypes_and_phenotypes = file_sync_phen
+                .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
+                .unwrap(); // we need all alleles in each locus
+            output = tajima_d(
+                &genotypes_and_phenotypes,
+                &file_sync_phen.pool_sizes,
+                &args.window_size_bp,
+                &args.min_loci_per_window,
+                &args.fname,
+                &args.output,
+            )
+            .unwrap();
+            output = xpclr(&genotypes_and_phenotypes,
+                &args.window_size_bp,
+                &args.min_loci_per_window,
+                &args.integration_precision,
+                &args.correlation_threshold_between_loci,
+                &args.selection_coefficient_min,
+                &args.selection_coefficient_max,
+                &args.selection_coefficient_n_steps,
+                &args.recombination_rate_min,
+                &args.recombination_rate_max,
+                &args.recombination_rate_n_steps,
+                &args.mutation_rate,
+                &args.output)
             .unwrap();
         } else if args.analysis == String::from("test") {
             let output = 0;

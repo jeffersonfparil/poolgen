@@ -3,40 +3,42 @@ use ndarray::{prelude::*, Zip};
 use std::f64::consts::PI;
 use statrs::distribution::{Binomial, Discrete};
 use std::fs::OpenOptions;
-use std::io::{self, prelude::*};
+use std::io::{self, prelude::*, Error, ErrorKind};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::gwas::*;
+use crate::gwas::pearsons_correlation;
+use crate::tables::theta_pi;
 
 /// XP-CLR from https://www.ncbi.nlm.nih.gov/pubmed/20086244
 /// Implementation and modifications (improvements, I hope) of https://github.com/hardingnj/xpclr/blob/master/xpclr/methods.py
 
-fn pdf_p1(p1: f64, other_params: &Vec<f64>) -> io::Result<f64> {
-    let q0 = other_params[0];
-    let s2 = other_params[1];
-    let c = other_params[2];
+// Probability density functions which will be integrated between 0 and 1 as allele frequencies are restricted between 0 and 1
+fn pdf_base(x: f64, other_params: &Vec<f64>) -> io::Result<f64> {
+    let q0 = other_params[0]; // allele frequency in the base population
+    let s2 = other_params[1]; // estimated variance of the allele frequency across the base and focal populations
+    let c = other_params[2]; // selection-recombination factor which is negatively related to selection intensity
     Ok(
-        if (p1 < c) & (p1 < (1.0-c)) {
+        if (x < c) & (x < (1.0-c)) {
             (1.0 / (2.0*PI*s2).sqrt()) 
-            * ((c-p1)/c.powf(2.0)) 
-            * f64::exp(-( ((p1-q0).powf(2.0)) / (2.0*c.powf(2.0)*s2) ))
-        } else if p1 > (1.0-c) {
+            * ((c-x)/c.powf(2.0)) 
+            * f64::exp(-( ((x-q0).powf(2.0)) / (2.0*c.powf(2.0)*s2) ))
+        } else if x > (1.0-c) {
             (1.0 / (2.0*PI*s2).sqrt()) 
-            * ((p1+c-1.0)/c.powf(2.0)) 
-            * f64::exp(-( ((p1+c-1.0-(c*q0)).powf(2.0)) / (2.0*c.powf(2.0)*s2) ))
+            * ((x+c-1.0)/c.powf(2.0)) 
+            * f64::exp(-( ((x+c-1.0-(c*q0)).powf(2.0)) / (2.0*c.powf(2.0)*s2) ))
         } else {
             0.0
         }
     )
 }
 
-fn cdf_p1(p1: f64, other_params: &Vec<f64>) -> io::Result<f64> {
-    let q0 = other_params[0];
-    let s2 = other_params[1];
-    let c = other_params[2];
-    let k = other_params[3] as u64;
-    let m = other_params[4] as u64;
-    let mut dist_binomial = Binomial::new(p1, m).unwrap();
-    Ok(pdf_p1(p1, &vec![q0, s2, c]).unwrap() * dist_binomial.pmf(k))
+fn pdf_focal(x: f64, other_params: &Vec<f64>) -> io::Result<f64> {
+    let q0 = other_params[0]; // allele frequency in the base population
+    let s2 = other_params[1]; // estimated variance of the allele frequency across the base and focal populations
+    let c = other_params[2]; // selection-recombination factor which is negatively related to selection intensity
+    let k = other_params[3] as u64; // allele count in the focal population
+    let m = other_params[4] as u64; // total coverage (total number of all the alleles in the current locus) in the focal population
+    let mut dist_binomial = Binomial::new(x, m).unwrap();
+    Ok(pdf_base(x, &vec![q0, s2, c]).unwrap() * dist_binomial.pmf(k))
 }
 
 // Modification of https://codereview.stackexchange.com/a/161366
@@ -61,9 +63,14 @@ fn simple_reimann_sum_integration<F>(a: f64, b: f64, func: F, precision: u64, ot
 pub fn xpclr_per_window(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
-    min_snps_per_window: &usize,
-    fname_output: &String,
-) -> io::Result<String> {
+    min_loci_per_window: &usize,
+    selection_coefficient: &f64,
+    recombination_rate: &f64,
+    min_recombination_rate: &f64,
+    effective_population_sizes: &Array1<f64>,
+    integration_precision: &u64,
+    correlation_threshold_between_loci: &f64,
+) -> io::Result<Array2<f64>> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
@@ -103,7 +110,6 @@ pub fn xpclr_per_window(
         .collect::<Vec<usize>>(),
     )
     .unwrap();
-
     // Estimate the effect of population histories between pairs of populations, i.e. omega (representing demography, splits, drift, bottleneck...)
     // where if the allele frequency at the base population, q0 is zero then we skip as we assume that the base population is the ancestral population
     // Generate an l x n x n array which is non-symmetric at nxn because of the reason above, i.e. allele frequencies cannot be fixed in the base (ancestral) population
@@ -136,8 +142,8 @@ pub fn xpclr_per_window(
             };
         }
     );
-    println!("squared_differences={:?}", squared_differences);
-    println!("denom_binomial_var={:?}", denom_binomial_var);
+    // println!("squared_differences={:?}", squared_differences);
+    // println!("denom_binomial_var={:?}", denom_binomial_var);
     // Population history factor (omega) across all loci (n x n)
     let omega: Array2<f64> = (&squared_differences / &denom_binomial_var).mean_axis(Axis(0)).unwrap();
     // Neutral allele frequency variance across time (sigma2) per locus (l x n x n)
@@ -149,36 +155,8 @@ pub fn xpclr_per_window(
             }
         }
     }
-    println!("omega={:?}", omega);
-    println!("sigma2={:?}", sigma2);
-    // Joint effects of selection and recombination (c) across all loci and populations (scalar)
-    let s = 0.05;
-    let r = 1.0e-5;
-    // let r = 1.0e-7;
-    let r_min = 1.0e-9;
-    let ne = 10_000;
-    let precision = 100_000;
-    let corr_cutoff = 0.5;
-    let c = if s <= f64::EPSILON {
-        0.0
-    } else {
-        1.00 - f64::exp(-(2.00 * ne as f64).ln() * vec![r, r_min]
-            .iter()
-            .fold(r, |max, &x| if x>max{x}else{max}) / s
-        )
-    };
-    // let c = 0.50;
-    println!("c={:?}", c);
-    let params_of_pdf_p1 = vec![0.5, 0.1, c];
-    let q = simple_reimann_sum_integration(0.001, 0.999, pdf_p1, precision, &params_of_pdf_p1).unwrap();
-    println!("q={:?}", q);
-    let q_001 = pdf_p1(0.001, &params_of_pdf_p1).unwrap();
-    let q_500 = pdf_p1(0.500, &params_of_pdf_p1).unwrap();
-    let q_999 = pdf_p1(0.999, &params_of_pdf_p1).unwrap();
-    println!("q_001={:?}", q_001);
-    println!("q_500={:?}", q_500);
-    println!("q_999={:?}", q_999);
-    println!("f64::EPSILON={:?}", f64::EPSILON);
+    // println!("omega={:?}", omega);
+    // println!("sigma2={:?}", sigma2);
     // Compute likelihood ratios per SNP
     // Instantiate an l x n x n array
     let mut xpclr: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
@@ -201,26 +179,36 @@ pub fn xpclr_per_window(
             let q0 = g[(j, idx_allele)];
             let q1 = g[(k, idx_allele)];
 
+            let ne_mean = (effective_population_sizes[j] + effective_population_sizes[k]) / 2.0;
+            let c = if *selection_coefficient <= f64::EPSILON {
+                0.0
+            } else {
+                1.00 - f64::exp(-(2.00 * ne_mean).ln() * vec![recombination_rate, min_recombination_rate]
+                    .iter()
+                    .fold(recombination_rate, |max, &x| if x>max{x}else{max}) / selection_coefficient
+                )
+            };
+
             let m = genotypes_and_phenotypes.coverages[(k, i)];
             let k = (q1 * m).round();
 
             let params_of_pdf_p1 = vec![q0, s2, c];
             let params_of_cdf_p1 = vec![q0, s2, c, k, m];
-            let likelihood_b = simple_reimann_sum_integration(0.001, 0.999, pdf_p1, precision, &params_of_pdf_p1).unwrap();
-            let likelihood_a = simple_reimann_sum_integration(0.001, 0.999, cdf_p1, precision, &params_of_cdf_p1).unwrap();
-            *ratio = if (likelihood_a < f64::EPSILON) | (likelihood_b < f64::EPSILON) {
+            let likelihood_base = simple_reimann_sum_integration(0.001, 0.999, pdf_base, *integration_precision, &params_of_pdf_p1).unwrap();
+            let likelihood_focal = simple_reimann_sum_integration(0.001, 0.999, pdf_focal, *integration_precision, &params_of_cdf_p1).unwrap();
+            *ratio = if (likelihood_focal < f64::EPSILON) | (likelihood_base < f64::EPSILON) {
                 f64::EPSILON.ln()
             } else {
-                likelihood_a.ln() - likelihood_b.ln()
+                likelihood_focal.ln() - likelihood_base.ln()
             };
         }
     );
-    println!("xpclr={:?}", xpclr);
+    // println!("xpclr={:?}", xpclr);
     ///////////////////////////////////////////////////////////////////////
     // Output: XP-CLR per window per population pair
     // Summarize per non-overlapping window
     // Find window indices making sure we respect chromosomal boundaries
-    // while filtering out windows with less than min_snps_per_window SNPs
+    // while filtering out windows with less than min_loci_per_window SNPs
     let m = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
@@ -234,7 +222,7 @@ pub fn xpclr_per_window(
             | ((chr == windows_chr.last().unwrap().to_owned())
                 & (pos > windows_pos.last().unwrap() + &(*window_size_bp as u64)))
         {
-            if windows_n_sites[j] < *min_snps_per_window {
+            if windows_n_sites[j] < *min_loci_per_window {
                 windows_idx[j] = i;
                 windows_chr[j] = chr.to_owned();
                 windows_pos[j] = pos;
@@ -254,7 +242,7 @@ pub fn xpclr_per_window(
     windows_idx.push(m);
     windows_chr.push(windows_chr.last().unwrap().to_owned());
     windows_pos.push(*loci_pos.last().unwrap());
-    if windows_n_sites.last().unwrap() < min_snps_per_window {
+    if windows_n_sites.last().unwrap() < min_loci_per_window {
         windows_idx.pop();
         windows_chr.pop();
         windows_pos.pop();
@@ -262,16 +250,16 @@ pub fn xpclr_per_window(
     }
     if windows_n_sites.len() < 1 {
         let error_message =
-            "No window with at least ".to_owned() + &min_snps_per_window.to_string() + " SNPs.";
-        return Ok(error_message);
+            "No window with at least ".to_owned() + &min_loci_per_window.to_string() + " SNPs.";
+        return Err(Error::new(ErrorKind::Other, error_message));
     }
-    println!("loci_chr={:?}", loci_chr);
-    println!("loci_pos={:?}", loci_pos);
-    println!("m={:?}", m);
-    println!("windows_idx={:?}", windows_idx);
-    println!("windows_chr={:?}", windows_chr);
-    println!("windows_pos={:?}", windows_pos);
-    println!("windows_n_sites={:?}", windows_n_sites);
+    // println!("loci_chr={:?}", loci_chr);
+    // println!("loci_pos={:?}", loci_pos);
+    // println!("m={:?}", m);
+    // println!("windows_idx={:?}", windows_idx);
+    // println!("windows_chr={:?}", windows_chr);
+    // println!("windows_pos={:?}", windows_pos);
+    // println!("windows_n_sites={:?}", windows_n_sites);
     // Estimate weights per locus
     // Computing the correlation between SNPs across pools instead of between 2 populations and using individual genotypes because we have Pool-seq data, i.e. individual genotypes are not available
     let mut weights: Array1<f64> = Array1::from_elem(l, 0.0);
@@ -303,7 +291,7 @@ pub fn xpclr_per_window(
             // println!("qi={:?}", qi);
             // println!("qj={:?}", qj);
             // println!("corr={:?}", corr);
-            weights[i] += if corr < corr_cutoff {
+            weights[i] += if corr < *correlation_threshold_between_loci {
                 0.0
             } else {
                 1.0
@@ -337,8 +325,88 @@ pub fn xpclr_per_window(
             }
         }
     }
-    println!("weights={:?}", weights);
-    println!("xpclr_per_window_per_pop_pair={:?}", xpclr_per_window_per_pop_pair);
+    // println!("weights={:?}", weights);
+    // println!("xpclr_per_window_per_pop_pair={:?}", xpclr_per_window_per_pop_pair);
+    Ok(xpclr_per_window_per_pop_pair)
+}
+
+pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    window_size_bp: &usize,
+    min_loci_per_window: &usize,
+    integration_precision: &u64,
+    correlation_threshold_between_loci: &f64,
+    selection_coefficient_min: &f64,
+    selection_coefficient_max: &f64,
+    selection_coefficient_n_steps: &u64,
+    recombination_rate_min: &f64,
+    recombination_rate_max: &f64,
+    recombination_rate_n_steps: &u64,
+    mutation_rate: &f64,
+    fname_output: &String,
+) -> io::Result<String> {
+    let s_step_size = (selection_coefficient_max - selection_coefficient_min) / (*selection_coefficient_n_steps as f64);
+    let r_step_size = (recombination_rate_max - recombination_rate_min) / (*recombination_rate_n_steps as f64);
+    let range_of_selection_coefficients: Vec<f64> = (0..*selection_coefficient_n_steps).map(|x| ((x as f64)*s_step_size)+selection_coefficient_min).collect();
+    let range_of_recombination_rates: Vec<f64> = (0..*recombination_rate_n_steps).map(|x| ((x as f64)*r_step_size)+recombination_rate_min).collect();
+    let min_recombination_rate = recombination_rate_min;
+    // Calculate heterozygosities to estimate the effective population sizes (theta = 4*Ne*mu)
+    let (pi_per_pool_per_window, windows_chr, windows_pos) = theta_pi(
+        genotypes_and_phenotypes,
+        window_size_bp,
+        min_loci_per_window,
+    )
+    .unwrap();
+    // Estimate effective population sizes per pool
+    let n = pi_per_pool_per_window.ncols();
+    let n_windows = pi_per_pool_per_window.nrows();
+    let pi_per_pool: Array1<f64> = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
+    let effective_population_sizes: Array1<f64> = pi_per_pool / (4.00 * mutation_rate);
+    // Define the output filename
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64();
+    let (bname, fname_output) = if fname_output.to_owned() == "".to_owned() {
+        ("XPCLR".to_owned(), "XPCLR".to_owned() + "-" + &time.to_string() + ".csv")
+    } else {
+        let bname = fname_output
+            .split(".")
+            .map(|a| a.to_owned())
+            .collect::<Vec<String>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()[1..]
+            .to_owned()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()
+            .join(".");
+        (bname, fname_output.to_owned())
+    };
+    // Estimate XP-CLR using the mean effective population sizes between pairs of pools
+    let mut vec_s: Vec<f64> = vec![];
+    let mut vec_r: Vec<f64> = vec![];
+    let mut vec_output: Vec<Array2<f64>> = vec![];
+    for selection_coefficient in &range_of_selection_coefficients {
+        for recombination_rate in &range_of_recombination_rates {
+            vec_s.push(*selection_coefficient);
+            vec_r.push(*recombination_rate);
+            vec_output.push(
+                xpclr_per_window(genotypes_and_phenotypes,
+                    window_size_bp,
+                    min_loci_per_window,
+                    &selection_coefficient,
+                    &recombination_rate,
+                    min_recombination_rate,
+                    &effective_population_sizes,
+                    integration_precision,
+                    correlation_threshold_between_loci).unwrap()
+                );
+        }
+    }
+    // println!("vec_s={:?}", vec_s);
+    // println!("vec_r={:?}", vec_r);
+    // println!("vec_output={:?}", vec_output);
     // Instantiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
     let mut file_out = OpenOptions::new()
@@ -348,40 +416,43 @@ pub fn xpclr_per_window(
         .open(&fname_output)
         .expect(&error_writing_file);
     // Header
-    let mut line: Vec<String> = vec!["chr".to_owned(), "pos_ini".to_owned(), "pos_fin".to_owned()];
+    let mut line: Vec<String> = vec!["selection_coefficient".to_owned(), "recombination_rate".to_owned(), "chr".to_owned(), "pos_ini".to_owned(), "pos_fin".to_owned()];
     for j in 0..n {
         for k in 0..n {
             line.push(
                 genotypes_and_phenotypes.pool_names[j].to_owned()
-                    + "_vs_"
+                    + "_into_"
                     + &genotypes_and_phenotypes.pool_names[k],
             );
         }
     }
     let line = line.join(",") + "\n";
     file_out.write_all(line.as_bytes()).unwrap();
-    // Per line
-    for i in 0..n_windows {
-        let window_pos_ini = windows_pos[i];
-        let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
-        let coordinate = windows_chr[i].clone()
-            + ","
-            + &window_pos_ini.to_string()
-            + ","
-            + &window_pos_fin.to_string()
-            + ",";
-        let xpclr_string = xpclr_per_window_per_pop_pair
-            .slice(s![i, ..])
-            .iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<String>>()
-            .join(",");
-        let line = coordinate + &xpclr_string[..] + "\n";
-        file_out.write_all(line.as_bytes()).unwrap();
+    // Write per line
+    for j in 0..vec_output.len() {
+        let xpclr_per_window_per_pop_pair = &vec_output[j];
+        // let selection_recombination = sensible_round(vec_s[j], 4).to_string() + "," + &sensible_round(vec_r[j], 4).to_string() + ",";
+        let selection_recombination = vec_s[j].to_string() + "," + &vec_r[j].to_string() + ",";
+        for i in 0..n_windows {
+            let window_pos_ini = windows_pos[i];
+            let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
+            let coordinate = windows_chr[i].clone()
+                + ","
+                + &window_pos_ini.to_string()
+                + ","
+                + &window_pos_fin.to_string()
+                + ",";
+            let xpclr_string = xpclr_per_window_per_pop_pair
+                .slice(s![i, ..])
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join(",");
+            let line = selection_recombination.to_owned() + &coordinate + &xpclr_string[..] + "\n";
+            file_out.write_all(line.as_bytes()).unwrap();
+        }
     }
-    ///////////////////////////////////////////////////////////////////////
-
-    Ok(fname_output.to_owned())
+    Ok(fname_output)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -442,54 +513,54 @@ mod tests {
             )
             .unwrap(),
         };
+        let window_size_bp = &100;
+        let min_loci_per_window = &1;
+        let selection_coefficient = &0.05;
+        let recombination_rate = &1.0e-5;
+        let min_recombination_rate = &1.0e-9;
+        let effective_population_size = &Array1::from_vec(vec![9_000., 9_500., 10_000., 11_000., 12_000.]);
+        let integration_precision = &100_000;
+        let correlation_threshold_between_loci = &0.5;
         // Outputs
         let out = xpclr_per_window(
             &genotypes_and_phenotypes,
-            &100,
-            &1,
-            &"test-something.csv".to_owned(),
+            window_size_bp,
+            min_loci_per_window,
+            selection_coefficient,
+            recombination_rate,
+            min_recombination_rate,
+            effective_population_size,
+            integration_precision,
+            correlation_threshold_between_loci
         )
         .unwrap();
-    assert_eq!(0, 1);
-        // let file = std::fs::File::open(&out_genomewide).unwrap();
-        // let reader = std::io::BufReader::new(file);
-        // let mut header: Vec<String> = vec![];
-        // let mut pop: Vec<String> = vec![];
-        // let mut xpclr: Vec<f64> = vec![];
-        // for line in reader.lines() {
-        //     let split = line
-        //         .unwrap()
-        //         .split(",")
-        //         .map(|x| x.to_owned())
-        //         .collect::<Vec<String>>();
-        //     if header.len() == 0 {
-        //         header = split;
-        //     } else {
-        //         pop.push(split[0].clone());
-        //         for f in split[1..]
-        //             .iter()
-        //             .map(|x| x.parse::<f64>().unwrap())
-        //             .collect::<Vec<f64>>()
-        //         {
-        //             xpclr.push(f);
-        //         }
-        //     }
-        // }
-        // let xpclr: Array2<f64> = Array2::from_shape_vec((pop.len(), pop.len()), xpclr).unwrap();
-        // let diag: Array1<f64> = xpclr.diag().to_owned(); // itself, i.e. xpclr=0.0
-        // let pop1_4 = xpclr[(0, 3)]; // the same populations, i.e. xpclr=0.0
-        // let pop4_1 = xpclr[(3, 0)]; // the same populations, i.e. xpclr=0.0
-        // let pop2_5 = xpclr[(1, 4)]; // totally different populations, i.e. xpclr=0.5, the same locus 1 and different locus 2
-        // let pop5_2 = xpclr[(4, 1)]; // totally different populations, i.e. xpclr=0.5, the same locus 1 and different locus 2
-        // println!("pop={:?}", pop);
-        // println!("xpclr={:?}", xpclr);
-        // println!("out_per_window={:?}", out_per_window);
-        // // Assertions
-        // assert_eq!(diag, Array1::from_elem(pop.len(), 0.0));
-        // assert_eq!(pop1_4, 0.0);
-        // assert_eq!(pop4_1, 0.0);
-        // assert_eq!(pop2_5, 0.5);
-        // assert_eq!(pop5_2, 0.5);
-        // assert_eq!(0, 1);
+
+        let selection_coefficient_min = 0.0;
+        let selection_coefficient_max = 1.0;
+        let selection_coefficient_n_steps = 10;
+        let recombination_rate_min = 1.0e-8;
+        let recombination_rate_max = 1.0e-3;
+        let recombination_rate_n_steps = 10;
+        // let selection_coefficient_min = 0.5;
+        // let selection_coefficient_max = 0.5;
+        // let selection_coefficient_n_steps = 1;
+        // let recombination_rate_min = 1.0e-3;
+        // let recombination_rate_max = 1.0e-3;
+        // let recombination_rate_n_steps = 1;
+        let mutation_rate = 9.01e-9; // Mutation rate: 9.01 x 10^(-9) - estimates from Oryza sativa (not using Arabipsis thaliana estimates of 4.35 x 10(-9)) from Wang et a, 2019
+        let out = xpclr(&genotypes_and_phenotypes,
+            window_size_bp,
+            min_loci_per_window,
+            integration_precision,
+            correlation_threshold_between_loci,
+            &selection_coefficient_min,
+            &selection_coefficient_max,
+            &selection_coefficient_n_steps,
+            &recombination_rate_min,
+            &recombination_rate_max,
+            &recombination_rate_n_steps,
+            &mutation_rate,
+            &"test-XP_CLR.csv".to_owned()).unwrap();
+        assert_eq!(0, 1);
     }
 }

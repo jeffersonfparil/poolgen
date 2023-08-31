@@ -88,8 +88,6 @@ pub fn fst(
     let mut fname_output = fname_output.to_owned();
     let mut fname_output_per_window = fname_output
         .split(".")
-        .collect::<Vec<&str>>()
-        .into_iter()
         .map(|a| a.to_owned())
         .collect::<Vec<String>>()
         .into_iter()
@@ -109,8 +107,6 @@ pub fn fst(
             .as_secs_f64();
         let bname = fname_input
             .split(".")
-            .collect::<Vec<&str>>()
-            .into_iter()
             .map(|a| a.to_owned())
             .collect::<Vec<String>>()
             .into_iter()
