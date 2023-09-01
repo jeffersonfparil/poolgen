@@ -1,0 +1,35 @@
+
+initialize() {
+    // Define simulation variables
+    defineGlobal("N", 1e4);
+    defineGlobal("CHRPOS_INI",     0);
+    defineGlobal("CHRPOS_END", 9999);
+    defineGlobal("CHRPOS_SEL", 5000);
+    defineGlobal("SEL_COEF", 1.0);
+    // defineGlobal("MU", 1e-7);
+    defineGlobal("MU", 1e-5);
+    defineGlobal("R", 1e-8);
+    // Define the genomes and the initial population
+    initializeMutationRate(MU);
+    initializeMutationType("m1", 0.5, "f", 0.0);
+    initializeGenomicElementType("g1", m1, 1.0);
+    initializeGenomicElement(g1, CHRPOS_INI, CHRPOS_END);
+    initializeRecombinationRate(R);
+    // Define the mutation with selective advantage which will be introduced later into population 2
+    initializeMutationType("m2", 1.0, "f", SEL_COEF); // introduced mutation (initially neutral)
+}
+1 early() { 
+    sim.addSubpop("p1", N);
+}
+1000 late() {
+    // sim.outputFull();
+    // p1.outputSample(500);
+    sim.addSubpopSplit("p2", N, p1);
+    target = sample(p2.genomes, 100);
+    target.addNewDrawnMutation(m2, CHRPOS_SEL);
+}
+1100 late() {
+    p1.outputSample(500, filePath="test-p1.txt");
+    p2.outputSample(500, filePath="test-p2.txt");
+}
+

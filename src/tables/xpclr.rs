@@ -60,6 +60,7 @@ fn simple_reimann_sum_integration<F>(a: f64, b: f64, func: F, precision: u64, ot
     )
 }
 
+// Compute XP-CLR across all pairs of pools per window
 pub fn xpclr_per_window(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
@@ -330,6 +331,8 @@ pub fn xpclr_per_window(
     Ok(xpclr_per_window_per_pop_pair)
 }
 
+// Compute and print out in a single csv file the XP-CLR across all pairs of pools per window 
+// across a range of selection coefficients and recombination rates
 pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
     min_loci_per_window: &usize,
@@ -564,3 +567,119 @@ mod tests {
         // assert_eq!(0, 1);
     }
 }
+
+// // Using SLiM-simulated data to test/validate XP-CLR
+// cd poolgen/tests
+// echo '
+// initialize() {
+//     // Define simulation variables
+//     defineGlobal("N", 1e4);
+//     defineGlobal("CHRPOS_INI",     0);
+//     defineGlobal("CHRPOS_END", 9999);
+//     defineGlobal("CHRPOS_SEL", 5000);
+//     defineGlobal("SEL_COEF", 1.0);
+//     // defineGlobal("MU", 1e-7);
+//     defineGlobal("MU", 1e-5);
+//     defineGlobal("R", 1e-8);
+//     // Define the genomes and the initial population
+//     initializeMutationRate(MU);
+//     initializeMutationType("m1", 0.5, "f", 0.0);
+//     initializeGenomicElementType("g1", m1, 1.0);
+//     initializeGenomicElement(g1, CHRPOS_INI, CHRPOS_END);
+//     initializeRecombinationRate(R);
+//     // Define the mutation with selective advantage which will be introduced later into population 2
+//     initializeMutationType("m2", 1.0, "f", SEL_COEF); // introduced mutation (initially neutral)
+// }
+// 1 early() { 
+//     sim.addSubpop("p1", N);
+// }
+// 1000 late() {
+//     // sim.outputFull();
+//     // p1.outputSample(500);
+//     sim.addSubpopSplit("p2", N, p1);
+//     target = sample(p2.genomes, 100);
+//     target.addNewDrawnMutation(m2, CHRPOS_SEL);
+// }
+// 1100 late() {
+//     p1.outputSample(1000, filePath="test-p1.txt"); // for 500 individuals or 2 x 500 haploid genomes
+//     p2.outputSample(1000, filePath="test-p2.txt"); // for 500 individuals or 2 x 500 haploid genomes
+// }
+// ' > test.slim
+// time slim test.slim > /dev/null
+// //
+
+// // Parsing in julia because python is too slow
+// using ProgressMeter
+// using UnicodePlots
+
+// function parse_slim_output(;fname::String="test-p1.txt", n::Int64=500, l::Int64=10000)::Vector{Float64}
+//     # fname = "test-p1.txt"
+//     # n = 500
+//     # l = 10000
+
+//     i = 1
+//     mut_id = []
+//     mut_type = []
+//     mut_pos = []
+//     mutations_data_bool = false
+//     genotype_data_bool = false
+
+//     X = zeros(Float64, n, l)
+//     f = open(fname)
+
+//     ini = 0
+//     while !eof(f)
+//         x = readline(f)
+//         if x == "Genomes:"
+//             ini = ini + position(f)
+//             break
+//         end
+//     end
+//     seekend(f)
+//     fin = position(f) - ini
+//     seekstart(f)
+//     p = Progress(fin, dt=1.0) 
+
+//     while !eof(f)
+//         x = readline(f)
+//         if x == "Mutations:"
+//             mutations_data_bool = true
+//             continue
+//         end
+//         if x == "Genomes:"
+//             mutations_data_bool = false
+//             genotype_data_bool = true
+//             continue
+//         end
+//         if mutations_data_bool
+//             xsplit = split(x, " ")
+//             push!(mut_id, parse(Int64, xsplit[1]))
+//             push!(mut_type, xsplit[3])
+//             push!(mut_pos, parse(Int64, xsplit[4]))
+//         end
+//         if genotype_data_bool
+//             xsplit = split(x, " ")
+//             m = length(xsplit)
+//             for _j = parse.(Int64, xsplit[3:m])
+//                 # _j = parse(Int64, xsplit[3])
+//                 j = mut_pos[mut_id .== _j][1] + 1 ### correct for julia starting with 1 instead of zero index
+//                 X[i, j] = 1.0
+//             end
+//             i += 1
+//             update!(p, position(f) - ini)
+//         end
+//     end
+//     close(f)
+//     q = sum(X, dims=1)[1,:] ./ n
+//     return(q)
+// end
+
+// n = 500
+// l = 10000
+// q1 = parse_slim_output(fname="test-p1.txt", n=n, l=l)
+// q2 = parse_slim_output(fname="test-p2.txt", n=n, l=l)
+
+// x = collect(1:l)
+// lineplot(x, q1)
+// lineplot(x, q2)
+
