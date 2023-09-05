@@ -565,7 +565,7 @@ mod tests {
             &recombination_rate_n_steps,
             &mutation_rate,
             &"test-XP_CLR.csv".to_owned()).unwrap();
-        assert_eq!(0, 1);
+        // assert_eq!(0, 1);
     }
 }
 
