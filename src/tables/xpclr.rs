@@ -352,7 +352,8 @@ pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     let range_of_selection_coefficients: Vec<f64> = (0..*selection_coefficient_n_steps).map(|x| ((x as f64)*s_step_size)+selection_coefficient_min).collect();
     let range_of_recombination_rates: Vec<f64> = (0..*recombination_rate_n_steps).map(|x| ((x as f64)*r_step_size)+recombination_rate_min).collect();
     let min_recombination_rate = recombination_rate_min;
-    println!("range_of_selection_coefficients={:?}", range_of_selection_coefficients);
+    // println!("range_of_selection_coefficients={:?}", range_of_selection_coefficients);
+    // println!("range_of_recombination_rates={:?}", range_of_recombination_rates);
     // Calculate heterozygosities to estimate the effective population sizes (theta = 4*Ne*mu)
     let (pi_per_pool_per_window, windows_chr, windows_pos) = theta_pi(
         genotypes_and_phenotypes,
