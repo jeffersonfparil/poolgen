@@ -379,15 +379,6 @@ fn main() {
             let genotypes_and_phenotypes = file_sync_phen
                 .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
                 .unwrap(); // we need all alleles in each locus
-            output = tajima_d(
-                &genotypes_and_phenotypes,
-                &file_sync_phen.pool_sizes,
-                &args.window_size_bp,
-                &args.min_loci_per_window,
-                &args.fname,
-                &args.output,
-            )
-            .unwrap();
             output = xpclr(&genotypes_and_phenotypes,
                 &args.window_size_bp,
                 &args.min_loci_per_window,
