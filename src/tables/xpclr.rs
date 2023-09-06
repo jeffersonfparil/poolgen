@@ -1,12 +1,12 @@
 use crate::base::*;
+use crate::gwas::pearsons_correlation;
+use crate::tables::theta_pi;
 use ndarray::{prelude::*, Zip};
-use std::f64::consts::PI;
 use statrs::distribution::{Binomial, Discrete};
+use std::f64::consts::PI;
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*, Error, ErrorKind};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::gwas::pearsons_correlation;
-use crate::tables::theta_pi;
 
 /// XP-CLR from https://www.ncbi.nlm.nih.gov/pubmed/20086244
 /// Implementation and modifications (improvements, I hope) of https://github.com/hardingnj/xpclr/blob/master/xpclr/methods.py
@@ -16,19 +16,17 @@ fn pdf_base(x: f64, other_params: &Vec<f64>) -> io::Result<f64> {
     let q0 = other_params[0]; // allele frequency in the base population
     let s2 = other_params[1]; // estimated variance of the allele frequency across the base and focal populations
     let c = other_params[2]; // selection-recombination factor which is negatively related to selection intensity
-    Ok(
-        if (x < c) & (x < (1.0-c)) {
-            (1.0 / (2.0*PI*s2).sqrt()) 
-            * ((c-x)/c.powf(2.0)) 
-            * f64::exp(-( ((x-q0).powf(2.0)) / (2.0*c.powf(2.0)*s2) ))
-        } else if x > (1.0-c) {
-            (1.0 / (2.0*PI*s2).sqrt()) 
-            * ((x+c-1.0)/c.powf(2.0)) 
-            * f64::exp(-( ((x+c-1.0-(c*q0)).powf(2.0)) / (2.0*c.powf(2.0)*s2) ))
-        } else {
-            0.0
-        }
-    )
+    Ok(if (x < c) & (x < (1.0 - c)) {
+        (1.0 / (2.0 * PI * s2).sqrt())
+            * ((c - x) / c.powf(2.0))
+            * f64::exp(-(((x - q0).powf(2.0)) / (2.0 * c.powf(2.0) * s2)))
+    } else if x > (1.0 - c) {
+        (1.0 / (2.0 * PI * s2).sqrt())
+            * ((x + c - 1.0) / c.powf(2.0))
+            * f64::exp(-(((x + c - 1.0 - (c * q0)).powf(2.0)) / (2.0 * c.powf(2.0) * s2)))
+    } else {
+        0.0
+    })
 }
 
 fn pdf_focal(x: f64, other_params: &Vec<f64>) -> io::Result<f64> {
@@ -42,22 +40,26 @@ fn pdf_focal(x: f64, other_params: &Vec<f64>) -> io::Result<f64> {
 }
 
 // Modification of https://codereview.stackexchange.com/a/161366
-fn simple_reimann_sum_integration<F>(a: f64, b: f64, func: F, precision: u64, other_params: &Vec<f64>) -> io::Result<f64>
-    where F: Fn(f64, &Vec<f64>) -> io::Result<f64>
+fn simple_reimann_sum_integration<F>(
+    a: f64,
+    b: f64,
+    func: F,
+    precision: u64,
+    other_params: &Vec<f64>,
+) -> io::Result<f64>
+where
+    F: Fn(f64, &Vec<f64>) -> io::Result<f64>,
 {
     let delta: f64 = (b - a) / precision as f64;
-    let sum: f64 = (0..precision).map(|trapezoid| {
-        let left_side = a + (delta * trapezoid as f64);
-        let right_size = left_side + delta;
-        0.5 * (func(left_side, other_params).unwrap() + func(right_size, other_params).unwrap()) * delta
-        }).sum();
-    Ok (
-        if a > b {
-            -sum
-        } else {
-            sum
-        }
-    )
+    let sum: f64 = (0..precision)
+        .map(|trapezoid| {
+            let left_side = a + (delta * trapezoid as f64);
+            let right_size = left_side + delta;
+            0.5 * (func(left_side, other_params).unwrap() + func(right_size, other_params).unwrap())
+                * delta
+        })
+        .sum();
+    Ok(if a > b { -sum } else { sum })
 }
 
 // Compute XP-CLR across all pairs of pools per window
@@ -122,31 +124,39 @@ pub fn xpclr_per_window(
         .and(&pop1)
         .and(&pop2)
         .par_for_each(|d, v, &i, &j, &k| {
-            let idx_start = loci_idx[i];
-            let idx_end = loci_idx[i + 1];
-            let g = genotypes_and_phenotypes
-                .intercept_and_allele_frequencies
-                .slice(s![.., idx_start..idx_end]);
-            // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
-            let (idx_allele, _) = g.sum_axis(Axis(0))
-                .iter()
-                .enumerate()
-                .fold((0, 0.0), |(idx_max, max), (idx, &x)| if x>max{(idx, x)}else{(idx_max, max)});
-            let q0 = g[(j, idx_allele)];
-            let q1 = g[(k, idx_allele)];
-            (*d, *v) = if (q0<f64::EPSILON) | (q0==1.00) {
-                // Catch where the allele frequency in the base population is zero and skip
-                // where if the denominator is zero then the locus is fixed
-                (f64::NAN, f64::NAN)
+            if j==k {
+                // If the base and focal populations are the same
+                (*d, *v) = (f64::NAN, f64::NAN);
             } else {
-                ((q1-q0).powf(2.0), (q0*(1.00-q0)))
-            };
-        }
+                let idx_start = loci_idx[i];
+                let idx_end = loci_idx[i + 1];
+                let g = genotypes_and_phenotypes
+                    .intercept_and_allele_frequencies
+                    .slice(s![.., idx_start..idx_end]);
+                // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
+                let (idx_allele, _) = g.sum_axis(Axis(0)).iter().enumerate().fold(
+                    (0, 0.0),
+                    |(idx_max, max), (idx, &x)| if x > max { (idx, x) } else { (idx_max, max) },
+                );
+                let q0 = g[(j, idx_allele)];
+                let q1 = g[(k, idx_allele)];
+                (*d, *v) = if (q0 < f64::EPSILON) | (q0 == 1.00) {
+                    // Catch where the allele frequency in the base population is zero and skip
+                    // where if the denominator is zero then the locus is fixed
+                    (f64::NAN, f64::NAN)
+                } else {
+                    ((q1 - q0).powf(2.0), (q0 * (1.00 - q0)))
+                };
+            }
+        });
+    println!("squared_differences={:?}", squared_differences);
+    println!("denom_binomial_var={:?}", denom_binomial_var);
+    println!(
+        "&squared_differences / &denom_binomial_var = {:?}",
+        &squared_differences / &denom_binomial_var
     );
-    // println!("squared_differences={:?}", squared_differences);
-    // println!("denom_binomial_var={:?}", denom_binomial_var);
-    // Population history factor (omega) across all loci (n x n)
-    let omega: Array2<f64> = (&squared_differences / &denom_binomial_var).mean_axis(Axis(0)).unwrap();
+    let omega: Array2<f64> =
+        mean_axis_ignore_nan(&squared_differences / &denom_binomial_var, 0).unwrap();
     // Neutral allele frequency variance across time (sigma2) per locus (l x n x n)
     let mut sigma2: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN);
     for i in 0..l {
@@ -156,8 +166,10 @@ pub fn xpclr_per_window(
             }
         }
     }
-    // println!("omega={:?}", omega);
-    // println!("sigma2={:?}", sigma2);
+    println!("omega={:?}", omega);
+    println!("sigma2={:?}", sigma2);
+    // println!("loci_idx={:?}", loci_idx);
+    // Below is the parallel computations that takes the most time! 20230906
     // Compute likelihood ratios per SNP
     // Instantiate an l x n x n array
     let mut xpclr: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN); // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
@@ -167,44 +179,65 @@ pub fn xpclr_per_window(
         .and(&pop1)
         .and(&pop2)
         .par_for_each(|ratio, &s2, &i, &j, &k| {
-            let idx_start = loci_idx[i];
-            let idx_end = loci_idx[i + 1];
-            let g = genotypes_and_phenotypes
-                .intercept_and_allele_frequencies
-                .slice(s![.., idx_start..idx_end]);
-            // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
-            let (idx_allele, _) = g.sum_axis(Axis(0))
-                .iter()
-                .enumerate()
-                .fold((0, 0.0), |(idx_max, max), (idx, &x)| if x>max{(idx, x)}else{(idx_max, max)});
-            let q0 = g[(j, idx_allele)];
-            let q1 = g[(k, idx_allele)];
+            if j==k {
+                // If the base and focal populations are the same
+                *ratio = f64::NAN;
+            } else  {
+                let idx_start = loci_idx[i];
+                let idx_end = loci_idx[i + 1];
+                let g = genotypes_and_phenotypes
+                    .intercept_and_allele_frequencies
+                    .slice(s![.., idx_start..idx_end]);
+                // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
+                let (idx_allele, _) = g.sum_axis(Axis(0)).iter().enumerate().fold(
+                    (0, 0.0),
+                    |(idx_max, max), (idx, &x)| if x > max { (idx, x) } else { (idx_max, max) },
+                );
+                let q0 = g[(j, idx_allele)];
+                let q1 = g[(k, idx_allele)];
 
-            let ne_mean = (effective_population_sizes[j] + effective_population_sizes[k]) / 2.0;
-            let c = if *selection_coefficient <= f64::EPSILON {
-                0.0
-            } else {
-                1.00 - f64::exp(-(2.00 * ne_mean).ln() * vec![recombination_rate, min_recombination_rate]
-                    .iter()
-                    .fold(recombination_rate, |max, &x| if x>max{x}else{max}) / selection_coefficient
+                let ne_mean = (effective_population_sizes[j] + effective_population_sizes[k]) / 2.0;
+                let c = if *selection_coefficient <= f64::EPSILON {
+                    0.0
+                } else {
+                    1.00 - f64::exp(
+                        -(2.00 * ne_mean).ln()
+                            * vec![recombination_rate, min_recombination_rate]
+                                .iter()
+                                .fold(recombination_rate, |max, &x| if x > max { x } else { max })
+                            / selection_coefficient,
+                    )
+                };
+
+                let m = genotypes_and_phenotypes.coverages[(k, i)];
+                let k = (q1 * m).round();
+
+                let params_of_pdf_p1 = vec![q0, s2, c];
+                let params_of_cdf_p1 = vec![q0, s2, c, k, m];
+                let likelihood_base = simple_reimann_sum_integration(
+                    0.001,
+                    0.999,
+                    pdf_base,
+                    *integration_precision,
+                    &params_of_pdf_p1,
                 )
-            };
-
-            let m = genotypes_and_phenotypes.coverages[(k, i)];
-            let k = (q1 * m).round();
-
-            let params_of_pdf_p1 = vec![q0, s2, c];
-            let params_of_cdf_p1 = vec![q0, s2, c, k, m];
-            let likelihood_base = simple_reimann_sum_integration(0.001, 0.999, pdf_base, *integration_precision, &params_of_pdf_p1).unwrap();
-            let likelihood_focal = simple_reimann_sum_integration(0.001, 0.999, pdf_focal, *integration_precision, &params_of_cdf_p1).unwrap();
-            *ratio = if (likelihood_focal < f64::EPSILON) | (likelihood_base < f64::EPSILON) {
-                f64::EPSILON.ln()
-            } else {
-                likelihood_focal.ln() - likelihood_base.ln()
-            };
-        }
-    );
-    // println!("xpclr={:?}", xpclr);
+                .unwrap();
+                let likelihood_focal = simple_reimann_sum_integration(
+                    0.001,
+                    0.999,
+                    pdf_focal,
+                    *integration_precision,
+                    &params_of_cdf_p1,
+                )
+                .unwrap();
+                *ratio = if (likelihood_focal < f64::EPSILON) | (likelihood_base < f64::EPSILON) {
+                    f64::EPSILON.ln()
+                } else {
+                    likelihood_focal.ln() - likelihood_base.ln()
+                };
+            }
+        });
+    println!("xpclr={:?}", xpclr);
     ///////////////////////////////////////////////////////////////////////
     // Output: XP-CLR per window per population pair
     // Summarize per non-overlapping window
@@ -260,7 +293,7 @@ pub fn xpclr_per_window(
     // println!("windows_idx={:?}", windows_idx);
     // println!("windows_chr={:?}", windows_chr);
     // println!("windows_pos={:?}", windows_pos);
-    // println!("windows_n_sites={:?}", windows_n_sites);
+    println!("windows_n_sites={:?}", windows_n_sites);
     // Estimate weights per locus
     // Computing the correlation between SNPs across pools instead of between 2 populations and using individual genotypes because we have Pool-seq data, i.e. individual genotypes are not available
     let mut weights: Array1<f64> = Array1::from_elem(l, 0.0);
@@ -271,10 +304,14 @@ pub fn xpclr_per_window(
             .intercept_and_allele_frequencies
             .slice(s![.., idx_start..idx_end]);
         // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
-        let (idx_allele, _) = g.sum_axis(Axis(0))
-            .iter()
-            .enumerate()
-            .fold((0, 0.0), |(idx_max, max), (idx, &x)| if x>max{(idx, x)}else{(idx_max, max)});
+        let (idx_allele, _) =
+            g.sum_axis(Axis(0))
+                .iter()
+                .enumerate()
+                .fold(
+                    (0, 0.0),
+                    |(idx_max, max), (idx, &x)| if x > max { (idx, x) } else { (idx_max, max) },
+                );
         let qi = g.column(idx_allele);
         for j in 0..l {
             let idx_start = loci_idx[j];
@@ -283,11 +320,11 @@ pub fn xpclr_per_window(
                 .intercept_and_allele_frequencies
                 .slice(s![.., idx_start..idx_end]);
             // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
-            let (idx_allele, _) = g.sum_axis(Axis(0))
-                .iter()
-                .enumerate()
-                .fold((0, 0.0), |(idx_max, max), (idx, &x)| if x>max{(idx, x)}else{(idx_max, max)});
-            let qj = g.column(idx_allele);    
+            let (idx_allele, _) = g.sum_axis(Axis(0)).iter().enumerate().fold(
+                (0, 0.0),
+                |(idx_max, max), (idx, &x)| if x > max { (idx, x) } else { (idx_max, max) },
+            );
+            let qj = g.column(idx_allele);
             let (corr, _) = pearsons_correlation(&qi, &qj).unwrap();
             // println!("qi={:?}", qi);
             // println!("qj={:?}", qj);
@@ -303,8 +340,7 @@ pub fn xpclr_per_window(
     }
     // Compute the cross-population composite likelihood ratio weighted by the inverse of the level of correlation between loci per window
     let n_windows = windows_idx.len() - 1;
-    let mut xpclr_per_window_per_pop_pair: Array2<f64> =
-        Array2::from_elem((n_windows, n * n), 0.0);
+    let mut xpclr_per_window_per_pop_pair: Array2<f64> = Array2::from_elem((n_windows, n * n), 0.0);
     for i in 0..n_windows {
         let idx_start = windows_idx[i];
         let idx_end = windows_idx[i + 1];
@@ -313,12 +349,13 @@ pub fn xpclr_per_window(
                 let idx = (j * n) + k;
                 let mut n_non_nan = 0;
                 for locus_idx in idx_start..idx_end {
-                    xpclr_per_window_per_pop_pair[(i, idx)] += if xpclr[(locus_idx, j, k)].is_nan() == false {
-                        n_non_nan += 1;
-                        weights[locus_idx] * xpclr[(locus_idx, j, k)]
-                    } else {
-                        0.0
-                    };
+                    xpclr_per_window_per_pop_pair[(i, idx)] +=
+                        if xpclr[(locus_idx, j, k)].is_nan() == false {
+                            n_non_nan += 1;
+                            weights[locus_idx] * xpclr[(locus_idx, j, k)]
+                        } else {
+                            0.0
+                        };
                 }
                 if n_non_nan == 0 {
                     xpclr_per_window_per_pop_pair[(i, idx)] = f64::NAN;
@@ -326,14 +363,18 @@ pub fn xpclr_per_window(
             }
         }
     }
-    // println!("weights={:?}", weights);
-    // println!("xpclr_per_window_per_pop_pair={:?}", xpclr_per_window_per_pop_pair);
+    println!("weights={:?}", weights);
+    println!(
+        "xpclr_per_window_per_pop_pair={:?}",
+        xpclr_per_window_per_pop_pair
+    );
     Ok(xpclr_per_window_per_pop_pair)
 }
 
-// Compute and print out in a single csv file the XP-CLR across all pairs of pools per window 
+// Compute and print out in a single csv file the XP-CLR across all pairs of pools per window
 // across a range of selection coefficients and recombination rates
-pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+pub fn xpclr(
+    genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &usize,
     min_loci_per_window: &usize,
     integration_precision: &u64,
@@ -345,12 +386,19 @@ pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     recombination_rate_max: &f64,
     recombination_rate_n_steps: &u64,
     mutation_rate: &f64,
+    fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
-    let s_step_size = (selection_coefficient_max - selection_coefficient_min) / (*selection_coefficient_n_steps as f64);
-    let r_step_size = (recombination_rate_max - recombination_rate_min) / (*recombination_rate_n_steps as f64);
-    let range_of_selection_coefficients: Vec<f64> = (0..*selection_coefficient_n_steps).map(|x| ((x as f64)*s_step_size)+selection_coefficient_min).collect();
-    let range_of_recombination_rates: Vec<f64> = (0..*recombination_rate_n_steps).map(|x| ((x as f64)*r_step_size)+recombination_rate_min).collect();
+    let s_step_size = (selection_coefficient_max - selection_coefficient_min)
+        / (*selection_coefficient_n_steps as f64);
+    let r_step_size =
+        (recombination_rate_max - recombination_rate_min) / (*recombination_rate_n_steps as f64);
+    let range_of_selection_coefficients: Vec<f64> = (0..*selection_coefficient_n_steps)
+        .map(|x| ((x as f64) * s_step_size) + selection_coefficient_min)
+        .collect();
+    let range_of_recombination_rates: Vec<f64> = (0..*recombination_rate_n_steps)
+        .map(|x| ((x as f64) * r_step_size) + recombination_rate_min)
+        .collect();
     let min_recombination_rate = recombination_rate_min;
     // println!("range_of_selection_coefficients={:?}", range_of_selection_coefficients);
     // println!("range_of_recombination_rates={:?}", range_of_recombination_rates);
@@ -367,14 +415,8 @@ pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     let pi_per_pool: Array1<f64> = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
     let effective_population_sizes: Array1<f64> = pi_per_pool / (4.00 * mutation_rate);
     // Define the output filename
-    let time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs_f64();
-    let (bname, fname_output) = if fname_output.to_owned() == "".to_owned() {
-        ("XPCLR".to_owned(), "XPCLR".to_owned() + "-" + &time.to_string() + ".csv")
-    } else {
-        let bname = fname_output
+    let fname_output = if fname_output.to_owned() == "".to_owned() {
+        let bname = fname_input
             .split(".")
             .map(|a| a.to_owned())
             .collect::<Vec<String>>()
@@ -386,7 +428,13 @@ pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
             .rev()
             .collect::<Vec<String>>()
             .join(".");
-        (bname, fname_output.to_owned())
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        bname + "-xpclr-" + &time.to_string() + ".csv"
+    } else {
+        fname_output.to_owned()
     };
     // Estimate XP-CLR using the mean effective population sizes between pairs of pools
     let mut vec_s: Vec<f64> = vec![];
@@ -397,7 +445,8 @@ pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
             vec_s.push(*selection_coefficient);
             vec_r.push(*recombination_rate);
             vec_output.push(
-                xpclr_per_window(genotypes_and_phenotypes,
+                xpclr_per_window(
+                    genotypes_and_phenotypes,
                     window_size_bp,
                     min_loci_per_window,
                     &selection_coefficient,
@@ -405,8 +454,10 @@ pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
                     min_recombination_rate,
                     &effective_population_sizes,
                     integration_precision,
-                    correlation_threshold_between_loci).unwrap()
-                );
+                    correlation_threshold_between_loci,
+                )
+                .unwrap(),
+            );
         }
     }
     // println!("vec_s={:?}", vec_s);
@@ -421,7 +472,13 @@ pub fn xpclr(genotypes_and_phenotypes: &GenotypesAndPhenotypes,
         .open(&fname_output)
         .expect(&error_writing_file);
     // Header
-    let mut line: Vec<String> = vec!["selection_coefficient".to_owned(), "recombination_rate".to_owned(), "chr".to_owned(), "pos_ini".to_owned(), "pos_fin".to_owned()];
+    let mut line: Vec<String> = vec![
+        "selection_coefficient".to_owned(),
+        "recombination_rate".to_owned(),
+        "chr".to_owned(),
+        "pos_ini".to_owned(),
+        "pos_fin".to_owned(),
+    ];
     for j in 0..n {
         for k in 0..n {
             line.push(
@@ -470,11 +527,8 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4,
-                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
-                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
+                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
             ],
         )
         .unwrap();
@@ -523,7 +577,8 @@ mod tests {
         let selection_coefficient = &0.05;
         let recombination_rate = &1.0e-5;
         let min_recombination_rate = &1.0e-9;
-        let effective_population_size = &Array1::from_vec(vec![9_000., 9_500., 10_000., 11_000., 12_000.]);
+        let effective_population_size =
+            &Array1::from_vec(vec![9_000., 9_500., 10_000., 11_000., 12_000.]);
         let integration_precision = &100_000;
         let correlation_threshold_between_loci = &0.5;
         // Outputs
@@ -536,7 +591,7 @@ mod tests {
             min_recombination_rate,
             effective_population_size,
             integration_precision,
-            correlation_threshold_between_loci
+            correlation_threshold_between_loci,
         )
         .unwrap();
 
@@ -553,7 +608,8 @@ mod tests {
         // let recombination_rate_max = 1.0e-3;
         // let recombination_rate_n_steps = 1;
         let mutation_rate = 9.01e-9; // Mutation rate: 9.01 x 10^(-9) - estimates from Oryza sativa (not using Arabipsis thaliana estimates of 4.35 x 10(-9)) from Wang et a, 2019
-        let out = xpclr(&genotypes_and_phenotypes,
+        let out = xpclr(
+            &genotypes_and_phenotypes,
             window_size_bp,
             min_loci_per_window,
             integration_precision,
@@ -565,7 +621,10 @@ mod tests {
             &recombination_rate_max,
             &recombination_rate_n_steps,
             &mutation_rate,
-            &"test-XP_CLR.csv".to_owned()).unwrap();
+            &"test.sync".to_owned(),
+            &"".to_owned(),
+        )
+        .unwrap();
         // assert_eq!(0, 1);
     }
 }
@@ -592,7 +651,7 @@ mod tests {
 //     // Define the mutation with selective advantage which will be introduced later into population 2
 //     initializeMutationType("m2", 1.0, "f", SEL_COEF); // introduced mutation (initially neutral)
 // }
-// 1 early() { 
+// 1 early() {
 //     sim.addSubpop("p1", N);
 // }
 // 1000 late() {
@@ -640,7 +699,7 @@ mod tests {
 //     seekend(f)
 //     fin = position(f) - ini
 //     seekstart(f)
-//     p = Progress(fin, dt=1.0) 
+//     p = Progress(fin, dt=1.0)
 
 //     while !eof(f)
 //         x = readline(f)
@@ -684,4 +743,3 @@ mod tests {
 // x = collect(1:l)
 // lineplot(x, q1)
 // lineplot(x, q2)
-

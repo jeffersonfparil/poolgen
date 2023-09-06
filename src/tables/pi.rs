@@ -16,7 +16,7 @@ pub fn theta_pi(
         .dim();
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
     let l = loci_idx.len() - 1; // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
-    // Each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
+                                // Each pi across loci is oriented row-wise, i.e. each row is a single value across columns for each locus
     let mut pi: Array2<f64> = Array2::from_elem((l, n), f64::NAN);
     let loci: Array2<usize> = Array2::from_shape_vec(
         (l, n),

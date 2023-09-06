@@ -15,8 +15,13 @@ pub fn tajima_d(
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate Watterson's estimator
-    let (watterson_theta_per_pool_per_window, windows_chr, windows_pos) =
-        theta_watterson(genotypes_and_phenotypes, pool_sizes, window_size_bp, min_loci_per_window).unwrap();
+    let (watterson_theta_per_pool_per_window, windows_chr, windows_pos) = theta_watterson(
+        genotypes_and_phenotypes,
+        pool_sizes,
+        window_size_bp,
+        min_loci_per_window,
+    )
+    .unwrap();
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let n_pools = watterson_theta_per_pool_per_window.ncols();
     let n_windows = watterson_theta_per_pool_per_window.nrows();
@@ -166,11 +171,8 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
-                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
-                1.0, 0.01, 0.01, 0.98, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
+                0.9, 0.1, 1.0, 0.01, 0.01, 0.98, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
             ],
         )
         .unwrap();

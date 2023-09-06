@@ -14,7 +14,7 @@ use gp::{
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
 use gwas::{mle_with_covariate, ols_with_covariate};
-use tables::{fst, pi, watterson_estimator, tajima_d, xpclr};
+use tables::{fst, pi, tajima_d, watterson_estimator, xpclr};
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -92,24 +92,24 @@ struct Args {
     #[clap(long, default_value_t = 10)]
     min_loci_per_window: usize,
     /// Estimating cross-population composite likelihood ratio
-    #[clap(long, default_value_t = 100_000)]
-    integration_precision:u64,
+    #[clap(long, default_value_t = 100)]
+    integration_precision: u64,
     #[clap(long, default_value_t = 0.9)]
-    correlation_threshold_between_loci:f64,
+    correlation_threshold_between_loci: f64,
     #[clap(long, default_value_t = 0.0)]
-    selection_coefficient_min:f64,
+    selection_coefficient_min: f64,
     #[clap(long, default_value_t = 1.0)]
-    selection_coefficient_max:f64,
+    selection_coefficient_max: f64,
     #[clap(long, default_value_t = 10)]
-    selection_coefficient_n_steps:u64,
+    selection_coefficient_n_steps: u64,
     #[clap(long, default_value_t = 1.0e-8)]
-    recombination_rate_min:f64,
+    recombination_rate_min: f64,
     #[clap(long, default_value_t = 1.0e-4)]
-    recombination_rate_max:f64,
+    recombination_rate_max: f64,
     #[clap(long, default_value_t = 10)]
-    recombination_rate_n_steps:u64,
+    recombination_rate_n_steps: u64,
     #[clap(long, default_value_t = 1.0e-9)]
-    mutation_rate:f64,
+    mutation_rate: f64,
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
@@ -379,7 +379,8 @@ fn main() {
             let genotypes_and_phenotypes = file_sync_phen
                 .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
                 .unwrap(); // we need all alleles in each locus
-            output = xpclr(&genotypes_and_phenotypes,
+            output = xpclr(
+                &genotypes_and_phenotypes,
                 &args.window_size_bp,
                 &args.min_loci_per_window,
                 &args.integration_precision,
@@ -391,7 +392,9 @@ fn main() {
                 &args.recombination_rate_max,
                 &args.recombination_rate_n_steps,
                 &args.mutation_rate,
-                &args.output)
+                &args.fname,
+                &args.output,
+            )
             .unwrap();
         } else if args.analysis == String::from("test") {
             let output = 0;

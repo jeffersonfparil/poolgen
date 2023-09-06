@@ -201,6 +201,33 @@ pub fn multiply_views_xxt(
     Ok(out)
 }
 
+pub fn mean_axis_ignore_nan<D>(
+    a: Array<f64, D>,
+    axis: usize,
+) -> io::Result<Array<f64, <D>::Smaller>>
+where
+    D: ndarray::Dimension + ndarray::RemoveAxis,
+{
+    let sum: Array<f64, <D>::Smaller> =
+        a.fold_axis(
+            Axis(axis),
+            0.0,
+            |&sum, &x| {
+                if x.is_nan() {
+                    sum
+                } else {
+                    sum + x
+                }
+            },
+        );
+    let n = a
+        .axis_iter(Axis(axis))
+        .map(|x| x.iter().filter(|&&y| !y.is_nan()).count() as f64)
+        .sum::<f64>();
+    let out: Array<f64, <D>::Smaller> = sum / n;
+    Ok(out)
+}
+
 impl MoorePenrosePseudoInverse for Array2<f64> {
     /// Implementation of pseudo-inverse using singlar-value decomposition where $\Sigma_{j,j} < \epsilon_{machine}$ are set to zero
     fn pinv(&self) -> io::Result<Array2<f64>> {
