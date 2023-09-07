@@ -32,6 +32,10 @@ Quantitative and population genetics analyses using pool sequencing data
 
 ## File formats
 
+## Note
+
+**Header line/s and comments should be prepended by '#'.**
+
 ### Pileup
 
 Summarised or piled up base calls of aligned reads to a reference genome.
