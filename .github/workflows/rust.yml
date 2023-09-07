@@ -59,7 +59,8 @@ jobs:
           cargo run -- gwalpha  -f ./tests/test.sync -p ./tests/test.py --n-threads 2 --gwalpha-method ML
           cargo run -- sync2csv -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2
           cargo run -- sync2csv -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2 --keep-p-minus-1
-          cargo run -- fst -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2
-          cargo run -- xpclr -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3 --window-size-bp 100000 --selection-coefficient-min 0.5 --selection-coefficient-max 0.5 --selection-coefficient-n-steps 1 --recombination-rate-min 1.0e-5 --recombination-rate-max 1.0e-5 --recombination-rate-n-steps 1 --n-threads 2
+          cargo run -- fst            -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2
           cargo run -- heterozygosity -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2
+          cargo run -- tajima_d       -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3 --window-size-bp 100000 --n-threads 2
+          cargo run -- xpclr          -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3 --window-size-bp 100000 --selection-coefficient-min 0.5 --selection-coefficient-max 0.5 --selection-coefficient-n-steps 1 --recombination-rate-min 1.0e-5 --recombination-rate-max 1.0e-5 --recombination-rate-n-steps 1 --n-threads 2
           # cargo run -- genomic_prediction_cross_validation -f ./tests/test_MORE_POOLS.sync -p ./tests/test_MORE_POOLS.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 2

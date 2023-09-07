@@ -297,47 +297,52 @@ pub fn xpclr_per_window(
     // Estimate weights per locus
     // Computing the correlation between SNPs across pools instead of between 2 populations and using individual genotypes because we have Pool-seq data, i.e. individual genotypes are not available
     let mut weights: Array1<f64> = Array1::from_elem(l, 0.0);
-    for i in 0..l {
-        let idx_start = loci_idx[i];
-        let idx_end = loci_idx[i + 1];
-        let g = genotypes_and_phenotypes
-            .intercept_and_allele_frequencies
-            .slice(s![.., idx_start..idx_end]);
-        // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
-        let (idx_allele, _) =
-            g.sum_axis(Axis(0))
-                .iter()
-                .enumerate()
-                .fold(
-                    (0, 0.0),
-                    |(idx_max, max), (idx, &x)| if x > max { (idx, x) } else { (idx_max, max) },
-                );
-        let qi = g.column(idx_allele);
-        for j in 0..l {
-            let idx_start = loci_idx[j];
-            let idx_end = loci_idx[j + 1];
+    let loci: Array1<usize> = Array1::from_vec((0..l).collect());
+    Zip::from(&mut weights)
+        .and(&loci)
+        .par_for_each(|w, &i| {
+            let idx_start = loci_idx[i];
+            let idx_end = loci_idx[i + 1];
             let g = genotypes_and_phenotypes
                 .intercept_and_allele_frequencies
                 .slice(s![.., idx_start..idx_end]);
             // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
-            let (idx_allele, _) = g.sum_axis(Axis(0)).iter().enumerate().fold(
-                (0, 0.0),
-                |(idx_max, max), (idx, &x)| if x > max { (idx, x) } else { (idx_max, max) },
-            );
-            let qj = g.column(idx_allele);
-            let (corr, _) = pearsons_correlation(&qi, &qj).unwrap();
-            // println!("qi={:?}", qi);
-            // println!("qj={:?}", qj);
-            // println!("corr={:?}", corr);
-            weights[i] += if corr < *correlation_threshold_between_loci {
-                0.0
-            } else {
-                1.0
-            };
+            let (idx_allele, _) =
+                g.sum_axis(Axis(0))
+                    .iter()
+                    .enumerate()
+                    .fold(
+                        (0, 0.0),
+                        |(idx_max, max), (idx, &x)| if x > max { (idx, x) } else { (idx_max, max) },
+                    );
+            let qi = g.column(idx_allele);
+            for j in 0..l {
+                let idx_start = loci_idx[j];
+                let idx_end = loci_idx[j + 1];
+                let g = genotypes_and_phenotypes
+                    .intercept_and_allele_frequencies
+                    .slice(s![.., idx_start..idx_end]);
+                // Using the major allele as the focal allele (NOTE: will need to account for multiallelic loci in a more satisfying way!)
+                let (idx_allele, _) = g.sum_axis(Axis(0)).iter().enumerate().fold(
+                    (0, 0.0),
+                    |(idx_max, max), (idx, &x)| if x > max { (idx, x) } else { (idx_max, max) },
+                );
+                let qj = g.column(idx_allele);
+                let (corr, _) = pearsons_correlation(&qi, &qj).unwrap();
+                // println!("qi={:?}", qi);
+                // println!("qj={:?}", qj);
+                // println!("corr={:?}", corr);
+                *w += if corr < *correlation_threshold_between_loci {
+                    0.0
+                } else {
+                    1.0
+                };
+            }
+            // println!("weights={:?}", weights);
+            *w = 1.0 / *w;
         }
-        // println!("weights={:?}", weights);
-        weights[i] = 1.0 / weights[i];
-    }
+    );
+    println!("weights={:?}", weights);
     // Compute the cross-population composite likelihood ratio weighted by the inverse of the level of correlation between loci per window
     let n_windows = windows_idx.len() - 1;
     let mut xpclr_per_window_per_pop_pair: Array2<f64> = Array2::from_elem((n_windows, n * n), 0.0);
@@ -363,7 +368,6 @@ pub fn xpclr_per_window(
             }
         }
     }
-    println!("weights={:?}", weights);
     println!(
         "xpclr_per_window_per_pop_pair={:?}",
         xpclr_per_window_per_pop_pair
