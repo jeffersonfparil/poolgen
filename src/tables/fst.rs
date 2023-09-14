@@ -7,8 +7,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Unbiased multi-allelic version of Fst similar to [Gautier et al, 2019](https://doi.org/10.1111/1755-0998.13557) which assumes biallelic loci
 pub fn fst(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
-    window_size_bp: &usize,
-    min_snps_per_window: &usize,
+    window_size_bp: &u64,
+    window_slide_size_bp: &u64,
+    min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<(String, String)> {
@@ -155,71 +156,36 @@ pub fn fst(
             + "\n";
         file_out.write_all(line.as_bytes()).unwrap();
     }
-    ///////////////////////////////////////////////////////////////////////
-    // Additional output: Fst per window per population
-    // Summarize per non-overlapping window
-    // Find window indices making sure we respect chromosomal boundaries
-    // while filtering out windows with less than min_snps_per_window SNPs
-    let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
-    let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
-    let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
-    let mut windows_n_sites: Vec<usize> = vec![0];
-    let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
-    for i in 0..l {
-        let chr = loci_chr[i].to_owned(); // skipping the intercept at position 0
-        let pos = loci_pos[i]; // skipping the intercept at position 0
-        if (chr != windows_chr.last().unwrap().to_owned())
-            | ((chr == windows_chr.last().unwrap().to_owned())
-                & (pos > windows_pos.last().unwrap() + &(*window_size_bp as u64)))
-        {
-            if windows_n_sites[j] < *min_snps_per_window {
-                windows_idx[j] = i;
-                windows_chr[j] = chr.to_owned();
-                windows_pos[j] = pos;
-                windows_n_sites[j] = 1;
-            } else {
-                windows_idx.push(i);
-                windows_chr.push(chr.to_owned());
-                windows_pos.push(pos);
-                windows_n_sites.push(1);
-            }
-        } else {
-            windows_n_sites[j] += 1;
-        }
-        j = windows_n_sites.len() - 1;
-    }
-    // Add the last index of the final position
-    windows_idx.push(l);
-    windows_chr.push(windows_chr.last().unwrap().to_owned());
-    windows_pos.push(*loci_pos.last().unwrap());
-    if windows_n_sites.last().unwrap() < min_snps_per_window {
-        windows_idx.pop();
-        windows_chr.pop();
-        windows_pos.pop();
-        windows_n_sites.pop();
-    }
-    if windows_n_sites.len() < 1 {
-        let error_message =
-            "No window with at least ".to_owned() + &min_snps_per_window.to_string() + " SNPs.";
-        return Ok((fname_output, error_message));
-    }
-    // println!("loci_chr={:?}", loci_chr);
-    // println!("loci_pos={:?}", loci_pos);
-    // println!("l={:?}", l);
-    // println!("windows_idx={:?}", windows_idx);
-    // println!("windows_chr={:?}", windows_chr);
-    // println!("windows_pos={:?}", windows_pos);
-    // println!("windows_n_sites={:?}", windows_n_sites);
+
+    let mut loci_chr_no_redundant_tail = loci_chr.to_owned(); loci_chr_no_redundant_tail.pop();
+    let mut loci_pos_no_redundant_tail = loci_pos.to_owned(); loci_pos_no_redundant_tail.pop();
+    let (windows_idx_head, windows_idx_tail) = define_sliding_windows(
+        &loci_chr_no_redundant_tail,
+        &loci_pos_no_redundant_tail,
+        window_size_bp,
+        window_slide_size_bp,
+        min_loci_per_window,
+    )
+    .unwrap();
+    println!("fst={:?}", fst);
+    println!("l={:?}", l);
+    println!("windows_idx_head={:?}", windows_idx_head);
+    println!("windows_idx_tail={:?}", windows_idx_tail);
     // Take the means per window
-    let n_windows = windows_idx.len() - 1;
+    let n_windows = windows_idx_head.len();
     let mut fst_per_pool_x_pool_per_window: Array2<f64> =
         Array2::from_elem((n_windows, n * n), f64::NAN);
     for i in 0..n_windows {
-        let idx_start = windows_idx[i];
-        let idx_end = windows_idx[i + 1];
+        let idx_start = windows_idx_head[i];
+        let idx_end = windows_idx_tail[i] + 1; // add one so that we include the tail index as part of the window
         for j in 0..n {
             for k in 0..n {
                 let idx = (j * n) + k;
+
+                println!("#############################");
+                println!("start={}; end={}; j={}; k={}", idx_start, idx_end, j, j);
+                println!("fst.slice(s![idx_start..idx_end, j, k])={:?}", fst.slice(s![idx_start..idx_end, j, k]));
+
                 fst_per_pool_x_pool_per_window[(i, idx)] = fst
                     .slice(s![idx_start..idx_end, j, k])
                     .mean_axis(Axis(0))
@@ -228,8 +194,13 @@ pub fn fst(
             }
         }
     }
+    println!(
+        "fst_per_pool_x_pool_per_window={:?}",
+        fst_per_pool_x_pool_per_window
+    );
+
     // Write output (Fst averaged per window)
-    // Instatiate output file
+    // Instantiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output_per_window;
     let mut file_out = OpenOptions::new()
         .create_new(true)
@@ -252,13 +223,16 @@ pub fn fst(
     file_out.write_all(line.as_bytes()).unwrap();
     // Per line
     for i in 0..n_windows {
-        let window_pos_ini = windows_pos[i];
-        let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
-        let coordinate = windows_chr[i].clone()
+        let idx_head = windows_idx_head[i];
+        let idx_tail = windows_idx_tail[i];
+        let chr = loci_chr[idx_head].to_owned();
+        let pos_head = loci_pos[idx_head];
+        let pos_tail = loci_pos[idx_tail];
+        let coordinate = chr
             + ","
-            + &window_pos_ini.to_string()
+            + &pos_head.to_string()
             + ","
-            + &window_pos_fin.to_string()
+            + &pos_tail.to_string()
             + ",";
         let fst_string = fst_per_pool_x_pool_per_window
             .slice(s![i, ..])
@@ -282,10 +256,11 @@ mod tests {
     #[test]
     fn test_fst() {
         let x: Array2<f64> = Array2::from_shape_vec(
-            (5, 6),
+            (5, 7),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
-                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+                1.0, 0.4, 0.5, 0.1, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.2, 1.0, 0.0, 1.0, 0.6,
+                0.4, 0.0, 0.3, 0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.4, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0,
+                0.5, 0.0, 1.0,
             ],
         )
         .unwrap();
@@ -300,10 +275,11 @@ mod tests {
                 "X".to_owned(),
                 "X".to_owned(),
                 "X".to_owned(),
+                "X".to_owned(),
                 "Y".to_owned(),
                 "Y".to_owned(),
             ],
-            position: vec![0, 123, 123, 123, 456, 456],
+            position: vec![0, 123, 180, 233, 279, 190, 456],
             allele: vec![
                 "Intercept".to_owned(),
                 "a".to_string(),
@@ -322,9 +298,11 @@ mod tests {
                 "Pop5".to_owned(),
             ],
             coverages: Array2::from_shape_vec(
-                (5, 2),
+                (5, 6),
                 vec![
-                    10.0, 10.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
+                    010.0, 010.0, 100.0, 090.0, 100.0, 100.0, 100.0, 100.0, 100.0, 090.0, 100.0,
+                    100.0, 010.0, 010.0, 100.0, 090.0, 100.0, 100.0, 100.0, 100.0, 100.0, 090.0,
+                    100.0, 100.0, 100.0, 100.0, 100.0, 090.0, 100.0, 100.0,
                 ],
             )
             .unwrap(),
@@ -333,6 +311,7 @@ mod tests {
         let (out_genomewide, out_per_window) = fst(
             &genotypes_and_phenotypes,
             &100,
+            &50,
             &1,
             &"test.something".to_owned(),
             &"".to_owned(),
@@ -377,6 +356,6 @@ mod tests {
         assert_eq!(pop4_1, 0.0);
         assert_eq!(pop2_5, 0.5);
         assert_eq!(pop5_2, 0.5);
-        // assert_eq!(0, 1);
+        assert_eq!(0, 1);
     }
 }

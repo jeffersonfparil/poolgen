@@ -10,8 +10,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn theta_watterson(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
-    window_size_bp: &usize,
-    min_loci_per_window: &usize,
+    window_size_bp: &u64,
+    min_loci_per_window: &u64,
 ) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
@@ -23,7 +23,7 @@ pub fn theta_watterson(
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
-    let mut windows_n_sites: Vec<usize> = vec![0];
+    let mut windows_n_sites: Vec<u64> = vec![0];
     let mut windows_n_polymorphic_sites: Vec<Vec<u64>> =
         vec![std::iter::repeat(0).take(n).collect()];
     let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
@@ -115,8 +115,8 @@ pub fn theta_watterson(
 pub fn watterson_estimator(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
-    window_size_bp: &usize,
-    min_loci_per_window: &usize,
+    window_size_bp: &u64,
+    min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {

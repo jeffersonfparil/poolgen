@@ -201,6 +201,7 @@ pub fn multiply_views_xxt(
     Ok(out)
 }
 
+/// Calculate the axis-wise means of an array while ignorning NaN
 pub fn mean_axis_ignore_nan<D>(
     a: Array<f64, D>,
     axis: usize,
@@ -226,6 +227,118 @@ where
         .sum::<f64>();
     let out: Array<f64, <D>::Smaller> = sum / n;
     Ok(out)
+}
+
+/// Extract the coordinates of each sliding window
+pub fn define_sliding_windows(
+    loci_chr: &Vec<String>,
+    loci_pos: &Vec<u64>,
+    window_size_bp: &u64,
+    window_slide_size_bp: &u64,
+    min_loci_per_window: &u64,
+) -> io::Result<(Vec<usize>, Vec<usize>)> {
+    assert_eq!(loci_chr.len(), loci_pos.len());
+    let l = loci_chr.len();
+    // Indices, chromosome names, and positions of the start and end of the window, respectively (will be filtered to remove redundant tails to remove windows which are complete subsets of a bigger window near the end of chromosomes or scaffolds)
+    let mut idx_head: Vec<usize> = vec![0];
+    let mut idx_tail = idx_head.clone();
+    let mut chr_head: Vec<String> = vec![loci_chr[0].to_owned()];
+    let mut chr_tail = chr_head.clone();
+    let mut pos_head: Vec<u64> = vec![loci_pos[0]];
+    let mut pos_tail = pos_head.clone();
+    // Number of genotyped loci included per window
+    let mut cov: Vec<u64> = vec![1];
+    // A boolean to mark whether the start of the next window has been found before the end of the current window has been reached
+    let mut marker_next_window_head: bool = false;
+    // The index of the sart of the next window
+    let mut idx_next_head: usize = 0;
+    // Index of the current locus
+    let mut i: usize = 1;
+    // We iterate across the genome until we reach the last locus (may not be consecutive as the start of the next window may be within the body of the current window)
+    while i < l {
+        let chr = loci_chr[i].to_owned();
+        let pos = loci_pos[i];
+        // println!("i={:?}", i);
+        // println!("idx_head={:?}", idx_head);
+        // println!("idx_tail={:?}", idx_tail);
+        // Did we reach the end of the chromosome or the end of the window according to window size?
+        if (&chr != chr_head.last().unwrap()) | (pos > (pos_head.last().unwrap() + window_size_bp))
+        {
+            // If we found the start of the next window in body of the current (ending) window then,
+            //  we use the next window head as the start of the next slide not the end of the window,
+            //  otherwise we use the end of the window.
+            i = if marker_next_window_head {
+                idx_next_head
+            } else {
+                i
+            };
+            let chr = loci_chr[i].to_owned();
+            let pos = loci_pos[i];
+            // Do we have the minimum number of required loci in the current window?
+            if cov.last().unwrap() >= min_loci_per_window {
+                // If we have enough loci covered in the current (ending) window:
+                // We also add the details of the start of the next window
+                idx_head.push(i);
+                idx_tail.push(i);
+                chr_head.push(chr.to_owned());
+                chr_tail.push(chr.to_owned());
+                pos_head.push(pos);
+                pos_tail.push(pos);
+                cov.push(1);
+            } else {
+                // If we did no have enough loci covered in the current (ending) window:
+                // We ditch the current (ending) window and replace it with the start of the next window
+                let i_ = idx_head.len() - 1;
+                idx_head[i_] = i;
+                chr_head[i_] = chr;
+                pos_head[i_] = pos;
+                cov[i_] = 1;
+            }
+            // Reset the marker for the start of the next window
+            marker_next_window_head = false;
+        } else {
+            // If we have yet to reach the end of the current window or the end of the chromosome,
+            // then we just replace the tail of the current window with the current locus
+            // and add the another locus to the coverage counter.
+            let i_ = idx_tail.len() - 1;
+            idx_tail[i_] = i;
+            chr_tail[i_] = chr;
+            pos_tail[i_] = pos;
+            cov[i_] += 1;
+            // We also check if we have reached the start of the next window and note the index if we have
+            if (marker_next_window_head == false)
+                & (pos >= (pos_head.last().unwrap() + window_slide_size_bp))
+            {
+                marker_next_window_head = true;
+                idx_next_head = i;
+            }
+        }
+        // Move to the next locus
+        i += 1;
+    }
+    // Remove redundant tails
+    assert_eq!(idx_head.len(), idx_tail.len());
+    let n = idx_head.len();
+    let mut out_idx_head: Vec<usize> = vec![idx_head[0]];
+    let mut out_idx_tail: Vec<usize> = vec![idx_tail[0]];
+    for i in 1..n {
+        // println!("out_idx_tail={:?}", out_idx_tail);
+        if &idx_tail[i] != out_idx_tail.last().unwrap() {
+            out_idx_head.push(idx_head[i]);
+            out_idx_tail.push(idx_tail[i]);
+        }
+    }
+    // println!("#################################");
+    // println!("loci_chr={:?}", loci_chr);
+    // println!("loci_pos={:?}", loci_pos);
+    // println!("window_size_bp={:?}", window_size_bp);
+    // println!("min_loci_per_window={:?}", min_loci_per_window);
+    // println!("cov={:?}", cov);
+    // println!("idx_head={:?}", idx_head);
+    // println!("idx_tail={:?}", idx_tail);
+    // println!("out_idx_head={:?}", out_idx_head);
+    // println!("out_idx_tail={:?}", out_idx_tail);
+    Ok((out_idx_head, out_idx_tail))
 }
 
 impl MoorePenrosePseudoInverse for Array2<f64> {
@@ -307,5 +420,28 @@ mod tests {
             )
             .unwrap()
         );
+
+        let loci_chr: Vec<String> = vec![
+            "chr1", "chr1", "chr1", "chr1", "chr2", "chr2", "chr2", "chr2", "chr3",
+        ]
+        .iter()
+        .map(|&x| x.to_owned())
+        .collect();
+        let loci_pos: Vec<u64> = vec![123, 174, 220, 254, 55, 56, 100, 500, 765];
+        let window_size_bp: u64 = 100;
+        let window_slide_size_bp: u64 = 50;
+        let min_loci_per_window: u64 = 1;
+        let (windows_idx_head, windows_idx_tail) = define_sliding_windows(
+            &loci_chr,
+            &loci_pos,
+            &window_size_bp,
+            &window_slide_size_bp,
+            &min_loci_per_window,
+        )
+        .unwrap();
+        println!("windows_idx_head={:?}", windows_idx_head);
+        println!("windows_idx_tail={:?}", windows_idx_tail);
+        assert_eq!(windows_idx_head, vec![0, 1, 4, 7, 8]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
+        assert_eq!(windows_idx_tail, vec![2, 3, 6, 7, 8]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
     }
 }

@@ -87,10 +87,13 @@ struct Args {
     n_reps: usize,
     /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: window size in terms of number of bases
     #[clap(long, default_value_t = 100)]
-    window_size_bp: usize,
+    window_size_bp: u64,
+    /// Number of bases to slide the window (a good start will be half the window size)
+    #[clap(long, default_value_t = 50)]
+    window_slide_size_bp: u64,
     /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: minimum number of loci per window
     #[clap(long, default_value_t = 10)]
-    min_loci_per_window: usize,
+    min_loci_per_window: u64,
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
@@ -308,6 +311,7 @@ fn main() {
             let (genome_wide, per_window) = fst(
                 &genotypes_and_phenotypes,
                 &args.window_size_bp,
+                &args.window_slide_size_bp,
                 &args.min_loci_per_window,
                 &args.fname,
                 &args.output,

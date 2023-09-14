@@ -9,8 +9,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn tajima_d(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
-    window_size_bp: &usize,
-    min_loci_per_window: &usize,
+    window_size_bp: &u64,
+    min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {

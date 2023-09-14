@@ -8,8 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Unbiased multi-allelic nucleotide diversity per population ($\pi$ or $\theta_{\pi}=4N_{e}\mu$), which is similar to [Korunes & Samuk 2019](https://doi.org/10.1111/1755-0998.13326) which assumes biallelic loci
 pub fn theta_pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
-    window_size_bp: &usize,
-    min_loci_per_window: &usize,
+    window_size_bp: &u64,
+    min_loci_per_window: &u64,
 ) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
@@ -56,7 +56,7 @@ pub fn theta_pi(
     let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
     let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
     let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
-    let mut windows_n_sites: Vec<usize> = vec![0];
+    let mut windows_n_sites: Vec<u64> = vec![0];
     let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
     for i in 0..l {
         let chr = loci_chr[i].to_owned(); // skipping the intercept at position 0
@@ -94,7 +94,7 @@ pub fn theta_pi(
     if windows_n_sites.len() < 1 {
         return Err(Error::new(
             ErrorKind::Other,
-            "The two matrices are incompatible.",
+            "No window with at least ".to_owned() + &min_loci_per_window.to_string() + " SNPs.",
         ));
     }
     // Take the means per window
@@ -116,8 +116,8 @@ pub fn theta_pi(
 
 pub fn pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
-    window_size_bp: &usize,
-    min_loci_per_window: &usize,
+    window_size_bp: &u64,
+    min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
