@@ -637,7 +637,7 @@ impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> O
                 .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + "-" + &test + ".csv";
         }
-        // Instatiate output file
+        // Instantiate output file
         let error_writing_file = "Unable to create file: ".to_owned() + &out;
         // let mut file_out = File::create(&out).expect(&error_writing_file);
         let mut file_out = OpenOptions::new()
@@ -826,7 +826,7 @@ impl
                 .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + "-" + &test + ".csv";
         }
-        // Instatiate output file
+        // Instantiate output file
         let error_writing_file = "Unable to create file: ".to_owned() + &out;
         // let mut file_out = File::create(&out).expect(&error_writing_file);
         let mut file_out = OpenOptions::new()
@@ -1058,7 +1058,7 @@ impl LoadAll for FileSyncPhen {
         } else {
             out.clone()
         };
-        // Instatiate output file
+        // Instantiate output file
         let error_writing_file = "Unable to create file: ".to_owned() + &out;
         let mut file_out = OpenOptions::new()
             .create_new(true)
@@ -1066,13 +1066,18 @@ impl LoadAll for FileSyncPhen {
             .append(false)
             .open(&out)
             .expect(&error_writing_file);
+        // Load the full sync file in parallel and sort
+        let (freqs, _cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
+        // Make sure that we have the same number of pools in the genotype and phenotype files
+        assert!(freqs[0].matrix.nrows()==(&self.pool_names).len(), "Please check that the pools are consistent across the genotype and phenotype files.");
+        // Write the header
         file_out
             .write_all(
                 ("#chr,pos,allele,".to_owned() + &self.pool_names.join(",") + "\n").as_bytes(),
             )
             .unwrap();
-        // Load the full sync file in parallel and sort
-        let (freqs, _cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
+        
+        // Write allele frequencies line by line
         for f in freqs.iter() {
             for i in 0..f.alleles_vector.len() {
                 let freqs_per_pool = f

@@ -62,6 +62,8 @@ pub fn fst(
             let g = genotypes_and_phenotypes
                 .intercept_and_allele_frequencies
                 .slice(s![.., idx_start..idx_end]);
+            // Make sure that allele frequencies per locus sums up to one
+            assert!(g.sum_axis(Axis(0)).sum() as usize == n);
             let nj = genotypes_and_phenotypes.coverages[(j, i)];
             let nk = genotypes_and_phenotypes.coverages[(k, i)];
             let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
@@ -167,10 +169,10 @@ pub fn fst(
         min_loci_per_window,
     )
     .unwrap();
-    println!("fst={:?}", fst);
-    println!("l={:?}", l);
-    println!("windows_idx_head={:?}", windows_idx_head);
-    println!("windows_idx_tail={:?}", windows_idx_tail);
+    // println!("fst={:?}", fst);
+    // println!("l={:?}", l);
+    // println!("windows_idx_head={:?}", windows_idx_head);
+    // println!("windows_idx_tail={:?}", windows_idx_tail);
     // Take the means per window
     let n_windows = windows_idx_head.len();
     let mut fst_per_pool_x_pool_per_window: Array2<f64> =
@@ -181,11 +183,9 @@ pub fn fst(
         for j in 0..n {
             for k in 0..n {
                 let idx = (j * n) + k;
-
-                println!("#############################");
-                println!("start={}; end={}; j={}; k={}", idx_start, idx_end, j, j);
-                println!("fst.slice(s![idx_start..idx_end, j, k])={:?}", fst.slice(s![idx_start..idx_end, j, k]));
-
+                // println!("#############################");
+                // println!("start={}; end={}; j={}; k={}", idx_start, idx_end, j, j);
+                // println!("fst.slice(s![idx_start..idx_end, j, k])={:?}", fst.slice(s![idx_start..idx_end, j, k]));
                 fst_per_pool_x_pool_per_window[(i, idx)] = fst
                     .slice(s![idx_start..idx_end, j, k])
                     .mean_axis(Axis(0))
@@ -194,11 +194,10 @@ pub fn fst(
             }
         }
     }
-    println!(
-        "fst_per_pool_x_pool_per_window={:?}",
-        fst_per_pool_x_pool_per_window
-    );
-
+    // println!(
+    //     "fst_per_pool_x_pool_per_window={:?}",
+    //     fst_per_pool_x_pool_per_window
+    // );
     // Write output (Fst averaged per window)
     // Instantiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output_per_window;
@@ -243,8 +242,6 @@ pub fn fst(
         let line = coordinate + &fst_string[..] + "\n";
         file_out.write_all(line.as_bytes()).unwrap();
     }
-    ///////////////////////////////////////////////////////////////////////
-
     Ok((fname_output, fname_output_per_window))
 }
 
@@ -256,11 +253,13 @@ mod tests {
     #[test]
     fn test_fst() {
         let x: Array2<f64> = Array2::from_shape_vec(
-            (5, 7),
+            (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.2, 1.0, 0.0, 1.0, 0.6,
-                0.4, 0.0, 0.3, 0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.4, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0,
-                0.5, 0.0, 1.0,
+                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
+                1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 
+                1.0, 0.5, 0.5, 0.0, 0.5, 0.5, 
+                1.0, 0.7, 0.2, 0.1, 0.7, 0.3, 
+                1.0, 0.7, 0.2, 0.1, 0.7, 0.3,
             ],
         )
         .unwrap();
@@ -275,11 +274,10 @@ mod tests {
                 "X".to_owned(),
                 "X".to_owned(),
                 "X".to_owned(),
-                "X".to_owned(),
                 "Y".to_owned(),
                 "Y".to_owned(),
             ],
-            position: vec![0, 123, 180, 233, 279, 190, 456],
+            position: vec![0, 123, 123, 123, 456, 456],
             allele: vec![
                 "Intercept".to_owned(),
                 "a".to_string(),
@@ -298,11 +296,9 @@ mod tests {
                 "Pop5".to_owned(),
             ],
             coverages: Array2::from_shape_vec(
-                (5, 6),
+                (5, 2),
                 vec![
-                    010.0, 010.0, 100.0, 090.0, 100.0, 100.0, 100.0, 100.0, 100.0, 090.0, 100.0,
-                    100.0, 010.0, 010.0, 100.0, 090.0, 100.0, 100.0, 100.0, 100.0, 100.0, 090.0,
-                    100.0, 100.0, 100.0, 100.0, 100.0, 090.0, 100.0, 100.0,
+                    10.0, 10.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
                 ],
             )
             .unwrap(),
@@ -343,19 +339,24 @@ mod tests {
         }
         let fst: Array2<f64> = Array2::from_shape_vec((pop.len(), pop.len()), fst).unwrap();
         let diag: Array1<f64> = fst.diag().to_owned(); // itself, i.e. fst=0.0
-        let pop1_4 = fst[(0, 3)]; // the same populations, i.e. fst=0.0
-        let pop4_1 = fst[(3, 0)]; // the same populations, i.e. fst=0.0
-        let pop2_5 = fst[(1, 4)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
-        let pop5_2 = fst[(4, 1)]; // totally different populations, i.e. fst=0.5, the same locus 1 and different locus 2
+        let pop1_2 = fst[(0, 1)]; // the same populations, i.e. fst=0.0
+        let pop2_1 = fst[(1, 0)]; // the same populations, i.e. fst=0.0
+        let pop4_5 = fst[(3, 4)]; // totally different populations, i.e. fst=1.0
+        let pop5_4 = fst[(4, 3)]; // totally different populations, i.e. fst=1.0
+        let pop1_3 = fst[(0, 2)]; // fst ~ 0.5
+        let pop3_1 = fst[(2, 1)]; // fst ~ 0.5
+        println!("genotypes_and_phenotypes={:?}", genotypes_and_phenotypes);
         println!("pop={:?}", pop);
         println!("fst={:?}", fst);
         println!("out_per_window={:?}", out_per_window);
         // Assertions
         assert_eq!(diag, Array1::from_elem(pop.len(), 0.0));
-        assert_eq!(pop1_4, 0.0);
-        assert_eq!(pop4_1, 0.0);
-        assert_eq!(pop2_5, 0.5);
-        assert_eq!(pop5_2, 0.5);
-        assert_eq!(0, 1);
+        assert_eq!(pop1_2, 1.0);
+        assert_eq!(pop2_1, 1.0);
+        assert_eq!(pop4_5, 0.0);
+        assert_eq!(pop5_4, 0.0);
+        assert!(f64::abs(pop1_3 - 0.5) < 0.1);
+        assert!(f64::abs(pop3_1 - 0.5) < 0.1);
+        // assert_eq!(0, 1);
     }
 }
