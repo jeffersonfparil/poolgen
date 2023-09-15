@@ -63,7 +63,7 @@ pub fn fst(
                 .intercept_and_allele_frequencies
                 .slice(s![.., idx_start..idx_end]);
             // Make sure that allele frequencies per locus sums up to one
-            assert!(g.sum_axis(Axis(0)).sum() as usize == n);
+            assert!(g.sum_axis(Axis(1)).sum() as usize == n);
             let nj = genotypes_and_phenotypes.coverages[(j, i)];
             let nk = genotypes_and_phenotypes.coverages[(k, i)];
             let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
@@ -186,11 +186,12 @@ pub fn fst(
                 // println!("#############################");
                 // println!("start={}; end={}; j={}; k={}", idx_start, idx_end, j, j);
                 // println!("fst.slice(s![idx_start..idx_end, j, k])={:?}", fst.slice(s![idx_start..idx_end, j, k]));
-                fst_per_pool_x_pool_per_window[(i, idx)] = fst
+                fst_per_pool_x_pool_per_window[(i, idx)] =  match fst
                     .slice(s![idx_start..idx_end, j, k])
-                    .mean_axis(Axis(0))
-                    .unwrap()
-                    .fold(0.0, |_, &x| x);
+                    .mean_axis(Axis(0)) {
+                        Some(x) => x.fold(0.0, |_, &x| x),
+                        None => f64::NAN
+                    };
             }
         }
     }
