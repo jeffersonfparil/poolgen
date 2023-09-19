@@ -326,6 +326,7 @@ fn main() {
             output = pi(
                 &genotypes_and_phenotypes,
                 &args.window_size_bp,
+                &args.window_slide_size_bp,
                 &args.min_loci_per_window,
                 &args.fname,
                 &args.output,
@@ -340,6 +341,7 @@ fn main() {
                 &genotypes_and_phenotypes,
                 &file_sync_phen.pool_sizes,
                 &args.window_size_bp,
+                &args.window_slide_size_bp,
                 &args.min_loci_per_window,
                 &args.fname,
                 &args.output,
@@ -354,6 +356,7 @@ fn main() {
                 &genotypes_and_phenotypes,
                 &file_sync_phen.pool_sizes,
                 &args.window_size_bp,
+                &args.window_slide_size_bp,
                 &args.min_loci_per_window,
                 &args.fname,
                 &args.output,

@@ -1,98 +1,108 @@
 use crate::base::*;
-use crate::tables::*;
-use ndarray::prelude::*;
+use ndarray::{prelude::*, Zip};
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// guDMC (genomewide unbiased method to distinguish modes of convergent evolution)
+/// Unbiased multi-allelic version of Fst similar to [Gautier et al, 2019](https://doi.org/10.1111/1755-0998.13557) which assumes biallelic loci
 pub fn gudmc(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
-    pool_sizes: &Vec<f64>,
     window_size_bp: &u64,
+    window_slide_size_bp: &u64,
     min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
-) -> io::Result<String> {
-    // Calculate Watterson's estimator
-    let (watterson_theta_per_pool_per_window, windows_chr, windows_pos) = theta_watterson(
-        genotypes_and_phenotypes,
-        pool_sizes,
-        window_size_bp,
-        min_loci_per_window,
+) -> io::Result<(String, String)> {
+    let (n, _) = genotypes_and_phenotypes
+        .intercept_and_allele_frequencies
+        .dim();
+    let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
+    let l = loci_idx.len() - 1; // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
+    let mut gudmc: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN);
+    let loci: Array3<usize> = Array3::from_shape_vec(
+        (l, n, n),
+        (0..(l))
+            .flat_map(|x| std::iter::repeat(x).take(n * n))
+            .collect(),
     )
     .unwrap();
-    // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
-    let n_pools = watterson_theta_per_pool_per_window.ncols();
-    let n_windows = watterson_theta_per_pool_per_window.nrows();
-    // Calculate heterozygosities
-    let (pi_per_pool_per_window, windows_chr_pi, windows_pos_pi) = theta_pi(
-        genotypes_and_phenotypes,
-        window_size_bp,
-        min_loci_per_window,
+    let pop1: Array3<usize> = Array3::from_shape_vec(
+        (l, n, n),
+        std::iter::repeat(
+            (0..n)
+                .flat_map(|x| std::iter::repeat(x).take(n))
+                .collect::<Vec<usize>>(),
+        )
+        .take(l)
+        .flat_map(|x| x)
+        .collect::<Vec<usize>>(),
     )
     .unwrap();
-    // println!("genotypes_and_phenotypes={:?}", genotypes_and_phenotypes);
-    // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
-    // println!("pi_per_pool_per_window={:?}", pi_per_pool_per_window);
-    // Sanity checks
-    assert_eq!(n_pools, pi_per_pool_per_window.ncols(), "The number of pools extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
-    assert_eq!(n_windows, pi_per_pool_per_window.nrows(), "The number of windows extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
-    assert_eq!(windows_chr, windows_chr_pi, "The chromosome names per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
-    assert_eq!(windows_pos, windows_pos_pi, "The SNP positions per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
-    // Calculate guDMC (genomewide unbiased method to distinguish modes of convergent evolution)
-    let mut gudmc_per_pool_per_window: Array2<f64> =
-        Array2::from_elem((n_windows, n_pools), f64::NAN);
-    for j in 0..n_pools {
-        let n = pool_sizes[j] as usize;
-        let a1 = (1..n).fold(0.0, |sum, x| sum + (1.00 / (x as f64)));
-        let a2 = (1..n).fold(0.0, |sum, x| sum + (1.00 / (x as f64).powf(2.00)));
-        let n = n as f64;
-        let b1 = (n + 1.0) / (3.0 * (n - 1.0));
-        let b2 = (2.0 * (n.powf(2.0) + n + 3.0)) / (9.0 * n * (n - 1.0));
-        let c1 = b1 - (1.0 / a1);
-        let c2 = b2 - ((n + 2.0) / (a1 * n)) + (a2 / a1.powf(2.0));
-        let e1 = c1 / a1;
-        let e2 = c2 / (a1.powf(2.0) + a2);
-        for i in 0..n_windows {
-            let s = if watterson_theta_per_pool_per_window[(i, j)] <= f64::EPSILON {
+    let pop2: Array3<usize> = Array3::from_shape_vec(
+        (l, n, n),
+        std::iter::repeat(
+            std::iter::repeat((0..n).collect::<Vec<usize>>())
+                .take(n)
+                .flat_map(|x| x)
+                .collect::<Vec<usize>>(),
+        )
+        .take(l)
+        .flat_map(|x| x)
+        .collect::<Vec<usize>>(),
+    )
+    .unwrap();
+    // Parallel computations (NOTE: Not efficient yet. Compute only the upper or lower triangular in the future.)
+    Zip::from(&mut gudmc)
+        .and(&loci)
+        .and(&pop1)
+        .and(&pop2)
+        .par_for_each(|f, &i, &j, &k| {
+            let idx_start = loci_idx[i];
+            let idx_end = loci_idx[i + 1];
+            let g = genotypes_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![.., idx_start..idx_end]);
+            // Make sure that allele frequencies per locus sums up to one
+            assert!(g.sum_axis(Axis(1)).sum() as usize == n);
+            let nj = genotypes_and_phenotypes.coverages[(j, i)];
+            let nk = genotypes_and_phenotypes.coverages[(k, i)];
+            let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                * (nj / (nj - 1.00 + f64::EPSILON)))
+                + (1.00 - (nj / (nj - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+            let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                * (nk / (nk - 1.00 + f64::EPSILON)))
+                + (1.00 - (nk / (nk - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+            let q2_jk = g
+                .slice(s![j, ..])
+                .iter()
+                .zip(&g.slice(s![k, ..]))
+                .fold(0.0, |sum, (&x, &y)| sum + (x * y));
+            let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
+            *f = if f_unbiased < 0.0 {
+                // gudmc[(i, j, k)] = if f_unbiased < 0.0 {
                 0.0
+            } else if f_unbiased > 1.0 {
+                1.0
             } else {
-                watterson_theta_per_pool_per_window[(i, j)] / a1
+                f_unbiased
             };
-            let vd = e1 * s + e2 * s * (s - 1.0);
-            gudmc_per_pool_per_window[(i, j)] = if (pi_per_pool_per_window[(i, j)]
-                - watterson_theta_per_pool_per_window[(i, j)])
-                .abs()
-                <= f64::EPSILON
-            {
-                0.0
-            } else if vd <= f64::EPSILON {
-                // If heterozygosity - expected and observed are very low in the window set guDMC (genomewide unbiased method to distinguish modes of convergent evolution) to zero to avoid infinities
-                0.0
-            } else {
-                (pi_per_pool_per_window[(i, j)] - watterson_theta_per_pool_per_window[(i, j)])
-                    / vd.sqrt()
-            };
-            // if gudmc_per_pool_per_window[(i, j)].is_infinite() {
-            //     println!("pi_per_pool_per_window[(i, j)]={:?}", pi_per_pool_per_window[(i, j)]);
-            //     println!("watterson_theta_per_pool_per_window[(i, j)]={:?}", watterson_theta_per_pool_per_window[(i, j)]);
-            //     println!("vd={:?}", vd);
-            //     println!("a1={:?}", a1);
-            //     println!("a2={:?}", a2);
-            //     println!("b1={:?}", b1);
-            //     println!("b2={:?}", b2);
-            //     println!("c1={:?}", c1);
-            //     println!("c2={:?}", c2);
-            //     println!("e1={:?}", e1);
-            //     println!("e2={:?}", e2);
-            // }
-        }
-    }
-    // Mean guDMC (genomewide unbiased method to distinguish modes of convergent evolution) across all the windows
-    let vec_gudmc_across_windows = gudmc_per_pool_per_window.mean_axis(Axis(0)).unwrap();
-    // Write output
+        });
+    // Write output (Fst averaged across all loci)
     let mut fname_output = fname_output.to_owned();
+    let mut fname_output_per_window = fname_output
+        .split(".")
+        .map(|a| a.to_owned())
+        .collect::<Vec<String>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<String>>()[1..]
+        .to_owned()
+        .into_iter()
+        .rev()
+        .collect::<Vec<String>>()
+        .join(".");
+    fname_output_per_window =
+        fname_output_per_window + "-gudmc-" + &window_size_bp.to_string() + "_bp_windows.csv";
     if fname_output == "".to_owned() {
         let time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -100,8 +110,6 @@ pub fn gudmc(
             .as_secs_f64();
         let bname = fname_input
             .split(".")
-            .collect::<Vec<&str>>()
-            .into_iter()
             .map(|a| a.to_owned())
             .collect::<Vec<String>>()
             .into_iter()
@@ -112,14 +120,16 @@ pub fn gudmc(
             .rev()
             .collect::<Vec<String>>()
             .join(".");
-        fname_output = bname.to_owned()
-            + "-Tajimas_D-"
+        fname_output =
+            bname.to_owned() + "-gudmc-averaged_across_genome-" + &time.to_string() + ".csv";
+        fname_output_per_window = bname.to_owned()
+            + "-gudmc-"
             + &window_size_bp.to_string()
             + "_bp_windows-"
             + &time.to_string()
             + ".csv";
     }
-    // Instatiate output file
+    // Instantiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
     let mut file_out = OpenOptions::new()
         .create_new(true)
@@ -127,30 +137,20 @@ pub fn gudmc(
         .append(false)
         .open(&fname_output)
         .expect(&error_writing_file);
-    let mut line: Vec<String> = vec!["Pool".to_owned(), "Mean_across_windows".to_owned()];
-    for i in 0..n_windows {
-        let window_chr = windows_chr[i].clone();
-        let window_pos_ini = windows_pos[i];
-        let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
-        line.push(
-            "Window-".to_owned()
-                + &window_chr
-                + "_"
-                + &window_pos_ini.to_string()
-                + "_"
-                + &window_pos_fin.to_string(),
-        );
+    // Header
+    let mut line: Vec<String> = vec!["".to_owned()];
+    for pool in &genotypes_and_phenotypes.pool_names {
+        line.push(pool.to_owned());
     }
     let line = line.join(",") + "\n";
     file_out.write_all(line.as_bytes()).unwrap();
-    // Write the nucleotide diversity per window
-    for i in 0..n_pools {
+    // Write the mean Fst across loci
+    let gudmc_means: Array2<f64> = gudmc.mean_axis(Axis(0)).unwrap();
+    for i in 0..n {
         let line = genotypes_and_phenotypes.pool_names[i].to_owned()
             + ","
-            + &vec_gudmc_across_windows[i].to_string()
-            + ","
-            + &gudmc_per_pool_per_window
-                .column(i)
+            + &gudmc_means
+                .row(i)
                 .iter()
                 .map(|x| parse_f64_roundup_and_own(*x, 8))
                 .collect::<Vec<String>>()
@@ -158,7 +158,93 @@ pub fn gudmc(
             + "\n";
         file_out.write_all(line.as_bytes()).unwrap();
     }
-    Ok(fname_output)
+    // Define sliding windows
+    let mut loci_chr_no_redundant_tail = loci_chr.to_owned(); loci_chr_no_redundant_tail.pop();
+    let mut loci_pos_no_redundant_tail = loci_pos.to_owned(); loci_pos_no_redundant_tail.pop();
+    let (windows_idx_head, windows_idx_tail) = define_sliding_windows(
+        &loci_chr_no_redundant_tail,
+        &loci_pos_no_redundant_tail,
+        window_size_bp,
+        window_slide_size_bp,
+        min_loci_per_window,
+    )
+    .unwrap();
+    // println!("gudmc={:?}", gudmc);
+    // println!("l={:?}", l);
+    // println!("windows_idx_head={:?}", windows_idx_head);
+    // println!("windows_idx_tail={:?}", windows_idx_tail);
+    // Take the means per window
+    let n_windows = windows_idx_head.len();
+    assert!(n_windows > 0, "There were no windows defined. Please check the sync file, the window size, slide size, and the minimum number of loci per window.");
+    let mut gudmc_per_pool_x_pool_per_window: Array2<f64> =
+        Array2::from_elem((n_windows, n * n), f64::NAN);
+    for i in 0..n_windows {
+        let idx_start = windows_idx_head[i];
+        let idx_end = windows_idx_tail[i] + 1; // add one so that we include the tail index as part of the window
+        for j in 0..n {
+            for k in 0..n {
+                let idx = (j * n) + k;
+                // println!("#############################");
+                // println!("start={}; end={}; j={}; k={}", idx_start, idx_end, j, j);
+                // println!("gudmc.slice(s![idx_start..idx_end, j, k])={:?}", gudmc.slice(s![idx_start..idx_end, j, k]));
+                gudmc_per_pool_x_pool_per_window[(i, idx)] =  match gudmc
+                    .slice(s![idx_start..idx_end, j, k])
+                    .mean_axis(Axis(0)) {
+                        Some(x) => x.fold(0.0, |_, &x| x),
+                        None => f64::NAN
+                    };
+            }
+        }
+    }
+    // println!(
+    //     "gudmc_per_pool_x_pool_per_window={:?}",
+    //     gudmc_per_pool_x_pool_per_window
+    // );
+    // Write output (Fst averaged per window)
+    // Instantiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &fname_output_per_window;
+    let mut file_out = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .append(false)
+        .open(&fname_output_per_window)
+        .expect(&error_writing_file);
+    // Header
+    let mut line: Vec<String> = vec!["chr".to_owned(), "pos_ini".to_owned(), "pos_fin".to_owned()];
+    for j in 0..n {
+        for k in 0..n {
+            line.push(
+                genotypes_and_phenotypes.pool_names[j].to_owned()
+                    + "_vs_"
+                    + &genotypes_and_phenotypes.pool_names[k],
+            );
+        }
+    }
+    let line = line.join(",") + "\n";
+    file_out.write_all(line.as_bytes()).unwrap();
+    // Per line
+    for i in 0..n_windows {
+        let idx_head = windows_idx_head[i];
+        let idx_tail = windows_idx_tail[i];
+        let chr = loci_chr[idx_head].to_owned();
+        let pos_head = loci_pos[idx_head];
+        let pos_tail = loci_pos[idx_tail];
+        let coordinate = chr
+            + ","
+            + &pos_head.to_string()
+            + ","
+            + &pos_tail.to_string()
+            + ",";
+        let gudmc_string = gudmc_per_pool_x_pool_per_window
+            .slice(s![i, ..])
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .join(",");
+        let line = coordinate + &gudmc_string[..] + "\n";
+        file_out.write_all(line.as_bytes()).unwrap();
+    }
+    Ok((fname_output, fname_output_per_window))
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,12 +253,15 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     #[test]
-    fn test_tajima_d() {
+    fn test_gudmc() {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
-                0.9, 0.1, 1.0, 0.01, 0.01, 0.98, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
+                1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 
+                1.0, 0.5, 0.5, 0.0, 0.5, 0.5, 
+                1.0, 0.7, 0.2, 0.1, 0.7, 0.3, 
+                1.0, 0.7, 0.2, 0.1, 0.7, 0.3,
             ],
         )
         .unwrap();
@@ -217,20 +306,20 @@ mod tests {
             .unwrap(),
         };
         // Outputs
-        let out = gudmc(
+        let (out_genomewide, out_per_window) = gudmc(
             &genotypes_and_phenotypes,
-            &vec![42.0, 42.0, 42.0, 42.0, 42.0],
-            &100, // 100-kb windows
+            &100,
+            &50,
             &1,
             &"test.something".to_owned(),
             &"".to_owned(),
         )
         .unwrap();
-        let file = std::fs::File::open(&out).unwrap();
+        let file = std::fs::File::open(&out_genomewide).unwrap();
         let reader = std::io::BufReader::new(file);
         let mut header: Vec<String> = vec![];
         let mut pop: Vec<String> = vec![];
-        let mut d: Vec<f64> = vec![];
+        let mut gudmc: Vec<f64> = vec![];
         for line in reader.lines() {
             let split = line
                 .unwrap()
@@ -246,26 +335,30 @@ mod tests {
                     .map(|x| x.parse::<f64>().unwrap())
                     .collect::<Vec<f64>>()
                 {
-                    d.push(f);
+                    gudmc.push(f);
                 }
             }
         }
-        let d: Array2<f64> = Array2::from_shape_vec((5, 3), d).unwrap();
-        println!("d={:?}", d);
-        let pop2_locus1 = d[(1, 1)]; // locus fixed - neutral, i.e. d=0.0
-        let pop2_locus2 = d[(1, 2)]; // locus fixed - neutral, i.e. d=0.0
-        let pop4_locus1 = d[(3, 1)]; // excess rare alleles - selective sweep, i.e. d<0.0
-        let pop4_locus2 = d[(3, 2)]; // scarce rare alleles - balancing selection, i.e. d>0.0
-        assert_eq!(parse_f64_roundup_and_own(pop2_locus1, 4), "0".to_owned());
-        assert_eq!(parse_f64_roundup_and_own(pop2_locus2, 4), "0".to_owned());
-        assert_eq!(
-            parse_f64_roundup_and_own(pop4_locus1, 4),
-            "-5.3954".to_owned()
-        );
-        assert_eq!(
-            parse_f64_roundup_and_own(pop4_locus2, 4),
-            "7.072".to_owned()
-        );
+        let gudmc: Array2<f64> = Array2::from_shape_vec((pop.len(), pop.len()), gudmc).unwrap();
+        let diag: Array1<f64> = gudmc.diag().to_owned(); // itself, i.e. gudmc=0.0
+        let pop1_2 = gudmc[(0, 1)]; // the same populations, i.e. gudmc=0.0
+        let pop2_1 = gudmc[(1, 0)]; // the same populations, i.e. gudmc=0.0
+        let pop4_5 = gudmc[(3, 4)]; // totally different populations, i.e. gudmc=1.0
+        let pop5_4 = gudmc[(4, 3)]; // totally different populations, i.e. gudmc=1.0
+        let pop1_3 = gudmc[(0, 2)]; // gudmc ~ 0.5
+        let pop3_1 = gudmc[(2, 1)]; // gudmc ~ 0.5
+        println!("genotypes_and_phenotypes={:?}", genotypes_and_phenotypes);
+        println!("pop={:?}", pop);
+        println!("gudmc={:?}", gudmc);
+        println!("out_per_window={:?}", out_per_window);
+        // Assertions
+        assert_eq!(diag, Array1::from_elem(pop.len(), 0.0));
+        assert_eq!(pop1_2, 1.0);
+        assert_eq!(pop2_1, 1.0);
+        assert_eq!(pop4_5, 0.0);
+        assert_eq!(pop5_4, 0.0);
+        assert!(f64::abs(pop1_3 - 0.5) < 0.1);
+        assert!(f64::abs(pop3_1 - 0.5) < 0.1);
         // assert_eq!(0, 1);
     }
 }

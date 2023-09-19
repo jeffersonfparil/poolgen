@@ -201,7 +201,7 @@ pub fn multiply_views_xxt(
     Ok(out)
 }
 
-/// Calculate the axis-wise means of an array while ignorning NaN
+/// Calculate the axis-wise means of an array while ignoring NaN
 pub fn mean_axis_ignore_nan<D>(
     a: Array<f64, D>,
     axis: usize,
@@ -229,7 +229,7 @@ where
     Ok(out)
 }
 
-/// Extract the coordinates of each sliding window
+/// Extract the coordinates of each sliding window (can accommodate redundant and non-redundant loci)
 pub fn define_sliding_windows(
     loci_chr: &Vec<String>,
     loci_pos: &Vec<u64>,
@@ -420,7 +420,7 @@ mod tests {
             )
             .unwrap()
         );
-
+        // Define sliding windows (non-redundant loci, i.e. per locus list with alleles ID removed)
         let loci_chr: Vec<String> = vec![
             "chr1", "chr1", "chr1", "chr1", "chr2", "chr2", "chr2", "chr2", "chr3",
         ]
@@ -443,5 +443,28 @@ mod tests {
         println!("windows_idx_tail={:?}", windows_idx_tail);
         assert_eq!(windows_idx_head, vec![0, 1, 4, 7, 8]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
         assert_eq!(windows_idx_tail, vec![2, 3, 6, 7, 8]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
+        // Define sliding windows (redundant loci, i.e. per allele per locus)
+        let loci_chr: Vec<String> = vec![
+            "X", "X", "X", "Y", "Y",
+        ]
+        .iter()
+        .map(|&x| x.to_owned())
+        .collect();
+        let loci_pos: Vec<u64> = vec![123, 123, 123, 456, 456];
+        let window_size_bp: u64 = 100;
+        let window_slide_size_bp: u64 = 50;
+        let min_loci_per_window: u64 = 1;
+        let (windows_idx_head, windows_idx_tail) = define_sliding_windows(
+            &loci_chr,
+            &loci_pos,
+            &window_size_bp,
+            &window_slide_size_bp,
+            &min_loci_per_window,
+        )
+        .unwrap();
+        println!("windows_idx_head={:?}", windows_idx_head);
+        println!("windows_idx_tail={:?}", windows_idx_tail);
+        assert_eq!(windows_idx_head, vec![0, 3]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
+        assert_eq!(windows_idx_tail, vec![2, 4]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
     }
 }

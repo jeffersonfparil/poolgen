@@ -158,7 +158,7 @@ pub fn fst(
             + "\n";
         file_out.write_all(line.as_bytes()).unwrap();
     }
-
+    // Define sliding windows
     let mut loci_chr_no_redundant_tail = loci_chr.to_owned(); loci_chr_no_redundant_tail.pop();
     let mut loci_pos_no_redundant_tail = loci_pos.to_owned(); loci_pos_no_redundant_tail.pop();
     let (windows_idx_head, windows_idx_tail) = define_sliding_windows(
@@ -175,6 +175,7 @@ pub fn fst(
     // println!("windows_idx_tail={:?}", windows_idx_tail);
     // Take the means per window
     let n_windows = windows_idx_head.len();
+    assert!(n_windows > 0, "There were no windows defined. Please check the sync file, the window size, slide size, and the minimum number of loci per window.");
     let mut fst_per_pool_x_pool_per_window: Array2<f64> =
         Array2::from_elem((n_windows, n * n), f64::NAN);
     for i in 0..n_windows {

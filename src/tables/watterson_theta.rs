@@ -4,6 +4,27 @@ use std::fs::OpenOptions;
 use std::io::{self, prelude::*, Error, ErrorKind};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Count the number of polymorphic sites per pool
+fn polymorphic_loci_per_pool(genotypes_and_phenotypes: &GenotypesAndPhenotypes, loci_idx: &Vec<usize>, idx: usize) -> io::Result<Vec<u64>> {
+    let (n, _) = genotypes_and_phenotypes
+        .intercept_and_allele_frequencies
+        .dim();
+    let mut out: Vec<u64> = std::iter::repeat(0).take(n).collect();
+    for k in 0..n {
+        let idx_allele_ini = loci_idx[idx + 0];
+        let idx_allele_fin = loci_idx[idx + 1];
+        let freq_max = genotypes_and_phenotypes
+            .intercept_and_allele_frequencies
+            .slice(s![k, idx_allele_ini..idx_allele_fin])
+            .fold(0.0, |max, &x| if x > max { x } else { max });
+        if freq_max < 1.0 {
+            // assumes we are keeping all the alleles per locus
+            out[k] += 1;
+        }
+    }
+    Ok(out)
+}
+
 /// Watterson's estimator of theta
 /// Simply (naively?) defined as $theta_w = number of segregating sites / \Sigma^{n-1}_{i=1}(1/i)$
 /// For details see [Feretti et al, 2013](https://doi.org/10.1111/mec.12522)
@@ -11,103 +32,146 @@ pub fn theta_watterson(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
     window_size_bp: &u64,
+    window_slide_size_bp: &u64,
     min_loci_per_window: &u64,
-) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
+) -> io::Result<(Array2<f64>, Vec<usize>, Vec<usize>)> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
-    // Find window indices making sure we respect chromosomal boundaries
-    // while filtering out windows with less than min_loci_per_window SNPs
-    let l = loci_idx.len() - 1; // total number of loci, we subtract 1 as the last index refer to the last allele of the last locus and serves as an end marker
-    let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
-    let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
-    let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
-    let mut windows_n_sites: Vec<u64> = vec![0];
-    let mut windows_n_polymorphic_sites: Vec<Vec<u64>> =
-        vec![std::iter::repeat(0).take(n).collect()];
-    let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
-    for i in 0..l {
-        let chr = loci_chr[i].to_owned(); // skipping the intercept at position 0
-        let pos = loci_pos[i]; // skipping the intercept at position 0
-        if (chr != windows_chr.last().unwrap().to_owned())
-            | ((chr == windows_chr.last().unwrap().to_owned())
-                & (pos > windows_pos.last().unwrap() + &(*window_size_bp as u64)))
+    // Remove redundant trailing loci from `genotypes_and_phenotypes.count_loci()`
+    // let mut loci_idx = loci_idx.to_owned(); loci_idx.pop(); // Do not remove the trailing index for loci_idx as it is needed in `polymorphic_loci_per_pool` to define the slice in `genotypes_and_phenotypes.intercept_and_allele_frequencies`
+    let mut loci_chr = loci_chr.to_owned(); loci_chr.pop();
+    let mut loci_pos = loci_pos.to_owned(); loci_pos.pop();
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    // The following code is similar to `src/base/helpers.rs define_sliding_windows()` function //
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    assert_eq!(loci_chr.len(), loci_pos.len());
+    let l = loci_chr.len();
+    // Indices, chromosome names, and positions of the start and end of the window, respectively (will be filtered to remove redundant tails to remove windows which are complete subsets of a bigger window near the end of chromosomes or scaffolds)
+    let mut idx_head: Vec<usize> = vec![0];
+    let mut idx_tail = idx_head.clone();
+    let mut chr_head: Vec<String> = vec![loci_chr[0].to_owned()];
+    let mut chr_tail = chr_head.clone();
+    let mut pos_head: Vec<u64> = vec![loci_pos[0]];
+    let mut pos_tail = pos_head.clone();
+    // Number of genotyped loci included per window
+    let mut cov: Vec<u64> = vec![1];
+    // A boolean to mark whether the start of the next window has been found before the end of the current window has been reached
+    let mut marker_next_window_head: bool = false;
+    // The index of the sart of the next window
+    let mut idx_next_head: usize = 0;
+    // Index of the current locus
+    let mut i: usize = 1;
+    // Counter for the number of polymorphic loci per window per pool (where we increment polymorphic site count per pool if the maximum allele frequency at a locus is less than 1 and assumes we are keeping all the alleles per locus)
+    let mut polymorphic: Vec<Vec<u64>> = vec![polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, 0).unwrap()];
+    // We iterate across the genome until we reach the last locus (may not be consecutive as the start of the next window may be within the body of the current window)
+    while i < l {
+        let chr = loci_chr[i].to_owned();
+        let pos = loci_pos[i];
+        // println!("i={:?}", i);
+        // println!("idx_head={:?}", idx_head);
+        // println!("idx_tail={:?}", idx_tail);
+        // Did we reach the end of the chromosome or the end of the window according to window size?
+        if (&chr != chr_head.last().unwrap()) | (pos > (pos_head.last().unwrap() + window_size_bp))
         {
-            if windows_n_sites[j] < *min_loci_per_window {
-                windows_idx[j] = i;
-                windows_chr[j] = chr.to_owned();
-                windows_pos[j] = pos;
-                windows_n_sites[j] = 1;
-                windows_n_polymorphic_sites[j] = std::iter::repeat(0).take(n).collect();
+            // If we found the start of the next window in body of the current (ending) window then,
+            //  we use the next window head as the start of the next slide not the end of the window,
+            //  otherwise we use the end of the window.
+            i = if marker_next_window_head {
+                idx_next_head
             } else {
-                windows_idx.push(i);
-                windows_chr.push(chr.to_owned());
-                windows_pos.push(pos);
-                windows_n_sites.push(1);
-                windows_n_polymorphic_sites.push(std::iter::repeat(0).take(n).collect());
+                i
+            };
+            let chr = loci_chr[i].to_owned();
+            let pos = loci_pos[i];
+            // Do we have the minimum number of required loci in the current window?
+            if cov.last().unwrap() >= min_loci_per_window {
+                // If we have enough loci covered in the current (ending) window:
+                // We also add the details of the start of the next window
+                idx_head.push(i);
+                idx_tail.push(i);
+                chr_head.push(chr.to_owned());
+                chr_tail.push(chr.to_owned());
+                pos_head.push(pos);
+                pos_tail.push(pos);
+                cov.push(1);
+                polymorphic.push(polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i).unwrap());
+            } else {
+                // If we did no have enough loci covered in the current (ending) window:
+                // We ditch the current (ending) window and replace it with the start of the next window
+                let i_ = idx_head.len() - 1;
+                idx_head[i_] = i;
+                chr_head[i_] = chr;
+                pos_head[i_] = pos;
+                cov[i_] = 1;
+                polymorphic[i_] = polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i_).unwrap();
             }
+            // Reset the marker for the start of the next window
+            marker_next_window_head = false;
         } else {
-            windows_n_sites[j] += 1;
-        }
-        j = windows_n_sites.len() - 1;
-        // Increment polymorphic site count per pool if the maximum allele frequency at a locus is less than 1 and assumes we are keeping all the alleles per locus
-        for k in 0..n {
-            let idx_allele_ini = loci_idx[i];
-            let idx_allele_fin = loci_idx[i + 1];
-            let freq_max = genotypes_and_phenotypes
-                .intercept_and_allele_frequencies
-                .slice(s![k, idx_allele_ini..idx_allele_fin])
-                .fold(0.0, |max, &x| if x > max { x } else { max });
-            if freq_max < 1.0 {
-                // assumes we are keeping all the alleles per locus
-                windows_n_polymorphic_sites[j][k] += 1;
+            // If we have yet to reach the end of the current window or the end of the chromosome,
+            // then we just replace the tail of the current window with the current locus
+            // and add the another locus to the coverage counter.
+            let i_ = idx_tail.len() - 1;
+            idx_tail[i_] = i;
+            chr_tail[i_] = chr;
+            pos_tail[i_] = pos;
+            cov[i_] += 1;
+            // Increment polymorphic site count per pool if the maximum allele frequency at a locus is less than 1 and assumes we are keeping all the alleles per locus
+            let polymorphic_loci_per_pool = polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i_).unwrap();
+            for k in 0..n {
+                polymorphic[i_][k] += polymorphic_loci_per_pool[k];
+            }
+            // We also check if we have reached the start of the next window and note the index if we have
+            if (marker_next_window_head == false)
+                & (pos >= (pos_head.last().unwrap() + window_slide_size_bp))
+            {
+                marker_next_window_head = true;
+                idx_next_head = i;
             }
         }
+        // Move to the next locus
+        i += 1;
     }
-    // Add the last index of the final position
-    windows_idx.push(l);
-    windows_chr.push(windows_chr.last().unwrap().to_owned());
-    windows_pos.push(*loci_pos.last().unwrap());
-    if windows_n_sites.last().unwrap() < min_loci_per_window {
-        windows_idx.pop();
-        windows_chr.pop();
-        windows_pos.pop();
-        windows_n_sites.pop();
+    // Remove redundant tails
+    assert_eq!(idx_head.len(), idx_tail.len());
+    let n_windows = idx_head.len();
+    let mut out_idx_head: Vec<usize> = vec![idx_head[0]];
+    let mut out_idx_tail: Vec<usize> = vec![idx_tail[0]];
+    let mut out_cov: Vec<u64> = vec![cov[0]];
+    let mut out_polymorphic: Vec<Vec<u64>> = vec![polymorphic[0].clone()];
+    for i in 1..n_windows {
+        // println!("out_idx_tail={:?}", out_idx_tail);
+        if &idx_tail[i] != out_idx_tail.last().unwrap() {
+            out_idx_head.push(idx_head[i]);
+            out_idx_tail.push(idx_tail[i]);
+            out_cov.push(cov[i]);
+            out_polymorphic.push(polymorphic[i].clone());
+        }
     }
-    // println!("loci_chr={:?}", loci_chr);
-    // println!("loci_pos={:?}", loci_pos);
-    // println!("l={:?}", l);
-    // println!("windows_idx={:?}", windows_idx);
-    // println!("windows_chr={:?}", windows_chr);
-    // println!("windows_pos={:?}", windows_pos);
-    // println!("windows_n_sites={:?}", windows_n_sites);
-    // println!("windows_n_polymorphic_sites={:?}", windows_n_polymorphic_sites);
-    if windows_n_sites.len() < 1 {
+    let n_windows = out_idx_head.len();
+    // Check if we have no windows containing at least the minimum number of loci
+    if out_cov.len() < 1 {
         let error_message =
             "No window with at least ".to_owned() + &min_loci_per_window.to_string() + " SNPs.";
         return Err(Error::new(ErrorKind::Other, error_message));
     }
     // Calculate Watterson's estimator per window
-    let n_windows = windows_chr.len() - 1;
-    let mut watterson_theta_per_pool_per_window: Array2<f64> =
-        Array2::from_elem((n_windows, n), f64::NAN);
+    let mut watterson_theta_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
     for i in 0..n_windows {
         for j in 0..n {
             let n_segregating_sites =
-                (windows_n_polymorphic_sites[i][j] as f64) / (windows_n_sites[i] as f64);
-
-            // Note: Do we need to account for coverage instead of pool sizes?
+                (out_polymorphic[i][j] as f64) / (out_cov[i] as f64);
             let correction_factor =
-                (1..(pool_sizes[j] as usize)).fold(0.0, |sum, x| sum + 1.0 / (x as f64));
-
+                (1..(pool_sizes[j] as usize)).fold(0.0, |sum, x| sum + 1.0 / (x as f64)); // Should we account for coverage instead of pool sizes?
             watterson_theta_per_pool_per_window[(i, j)] = n_segregating_sites / correction_factor;
         }
     }
     Ok((
         watterson_theta_per_pool_per_window,
-        windows_chr,
-        windows_pos,
+        out_idx_head,
+        out_idx_tail,
     ))
 }
 
@@ -116,15 +180,17 @@ pub fn watterson_estimator(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
     window_size_bp: &u64,
+    window_slide_size_bp: &u64,
     min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate Watterson's estimator
-    let (watterson_theta_per_pool_per_window, windows_chr, windows_pos) = theta_watterson(
+    let (watterson_theta_per_pool_per_window, windows_idx_head, windows_idx_tail) = theta_watterson(
         genotypes_and_phenotypes,
         pool_sizes,
         window_size_bp,
+        window_slide_size_bp,
         min_loci_per_window,
     )
     .unwrap();
@@ -162,7 +228,9 @@ pub fn watterson_estimator(
             + &time.to_string()
             + ".csv";
     }
-    // Instatiate output file
+    // Define the loci for writing the output
+    let (_loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
+    // Instantiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
     let mut file_out = OpenOptions::new()
         .create_new(true)
@@ -173,12 +241,14 @@ pub fn watterson_estimator(
     // Header
     let mut line: Vec<String> = vec!["Pool".to_owned()];
     for i in 0..n_windows {
-        let windows_chr = windows_chr[i].clone();
-        let window_pos_ini = windows_pos[i];
-        let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
+        let idx_ini = windows_idx_head[i];
+        let idx_fin = windows_idx_tail[i];
+        let window_chr = loci_chr[idx_ini].clone();
+        let window_pos_ini = loci_pos[idx_ini];
+        let window_pos_fin = loci_pos[idx_fin];
         line.push(
             "Window-".to_owned()
-                + &windows_chr
+                + &window_chr
                 + "_"
                 + &window_pos_ini.to_string()
                 + "_"
@@ -255,18 +325,19 @@ mod tests {
             coverages: Array2::from_shape_vec(
                 (5, 2),
                 vec![
-                    10.0, 10.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
+                     10.0,  10.0, 100.0, 100.0, 100.0, 
+                    100.0, 100.0, 100.0, 100.0, 100.0,
                 ],
             )
             .unwrap(),
         };
-        // Outputs
         println!("genotypes_and_phenotypes={:?}", genotypes_and_phenotypes);
-
+        // Outputs
         let out = watterson_estimator(
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
-            &100, // 100-kb windows
+            &100, // 100-bp windows
+            & 50, // 50-bp window slide 
             &1,
             &"test.something".to_owned(),
             &"".to_owned(),
@@ -302,7 +373,7 @@ mod tests {
         let pop2_locus1 = watterson[(1, 1)]; // locus fixed, i.e. watterson=0.0
         let pop2_locus2 = watterson[(1, 2)]; // locus fixed, i.e. watterson=0.0
         let pop3_locus1 = watterson[(2, 1)]; // locus fixed, i.e. watterson=0.0
-        let pop3_locus2 = watterson[(2, 2)]; // locus at 0.5, i.e. watterson = 50 / (100-1) = 0.5051
+        let pop3_locus2 = watterson[(2, 2)]; // locus polymorphic with pool size of 42, i.e. watterson = 1 polymorphic locus / (42 pools - 1) = 0.2324
         assert_eq!(parse_f64_roundup_and_own(pop2_locus1, 4), "0".to_owned());
         assert_eq!(parse_f64_roundup_and_own(pop2_locus2, 4), "0".to_owned());
         assert_eq!(

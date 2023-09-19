@@ -10,15 +10,17 @@ pub fn tajima_d(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
     window_size_bp: &u64,
+    window_slide_size_bp: &u64,
     min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate Watterson's estimator
-    let (watterson_theta_per_pool_per_window, windows_chr, windows_pos) = theta_watterson(
+    let (watterson_theta_per_pool_per_window, windows_idx_head, windows_idx_tail) = theta_watterson(
         genotypes_and_phenotypes,
         pool_sizes,
         window_size_bp,
+        window_slide_size_bp,
         min_loci_per_window,
     )
     .unwrap();
@@ -26,9 +28,10 @@ pub fn tajima_d(
     let n_pools = watterson_theta_per_pool_per_window.ncols();
     let n_windows = watterson_theta_per_pool_per_window.nrows();
     // Calculate heterozygosities
-    let (pi_per_pool_per_window, windows_chr_pi, windows_pos_pi) = theta_pi(
+    let (pi_per_pool_per_window, windows_idx_head_pi, windows_idx_tail_pi) = theta_pi(
         genotypes_and_phenotypes,
         window_size_bp,
+        window_slide_size_bp,
         min_loci_per_window,
     )
     .unwrap();
@@ -38,8 +41,8 @@ pub fn tajima_d(
     // Sanity checks
     assert_eq!(n_pools, pi_per_pool_per_window.ncols(), "The number of pools extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
     assert_eq!(n_windows, pi_per_pool_per_window.nrows(), "The number of windows extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
-    assert_eq!(windows_chr, windows_chr_pi, "The chromosome names per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
-    assert_eq!(windows_pos, windows_pos_pi, "The SNP positions per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
+    assert_eq!(windows_idx_head, windows_idx_head_pi, "The chromosome names per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
+    assert_eq!(windows_idx_tail, windows_idx_tail_pi, "The SNP positions per window extracted from estimating the heterozygosities and Watterson's estimators are incompatible. Please report a bug.");
     // Calculate Tajima's D
     let mut tajimas_d_per_pool_per_window: Array2<f64> =
         Array2::from_elem((n_windows, n_pools), f64::NAN);
@@ -119,7 +122,9 @@ pub fn tajima_d(
             + &time.to_string()
             + ".csv";
     }
-    // Instatiate output file
+    // Define the loci for writing the output
+    let (_loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
+    // Instantiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
     let mut file_out = OpenOptions::new()
         .create_new(true)
@@ -129,9 +134,11 @@ pub fn tajima_d(
         .expect(&error_writing_file);
     let mut line: Vec<String> = vec!["Pool".to_owned(), "Mean_across_windows".to_owned()];
     for i in 0..n_windows {
-        let window_chr = windows_chr[i].clone();
-        let window_pos_ini = windows_pos[i];
-        let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
+        let idx_ini = windows_idx_head[i];
+        let idx_fin = windows_idx_tail[i];
+        let window_chr = loci_chr[idx_ini].clone();
+        let window_pos_ini = loci_pos[idx_ini];
+        let window_pos_fin = loci_pos[idx_fin];
         line.push(
             "Window-".to_owned()
                 + &window_chr
@@ -220,7 +227,8 @@ mod tests {
         let out = tajima_d(
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
-            &100, // 100-kb windows
+            &100, // 100-bp windows
+            &50, // 50-bp window slide
             &1,
             &"test.something".to_owned(),
             &"".to_owned(),

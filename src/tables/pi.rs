@@ -9,8 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn theta_pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &u64,
+    window_slide_size_bp: &u64,
     min_loci_per_window: &u64,
-) -> io::Result<(Array2<f64>, Vec<String>, Vec<u64>)> {
+) -> io::Result<(Array2<f64>, Vec<usize>, Vec<usize>)> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
@@ -51,85 +52,69 @@ pub fn theta_pi(
                 .abs(); // equivalent to (n/(n-1))*(1-sum(p^2)) with a n/(n-1) factor on the heteroygosity to make it unbiased
         });
     // Summarize per non-overlapping window
-    // Find window indices making sure we respect chromosomal boundaries
-    // while filtering out windows with less than min_loci_per_window SNPs
-    let mut windows_idx: Vec<usize> = vec![0]; // indices in terms of the number of loci not in terms of genome coordinates - just to make it simpler
-    let mut windows_chr: Vec<String> = vec![loci_chr[0].to_owned()];
-    let mut windows_pos: Vec<u64> = vec![loci_pos[0] as u64];
-    let mut windows_n_sites: Vec<u64> = vec![0];
-    let mut j = windows_n_sites.len() - 1; // number of sites per window whose length is used to count the current number of windows
-    for i in 0..l {
-        let chr = loci_chr[i].to_owned(); // skipping the intercept at position 0
-        let pos = loci_pos[i]; // skipping the intercept at position 0
-        if (chr != windows_chr.last().unwrap().to_owned())
-            | ((chr == windows_chr.last().unwrap().to_owned())
-                & (pos > windows_pos.last().unwrap() + &(*window_size_bp as u64)))
-        {
-            if windows_n_sites[j] < *min_loci_per_window {
-                windows_idx[j] = i;
-                windows_chr[j] = chr.to_owned();
-                windows_pos[j] = pos;
-                windows_n_sites[j] = 1;
-            } else {
-                windows_idx.push(i);
-                windows_chr.push(chr.to_owned());
-                windows_pos.push(pos);
-                windows_n_sites.push(1);
-            }
-        } else {
-            windows_n_sites[j] += 1;
-        }
-        j = windows_n_sites.len() - 1;
-    }
-    // Add the last index of the final position
-    windows_idx.push(l);
-    windows_chr.push(windows_chr.last().unwrap().to_owned());
-    windows_pos.push(*loci_pos.last().unwrap());
-    if windows_n_sites.last().unwrap() < min_loci_per_window {
-        windows_idx.pop();
-        windows_chr.pop();
-        windows_pos.pop();
-        windows_n_sites.pop();
-    }
-    if windows_n_sites.len() < 1 {
-        return Err(Error::new(
-            ErrorKind::Other,
-            "No window with at least ".to_owned() + &min_loci_per_window.to_string() + " SNPs.",
-        ));
-    }
+    // Remove redundant trailing loci from `genotypes_and_phenotypes.count_loci()`
+    let mut loci_chr_no_redundant_tail = loci_chr.to_owned(); loci_chr_no_redundant_tail.pop();
+    let mut loci_pos_no_redundant_tail = loci_pos.to_owned(); loci_pos_no_redundant_tail.pop();
+    // println!("loci_idx={:?}", loci_idx);
+    // println!("loci_chr_no_redundant_tail={:?}", loci_chr_no_redundant_tail);
+    // println!("loci_pos_no_redundant_tail={:?}", loci_pos_no_redundant_tail);
+    // Define sliding windows
+    let (windows_idx_head, windows_idx_tail) = define_sliding_windows(
+        &loci_chr_no_redundant_tail,
+        &loci_pos_no_redundant_tail,
+        window_size_bp,
+        window_slide_size_bp,
+        min_loci_per_window,
+    )
+    .unwrap();
+    // println!("fst={:?}", fst);
+    // println!("l={:?}", l);
+    // println!("windows_idx_head={:?}", windows_idx_head);
+    // println!("windows_idx_tail={:?}", windows_idx_tail);
     // Take the means per window
-    let n_windows = windows_idx.len() - 1;
-    let mut pi_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
+    let n_windows = windows_idx_head.len();
+    assert!(n_windows > 0, "There were no windows defined. Please check the sync file, the window size, slide size, and the minimum number of loci per window.");
+    let mut pi_per_pool_per_window: Array2<f64> =
+        Array2::from_elem((n_windows, n), f64::NAN);
     for i in 0..n_windows {
-        let idx_start = windows_idx[i];
-        let idx_end = windows_idx[i + 1];
+        let idx_start = windows_idx_head[i];
+        let idx_end = windows_idx_tail[i] + 1; // add one so that we include the tail index as part of the window
         for j in 0..n {
-            pi_per_pool_per_window[(i, j)] = pi
+            let idx = j;
+            pi_per_pool_per_window[(i, idx)] =  match pi
                 .slice(s![idx_start..idx_end, j])
-                .mean_axis(Axis(0))
-                .unwrap()
-                .fold(0.0, |_, &x| x);
+                .mean_axis(Axis(0)) {
+                    Some(x) => x.fold(0.0, |_, &x| x),
+                    None => f64::NAN
+                };
         }
     }
-    Ok((pi_per_pool_per_window, windows_chr, windows_pos))
+    // println!("windows_idx_head={:?}", windows_idx_head);
+    // println!("windows_idx_tail={:?}", windows_idx_tail);
+    // println!("pi_per_pool_per_window={:?}", pi_per_pool_per_window);
+    Ok((pi_per_pool_per_window, windows_idx_head, windows_idx_tail))
 }
 
 pub fn pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &u64,
+    window_slide_size_bp: &u64,
     min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate heterozygosities
-    let (pi_per_pool_per_window, windows_chr, windows_pos) = theta_pi(
+    let (pi_per_pool_per_window, windows_idx_head, windows_idx_tail) = theta_pi(
         genotypes_and_phenotypes,
         window_size_bp,
+        window_slide_size_bp,
         min_loci_per_window,
     )
     .unwrap();
     let n = pi_per_pool_per_window.ncols();
     let n_windows = pi_per_pool_per_window.nrows();
+    assert!(n_windows==windows_idx_head.len(), "Please check the number of windows in the pi estimates and the starting indices of each window.");
+    assert!(n_windows==windows_idx_tail.len(), "Please check the number of windows in the pi estimates and the ending indices of each window.");
     let vec_pi_across_windows = pi_per_pool_per_window.mean_axis(Axis(0)).unwrap();
     // Write output
     let mut fname_output = fname_output.to_owned();
@@ -159,7 +144,9 @@ pub fn pi(
             + &time.to_string()
             + ".csv";
     }
-    // Instatiate output file
+    // Define the loci for writing the output
+    let (_loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
+    // Instantiate output file
     let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
     let mut file_out = OpenOptions::new()
         .create_new(true)
@@ -170,9 +157,11 @@ pub fn pi(
     // Header
     let mut line: Vec<String> = vec!["Pool".to_owned(), "Mean_across_windows".to_owned()];
     for i in 0..n_windows {
-        let window_chr = windows_chr[i].clone();
-        let window_pos_ini = windows_pos[i];
-        let window_pos_fin = window_pos_ini + (*window_size_bp as u64);
+        let idx_ini = windows_idx_head[i];
+        let idx_fin = windows_idx_tail[i];
+        let window_chr = loci_chr[idx_ini].clone();
+        let window_pos_ini = loci_pos[idx_ini];
+        let window_pos_fin = loci_pos[idx_fin];
         line.push(
             "Window-".to_owned()
                 + &window_chr
@@ -212,8 +201,11 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
-                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
+                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
+                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
+                1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
             ],
         )
         .unwrap();
@@ -257,10 +249,12 @@ mod tests {
             )
             .unwrap(),
         };
+        println!("genotypes_and_phenotypes={:?}", genotypes_and_phenotypes);
         // Outputs
         let out = pi(
             &genotypes_and_phenotypes,
-            &100, // 100-kb windows
+            &100, // 100-bp windows
+            &50, // 50-bp window slide
             &1,   // minimum of 1 SNP per window
             &"test.something".to_owned(),
             &"".to_owned(),
