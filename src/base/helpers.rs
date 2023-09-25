@@ -443,13 +443,11 @@ mod tests {
         println!("windows_idx_tail={:?}", windows_idx_tail);
         assert_eq!(windows_idx_head, vec![0, 1, 4, 7, 8]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
         assert_eq!(windows_idx_tail, vec![2, 3, 6, 7, 8]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
-        // Define sliding windows (redundant loci, i.e. per allele per locus)
-        let loci_chr: Vec<String> = vec![
-            "X", "X", "X", "Y", "Y",
-        ]
-        .iter()
-        .map(|&x| x.to_owned())
-        .collect();
+                                                           // Define sliding windows (redundant loci, i.e. per allele per locus)
+        let loci_chr: Vec<String> = vec!["X", "X", "X", "Y", "Y"]
+            .iter()
+            .map(|&x| x.to_owned())
+            .collect();
         let loci_pos: Vec<u64> = vec![123, 123, 123, 456, 456];
         let window_size_bp: u64 = 100;
         let window_slide_size_bp: u64 = 50;

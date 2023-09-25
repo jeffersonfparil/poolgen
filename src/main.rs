@@ -7,6 +7,7 @@ use std::io;
 mod base;
 mod gp;
 mod gwas;
+mod popgen;
 mod tables;
 use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse};
 use gp::{
@@ -14,7 +15,7 @@ use gp::{
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
 use gwas::{mle_with_covariate, ols_with_covariate};
-use tables::{fst, pi, tajima_d, watterson_estimator};
+use popgen::{fst, pi, tajima_d, watterson_estimator};
 
 #[derive(Parser, Debug)]
 #[clap(

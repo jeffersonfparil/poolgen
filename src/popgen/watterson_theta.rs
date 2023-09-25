@@ -5,7 +5,11 @@ use std::io::{self, prelude::*, Error, ErrorKind};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Count the number of polymorphic sites per pool
-fn polymorphic_loci_per_pool(genotypes_and_phenotypes: &GenotypesAndPhenotypes, loci_idx: &Vec<usize>, idx: usize) -> io::Result<Vec<u64>> {
+fn polymorphic_loci_per_pool(
+    genotypes_and_phenotypes: &GenotypesAndPhenotypes,
+    loci_idx: &Vec<usize>,
+    idx: usize,
+) -> io::Result<Vec<u64>> {
     let (n, _) = genotypes_and_phenotypes
         .intercept_and_allele_frequencies
         .dim();
@@ -41,8 +45,10 @@ pub fn theta_watterson(
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
     // Remove redundant trailing loci from `genotypes_and_phenotypes.count_loci()`
     // let mut loci_idx = loci_idx.to_owned(); loci_idx.pop(); // Do not remove the trailing index for loci_idx as it is needed in `polymorphic_loci_per_pool` to define the slice in `genotypes_and_phenotypes.intercept_and_allele_frequencies`
-    let mut loci_chr = loci_chr.to_owned(); loci_chr.pop();
-    let mut loci_pos = loci_pos.to_owned(); loci_pos.pop();
+    let mut loci_chr = loci_chr.to_owned();
+    loci_chr.pop();
+    let mut loci_pos = loci_pos.to_owned();
+    loci_pos.pop();
     //////////////////////////////////////////////////////////////////////////////////////////////
     // The following code is similar to `src/base/helpers.rs define_sliding_windows()` function //
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,7 +70,8 @@ pub fn theta_watterson(
     // Index of the current locus
     let mut i: usize = 1;
     // Counter for the number of polymorphic loci per window per pool (where we increment polymorphic site count per pool if the maximum allele frequency at a locus is less than 1 and assumes we are keeping all the alleles per locus)
-    let mut polymorphic: Vec<Vec<u64>> = vec![polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, 0).unwrap()];
+    let mut polymorphic: Vec<Vec<u64>> =
+        vec![polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, 0).unwrap()];
     // We iterate across the genome until we reach the last locus (may not be consecutive as the start of the next window may be within the body of the current window)
     while i < l {
         let chr = loci_chr[i].to_owned();
@@ -96,7 +103,9 @@ pub fn theta_watterson(
                 pos_head.push(pos);
                 pos_tail.push(pos);
                 cov.push(1);
-                polymorphic.push(polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i).unwrap());
+                polymorphic.push(
+                    polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i).unwrap(),
+                );
             } else {
                 // If we did no have enough loci covered in the current (ending) window:
                 // We ditch the current (ending) window and replace it with the start of the next window
@@ -105,7 +114,8 @@ pub fn theta_watterson(
                 chr_head[i_] = chr;
                 pos_head[i_] = pos;
                 cov[i_] = 1;
-                polymorphic[i_] = polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i_).unwrap();
+                polymorphic[i_] =
+                    polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i_).unwrap();
             }
             // Reset the marker for the start of the next window
             marker_next_window_head = false;
@@ -119,7 +129,8 @@ pub fn theta_watterson(
             pos_tail[i_] = pos;
             cov[i_] += 1;
             // Increment polymorphic site count per pool if the maximum allele frequency at a locus is less than 1 and assumes we are keeping all the alleles per locus
-            let polymorphic_loci_per_pool = polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i_).unwrap();
+            let polymorphic_loci_per_pool =
+                polymorphic_loci_per_pool(genotypes_and_phenotypes, &loci_idx, i_).unwrap();
             for k in 0..n {
                 polymorphic[i_][k] += polymorphic_loci_per_pool[k];
             }
@@ -158,11 +169,11 @@ pub fn theta_watterson(
         return Err(Error::new(ErrorKind::Other, error_message));
     }
     // Calculate Watterson's estimator per window
-    let mut watterson_theta_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
+    let mut watterson_theta_per_pool_per_window: Array2<f64> =
+        Array2::from_elem((n_windows, n), f64::NAN);
     for i in 0..n_windows {
         for j in 0..n {
-            let n_segregating_sites =
-                (out_polymorphic[i][j] as f64) / (out_cov[i] as f64);
+            let n_segregating_sites = (out_polymorphic[i][j] as f64) / (out_cov[i] as f64);
             let correction_factor =
                 (1..(pool_sizes[j] as usize)).fold(0.0, |sum, x| sum + 1.0 / (x as f64)); // Should we account for coverage instead of pool sizes?
             watterson_theta_per_pool_per_window[(i, j)] = n_segregating_sites / correction_factor;
@@ -186,14 +197,15 @@ pub fn watterson_estimator(
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate Watterson's estimator
-    let (watterson_theta_per_pool_per_window, windows_idx_head, windows_idx_tail) = theta_watterson(
-        genotypes_and_phenotypes,
-        pool_sizes,
-        window_size_bp,
-        window_slide_size_bp,
-        min_loci_per_window,
-    )
-    .unwrap();
+    let (watterson_theta_per_pool_per_window, windows_idx_head, windows_idx_tail) =
+        theta_watterson(
+            genotypes_and_phenotypes,
+            pool_sizes,
+            window_size_bp,
+            window_slide_size_bp,
+            min_loci_per_window,
+        )
+        .unwrap();
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let (n_windows, n) = watterson_theta_per_pool_per_window.dim();
     // println!("n={}; n_windows={}", n, n_windows);
@@ -325,8 +337,7 @@ mod tests {
             coverages: Array2::from_shape_vec(
                 (5, 2),
                 vec![
-                     10.0,  10.0, 100.0, 100.0, 100.0, 
-                    100.0, 100.0, 100.0, 100.0, 100.0,
+                    10.0, 10.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
                 ],
             )
             .unwrap(),
@@ -337,7 +348,7 @@ mod tests {
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
             &100, // 100-bp windows
-            & 50, // 50-bp window slide 
+            &50,  // 50-bp window slide
             &1,
             &"test.something".to_owned(),
             &"".to_owned(),

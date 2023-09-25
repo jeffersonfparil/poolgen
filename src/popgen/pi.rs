@@ -53,8 +53,10 @@ pub fn theta_pi(
         });
     // Summarize per non-overlapping window
     // Remove redundant trailing loci from `genotypes_and_phenotypes.count_loci()`
-    let mut loci_chr_no_redundant_tail = loci_chr.to_owned(); loci_chr_no_redundant_tail.pop();
-    let mut loci_pos_no_redundant_tail = loci_pos.to_owned(); loci_pos_no_redundant_tail.pop();
+    let mut loci_chr_no_redundant_tail = loci_chr.to_owned();
+    loci_chr_no_redundant_tail.pop();
+    let mut loci_pos_no_redundant_tail = loci_pos.to_owned();
+    loci_pos_no_redundant_tail.pop();
     // println!("loci_idx={:?}", loci_idx);
     // println!("loci_chr_no_redundant_tail={:?}", loci_chr_no_redundant_tail);
     // println!("loci_pos_no_redundant_tail={:?}", loci_pos_no_redundant_tail);
@@ -74,18 +76,16 @@ pub fn theta_pi(
     // Take the means per window
     let n_windows = windows_idx_head.len();
     assert!(n_windows > 0, "There were no windows defined. Please check the sync file, the window size, slide size, and the minimum number of loci per window.");
-    let mut pi_per_pool_per_window: Array2<f64> =
-        Array2::from_elem((n_windows, n), f64::NAN);
+    let mut pi_per_pool_per_window: Array2<f64> = Array2::from_elem((n_windows, n), f64::NAN);
     for i in 0..n_windows {
         let idx_start = windows_idx_head[i];
         let idx_end = windows_idx_tail[i] + 1; // add one so that we include the tail index as part of the window
         for j in 0..n {
             let idx = j;
-            pi_per_pool_per_window[(i, idx)] =  match pi
-                .slice(s![idx_start..idx_end, j])
-                .mean_axis(Axis(0)) {
+            pi_per_pool_per_window[(i, idx)] =
+                match pi.slice(s![idx_start..idx_end, j]).mean_axis(Axis(0)) {
                     Some(x) => x.fold(0.0, |_, &x| x),
-                    None => f64::NAN
+                    None => f64::NAN,
                 };
         }
     }
@@ -201,11 +201,8 @@ mod tests {
         let x: Array2<f64> = Array2::from_shape_vec(
             (5, 6),
             vec![
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 
-                1.0, 0.6, 0.4, 0.0, 0.9, 0.1, 
-                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 
-                1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
+                1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.6, 0.4, 0.0,
+                0.9, 0.1, 1.0, 0.4, 0.5, 0.1, 0.6, 0.4, 1.0, 1.0, 0.0, 0.0, 0.5, 0.5,
             ],
         )
         .unwrap();
@@ -254,7 +251,7 @@ mod tests {
         let out = pi(
             &genotypes_and_phenotypes,
             &100, // 100-bp windows
-            &50, // 50-bp window slide
+            &50,  // 50-bp window slide
             &1,   // minimum of 1 SNP per window
             &"test.something".to_owned(),
             &"".to_owned(),

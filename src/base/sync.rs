@@ -1069,14 +1069,17 @@ impl LoadAll for FileSyncPhen {
         // Load the full sync file in parallel and sort
         let (freqs, _cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         // Make sure that we have the same number of pools in the genotype and phenotype files
-        assert!(freqs[0].matrix.nrows()==(&self.pool_names).len(), "Please check that the pools are consistent across the genotype and phenotype files.");
+        assert!(
+            freqs[0].matrix.nrows() == (&self.pool_names).len(),
+            "Please check that the pools are consistent across the genotype and phenotype files."
+        );
         // Write the header
         file_out
             .write_all(
                 ("#chr,pos,allele,".to_owned() + &self.pool_names.join(",") + "\n").as_bytes(),
             )
             .unwrap();
-        
+
         // Write allele frequencies line by line
         for f in freqs.iter() {
             for i in 0..f.alleles_vector.len() {

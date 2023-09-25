@@ -1,5 +1,5 @@
 use crate::base::*;
-use crate::tables::*;
+use crate::popgen::*;
 use ndarray::prelude::*;
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
@@ -16,14 +16,15 @@ pub fn tajima_d(
     fname_output: &String,
 ) -> io::Result<String> {
     // Calculate Watterson's estimator
-    let (watterson_theta_per_pool_per_window, windows_idx_head, windows_idx_tail) = theta_watterson(
-        genotypes_and_phenotypes,
-        pool_sizes,
-        window_size_bp,
-        window_slide_size_bp,
-        min_loci_per_window,
-    )
-    .unwrap();
+    let (watterson_theta_per_pool_per_window, windows_idx_head, windows_idx_tail) =
+        theta_watterson(
+            genotypes_and_phenotypes,
+            pool_sizes,
+            window_size_bp,
+            window_slide_size_bp,
+            min_loci_per_window,
+        )
+        .unwrap();
     // println!("watterson_theta_per_pool_per_window={:?}", watterson_theta_per_pool_per_window);
     let n_pools = watterson_theta_per_pool_per_window.ncols();
     let n_windows = watterson_theta_per_pool_per_window.nrows();
@@ -228,7 +229,7 @@ mod tests {
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
             &100, // 100-bp windows
-            &50, // 50-bp window slide
+            &50,  // 50-bp window slide
             &1,
             &"test.something".to_owned(),
             &"".to_owned(),
