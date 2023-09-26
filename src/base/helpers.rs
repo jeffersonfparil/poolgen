@@ -203,7 +203,7 @@ pub fn multiply_views_xxt(
 
 /// Calculate the axis-wise means of an array while ignoring NaN
 pub fn mean_axis_ignore_nan<D>(
-    a: Array<f64, D>,
+    a: &Array<f64, D>,
     axis: usize,
 ) -> io::Result<Array<f64, <D>::Smaller>>
 where
@@ -221,11 +221,10 @@ where
                 }
             },
         );
-    let n = a
-        .axis_iter(Axis(axis))
-        .map(|x| x.iter().filter(|&&y| !y.is_nan()).count() as f64)
-        .sum::<f64>();
-    let out: Array<f64, <D>::Smaller> = sum / n;
+    let counts: Array<f64, <D>::Smaller> = a.map_axis(Axis(axis), |x| {
+        x.iter().filter(|&&y| !y.is_nan()).count() as f64
+    });
+    let out: Array<f64, <D>::Smaller> = sum / counts;
     Ok(out)
 }
 
@@ -341,8 +340,25 @@ pub fn define_sliding_windows(
     Ok((out_idx_head, out_idx_tail))
 }
 
+/// Load tables of sliding window metrics
+pub fn load_sliding_window_tables(
+    fname: &String,
+    chr_col: &usize,
+    pos_start_col: &usize,
+    pos_end_col: &usize,
+    data_start_col: &usize,
+    data_end_col: &usize,
+) -> io::Result<(Array1<String>, Array1<u64>, Array1<u64>, Array2<f64>)> {
+    Ok((
+        Array1::from_vec(vec!["".to_owned()]),
+        Array1::from_vec(vec![0]),
+        Array1::from_vec(vec![0]),
+        Array2::from_shape_vec((1, 1), vec![0.0]).unwrap(),
+    ))
+}
+
+/// Implementation of pseudo-inverse using singlar-value decomposition where $\Sigma_{j,j} < \epsilon_{machine}$ are set to zero
 impl MoorePenrosePseudoInverse for Array2<f64> {
-    /// Implementation of pseudo-inverse using singlar-value decomposition where $\Sigma_{j,j} < \epsilon_{machine}$ are set to zero
     fn pinv(&self) -> io::Result<Array2<f64>> {
         let n: usize = self.nrows();
         let p: usize = self.ncols();
@@ -464,5 +480,18 @@ mod tests {
         println!("windows_idx_tail={:?}", windows_idx_tail);
         assert_eq!(windows_idx_head, vec![0, 3]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
         assert_eq!(windows_idx_tail, vec![2, 4]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
+        let mut array2d: Array2<f64> =
+            Array2::from_shape_vec((2, 5), (0..10).map(|x| x as f64).collect::<Vec<f64>>())
+                .unwrap();
+        array2d[(0, 0)] = f64::NAN;
+        println!("array2d={:?}", array2d);
+        assert_eq!(
+            Array1::from_shape_vec(5, vec![5.0, 3.5, 4.5, 5.5, 6.5]).unwrap(),
+            mean_axis_ignore_nan(&array2d, 0).unwrap()
+        );
+        assert_eq!(
+            Array1::from_shape_vec(2, vec![2.5, 7.0]).unwrap(),
+            mean_axis_ignore_nan(&array2d, 1).unwrap()
+        );
     }
 }

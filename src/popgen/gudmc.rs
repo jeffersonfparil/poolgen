@@ -10,12 +10,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub fn gudmc(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
+    recombination_rate: &f64,
     window_size_bp: &u64,
     window_slide_size_bp: &u64,
     min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<i32> {
+    // Calculate Tajima's D
     let fname_tajima = tajima_d(
         genotypes_and_phenotypes,
         pool_sizes,
@@ -27,6 +29,7 @@ pub fn gudmc(
     )
     .unwrap();
 
+    // Calculate pairwise Fst (all pairwise combinations)
     let (_, fname_fst) = fst(
         genotypes_and_phenotypes,
         window_size_bp,
@@ -36,6 +39,9 @@ pub fn gudmc(
         &"gudmc_intermediate_file_Fst.tmp".to_owned(),
     )
     .unwrap();
+
+    // Find significant troughs (selective sweeps) and peaks (balancing selection)
+    //
 
     Ok(0)
 }
@@ -99,6 +105,7 @@ mod tests {
         let out = gudmc(
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
+            &3.14e-6,
             &100,
             &50,
             &1,
@@ -106,7 +113,7 @@ mod tests {
             &"".to_owned(),
         )
         .unwrap();
-        
+
         // Assertions
         assert_eq!(out, 0);
         // assert_eq!(0, 1);
