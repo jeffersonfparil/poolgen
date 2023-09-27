@@ -128,6 +128,12 @@ pub struct MaximumLikelihoodBeta {
     pub percs_b0: Array1<f64>,
 }
 
+// Struct for gudmc's maximum likelihood estimation for the distribution of Tajima's D which is assumed to be normally distributed centred on zero
+#[derive(Debug, Clone)]
+pub struct MaximumLikelihoodNormal {
+    pub q: Array1<f64>,
+}
+
 // Struct for regression objects
 #[derive(Debug, Clone)]
 pub struct UnivariateOrdinaryLeastSquares {

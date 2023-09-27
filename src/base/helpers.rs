@@ -343,17 +343,47 @@ pub fn define_sliding_windows(
 /// Load tables of sliding window metrics
 pub fn load_sliding_window_tables(
     fname: &String,
-    chr_col: &usize,
-    pos_start_col: &usize,
-    pos_end_col: &usize,
+    delimiter: &String,
+    idx_row_labels: &Vec<usize>,
     data_start_col: &usize,
     data_end_col: &usize,
-) -> io::Result<(Array1<String>, Array1<u64>, Array1<u64>, Array2<f64>)> {
+) -> io::Result<(Vec<String>, Vec<String>, Vec<Vec<f64>>)> {
+
+    let file = File::open(fname).unwrap();
+    let mut reader = BufReader::new(file);
+    let mut lines = reader.lines();
+    let column_labels = match lines.next() {
+        Some(x) => x.unwrap().split(delimiter.as_str()).map(|x| x.to_owned()).collect::<Vec<String>>(),
+        None => return Err(Error::new(ErrorKind::Other, "No lines found."))
+    };
+    let data_end_col = if column_labels.len() < *data_end_col {
+        column_labels.len()
+    } else {
+        *data_end_col
+    };
+    let column_labels = column_labels[*data_start_col..data_end_col].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+    let mut row_labels: Vec<String> = vec![];
+    let mut data: Vec<Vec<f64>> = vec![];
+    while let Some(line) = lines.next() {
+        let mut line = line.unwrap();
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
+        let line = line.split(delimiter.as_str()).collect::<Vec<&str>>();
+        let mut lab = vec![];
+        for i in idx_row_labels {
+            lab.push(line[*i].to_owned())
+        }
+        row_labels.push(lab.join("__-__"));
+        data.push(line[*data_start_col..data_end_col].into_iter().map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>());
+    }
     Ok((
-        Array1::from_vec(vec!["".to_owned()]),
-        Array1::from_vec(vec![0]),
-        Array1::from_vec(vec![0]),
-        Array2::from_shape_vec((1, 1), vec![0.0]).unwrap(),
+        row_labels,
+        column_labels,
+        data,
     ))
 }
 
@@ -493,5 +523,26 @@ mod tests {
             Array1::from_shape_vec(2, vec![2.5, 7.0]).unwrap(),
             mean_axis_ignore_nan(&array2d, 1).unwrap()
         );
+
+        let fname = "./tests/test.csv".to_owned();
+        let delimiter = ",".to_owned();
+        let chr_col = 0;
+        let pos_start_col = 1;
+        let pos_end_col = 1;
+        let data_start_col = 2;
+        let data_end_col = 6;
+        let (row_labels, column_labels, data) = load_sliding_window_tables(
+            &"./tests/test.csv".to_owned(),
+            &",".to_owned(),
+            &vec![0,1],
+            &2,
+            &6).unwrap();
+        println!("row_labels={:?}", row_labels);
+        println!("column_labels={:?}", column_labels);
+        println!("data={:?}", data);
+        assert_eq!(row_labels.len(), 5);
+        assert_eq!(column_labels.len(), 4);
+        assert_eq!(data[0], vec![0.1, 83.2, 0.2, 0.0]);
+        assert_eq!(data[4], vec![0.9, 12.0, 1.0, 0.0]);
     }
 }
