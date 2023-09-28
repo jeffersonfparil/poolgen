@@ -6,6 +6,7 @@ use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Tajima's D
+/// Note: Window sizes smaller than the requested window size can be expected because the actual window sizes noted are dependent on the minimum coverage per window, such that window sizes are based on the coordinates of the loci covered
 pub fn tajima_d(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,

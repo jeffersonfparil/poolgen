@@ -5,6 +5,7 @@ use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unbiased multi-allelic version of Fst similar to [Gautier et al, 2019](https://doi.org/10.1111/1755-0998.13557) which assumes biallelic loci
+/// Note: Window sizes smaller than the requested window size can be expected because the actual window sizes noted are dependent on the minimum coverage per window, such that window sizes are based on the coordinates of the loci covered
 pub fn fst(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &u64,

@@ -378,7 +378,10 @@ pub fn load_sliding_window_tables(
             lab.push(line[*i].to_owned())
         }
         row_labels.push(lab.join("__-__"));
-        data.push(line[*data_start_col..data_end_col].into_iter().map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>());
+        data.push(line[*data_start_col..data_end_col]
+            .into_iter()
+            .map(|x| match x.parse::<f64>(){Ok(x)=>x, Err(_)=>f64::NAN})
+            .collect::<Vec<f64>>());
     }
     Ok((
         row_labels,

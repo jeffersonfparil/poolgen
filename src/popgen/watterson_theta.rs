@@ -32,6 +32,7 @@ fn polymorphic_loci_per_pool(
 /// Watterson's estimator of theta
 /// Simply (naively?) defined as $theta_w = number of segregating sites / \Sigma^{n-1}_{i=1}(1/i)$
 /// For details see [Feretti et al, 2013](https://doi.org/10.1111/mec.12522)
+/// Note: Window sizes smaller than the requested window size can be expected because the actual window sizes noted are dependent on the minimum coverage per window, such that window sizes are based on the coordinates of the loci covered
 pub fn theta_watterson(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,

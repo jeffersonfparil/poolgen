@@ -6,6 +6,7 @@ use std::io::{Error, ErrorKind};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unbiased multi-allelic nucleotide diversity per population ($\pi$ or $\theta_{\pi}=4N_{e}\mu$), which is similar to [Korunes & Samuk 2019](https://doi.org/10.1111/1755-0998.13326) which assumes biallelic loci
+/// Note: Window sizes smaller than the requested window size can be expected because the actual window sizes noted are dependent on the minimum coverage per window, such that window sizes are based on the coordinates of the loci covered
 pub fn theta_pi(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     window_size_bp: &u64,

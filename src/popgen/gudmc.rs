@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use argmin::core::{self, CostFunction, Executor};
 use argmin::solver::neldermead::NelderMead;
 use statrs::distribution::Normal;
+use statrs::statistics::Statistics;
 
 const PARAMETER_LOWER_LIMIT: f64 = f64::EPSILON;
 const PARAMETER_UPPER_LIMIT: f64 = 1e24;
@@ -39,13 +40,13 @@ impl CostFunction for MaximumLikelihoodNormal {
 
 fn ml_normal_1d(
     solver: NelderMead<Vec<f64>, f64>,
-    q: Array1<f64>,
+    q: &Array1<f64>,
 ) -> Option<Vec<f64>> {
     let cost = MaximumLikelihoodNormal {
-        q: q,
+        q: q.clone(),
     };
     let res = match Executor::new(cost, solver)
-        .configure(|state| state.max_iters(1_000))
+        .configure(|state| state.max_iters(10_000))
         // .add_observer(SlogLogger::term(), ObserverMode::NewBest)
         .run()
     {
@@ -54,8 +55,8 @@ fn ml_normal_1d(
     };
     // println!("CONVERGENCE: {:?}", res.state());
     let params = res.state().param.clone().unwrap();
-    let solution =
-        bound_parameters_with_logit(&params, PARAMETER_LOWER_LIMIT, PARAMETER_UPPER_LIMIT);
+    let solution = vec![params[0], 
+        bound_parameters_with_logit(&vec![params[1]], PARAMETER_LOWER_LIMIT, PARAMETER_UPPER_LIMIT)[0]];
     Some(solution)
 }
 
@@ -64,6 +65,7 @@ fn ml_normal_1d(
 pub fn gudmc(
     genotypes_and_phenotypes: &GenotypesAndPhenotypes,
     pool_sizes: &Vec<f64>,
+    sigma_threshold: &f64,
     recombination_rate: &f64,
     window_size_bp: &u64,
     window_slide_size_bp: &u64,
@@ -71,6 +73,7 @@ pub fn gudmc(
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<i32> {
+    /////////////////////////////////////////////////////////
     // Calculate Tajima's D
     let fname_tajima = tajima_d(
         genotypes_and_phenotypes,
@@ -86,10 +89,11 @@ pub fn gudmc(
         &",".to_owned(), // rows are the populations, and columns are the windows
         &vec![0], // population ID
         &2, // skip the population ID and mean Tajima's D across the whole genome
-        &10_000_000_000_000_000_000).unwrap();
-        println!("tajima_row_labels={:?}", tajima_row_labels);
-        println!("tajima_col_labels={:?}", tajima_col_labels);
-        println!("tajima={:?}", tajima);
+        &(PARAMETER_UPPER_LIMIT as usize)).unwrap();
+        // println!("tajima_row_labels={:?}", tajima_row_labels);
+        // println!("tajima_col_labels={:?}", tajima_col_labels);
+        // println!("tajima={:?}", tajima);
+    /////////////////////////////////////////////////////////
     // Calculate pairwise Fst (all pairwise combinations)
     let (_, fname_fst) = fst(
         genotypes_and_phenotypes,
@@ -104,10 +108,10 @@ pub fn gudmc(
         &",".to_owned(), // rows are the windows, and columns are population pairs
         &vec![0,1,2], // chr, pos_ini, and pos_fin
         &3, // start of pairwise Fst per window
-        &10_000_000_000_000_000_000).unwrap(); // set the end column to a very large number so we default to the last column
-        println!("fst_row_labels={:?}", fst_row_labels);
-        println!("fst_col_labels={:?}", fst_col_labels);
-        println!("fst={:?}", fst);
+        &(PARAMETER_UPPER_LIMIT as usize)).unwrap(); // set the end column to a very large number so we default to the last column
+        // println!("fst_row_labels={:?}", fst_row_labels);
+        // println!("fst_col_labels={:?}", fst_col_labels);
+        // println!("fst={:?}", fst);
     // Sanity checks
     let n = tajima.len();       // number of populations
     let w = tajima[0].len();    // number of windows
@@ -115,26 +119,194 @@ pub fn gudmc(
     let w_ = fst.len();         // number of windows according to Fst matrix - compare with that of Tajima's D matrix
     assert!(n*n == nxn, "Tajima's D and Fst calculations are not matching.");
     assert!(w == w_, "Tajima's D and Fst calculations are not matching.");
+    /////////////////////////////////////////////////////////
     // PER POPULATION: find significant troughs (selective sweeps) and peaks (balancing selection) and meausre their widths
     let mut tajima_pop: Vec<String> = vec![];
-    let mut tajima_chr: Vec<String> = vec![];
-    let mut tajima_pos_ini: Vec<u64> = vec![];
-    let mut tajima_pos_fin: Vec<u64> = vec![];
-    let mut tajima_d: Vec<f64> = vec![];
-    let mut tajima_width: Vec<f64> = vec![];
+    let mut tajima_chr: Vec<Vec<String>> = vec![]; // each sub-vector represents a population
+    let mut tajima_pos_ini: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
+    let mut tajima_pos_fin: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
+    let mut tajima_d: Vec<Vec<f64>> = vec![]; // each sub-vector represents a population
+    let mut tajima_width: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
     for i in 0..n {
-        let d = Array1::from_vec(tajima[i].clone());
-        println!("d={:?}", d);
-        // Fit a normal distribution to d and find the location of d_i at p-value <= 5% (two-tailed)
+        // Instatntiate the information for the current population
+        tajima_pop.push(tajima_row_labels[i].clone());
+        tajima_chr.push(vec![]);
+        tajima_pos_ini.push(vec![]);
+        tajima_pos_fin.push(vec![]);
+        tajima_d.push(vec![]);
+        tajima_width.push(vec![]);
+        let d = Array1::from_vec(tajima[i]
+            .iter()
+            .filter(|&&x| x.is_nan() == false )
+            .map(|&x| x.clone())
+            .collect::<Vec<f64>>()
+        );
+        // Fit a normal distribution to d and find the location of d_i >= sigma_threshold
         let solver = prepare_solver_neldermead(2.0, 1.0);
-        let solution = match ml_normal_1d(solver, d) {
+        let solution = match ml_normal_1d(solver, &d) {
             Some(x) => x,
             None => vec![f64::NAN, f64::NAN],
         };
-        println!("solution={:?}", solution);
+        // println!("d={:?}", d);
+        // println!("solution={:?}", solution);
+        // println!("mean={:?}; sd={:?}; min={:?}; max={:?}", 
+        //     &d.mean(), 
+        //     &d.std(1.0), 
+        //     d.iter().fold(d[0], |min, &x| if x<min{x}else{min}), 
+        //     d.iter().fold(d[0], |max, &x| if x>max{x}else{max}));
+        // Find troughs and peaks above the `sigma_threshold`
+        for j in 0..d.len() {
+            if (d[j] - solution[0]).abs() >= *sigma_threshold {
+                // println!("tajima_col_labels[j]={:?}", tajima_col_labels[j]);
+                let window_id = tajima_col_labels[j]
+                    .split("-")
+                    .collect::<Vec<&str>>()[1]
+                    .to_owned()
+                    .split("_")
+                    .map(|x| x.to_owned())
+                    .collect::<Vec<String>>();
+                tajima_chr[i].push(window_id[0..(window_id.len()-2)].join("_").to_owned());
+                tajima_pos_ini[i].push(window_id[window_id.len()-2].parse::<u64>().unwrap());
+                tajima_pos_fin[i].push(window_id[window_id.len()-1].parse::<u64>().unwrap());
+                tajima_d[i].push(d[j]);
+                tajima_width[i].push(tajima_pos_fin[i].last().unwrap() - tajima_pos_ini[i].last().unwrap());
+                // Estimate trough and peak widths
+                if tajima_chr[i].len() > 1 {
+                    let idx_current = tajima_chr[i].len() - 1;
+                    let idx_previous = idx_current - 1;
+                    if (tajima_chr[i][idx_current] == tajima_chr[i][idx_previous]) & (tajima_pos_ini[i][idx_current] <= tajima_pos_fin[i][idx_previous]) {
+                        tajima_width[i][idx_current] += tajima_width[i][idx_previous];
+                    }
+                }
+                // Skip if if have smaller than expected window sizes (Note: we expect at least half the window size in size, we can get smaller window sizes as function of the minimum coverage per window and we are noting window sizes based on the coordinates of the loci covered)
+                if tajima_width[i].last().unwrap() < &((*window_size_bp as f64 / 2.0).ceil() as u64) {
+                // if tajima_width[i].last().unwrap() < &1 {
+                    tajima_pop[i].pop();
+                    tajima_chr[i].pop();
+                    tajima_pos_ini[i].pop();
+                    tajima_pos_fin[i].pop();
+                    tajima_d[i].pop();
+                    tajima_width[i].pop();
+                }
+            }
+        }
+    }
+    // println!("tajima_pop={:?}", tajima_pop);
+    // println!("tajima_chr={:?}", tajima_chr);
+    // println!("tajima_pos_ini={:?}", tajima_pos_ini);
+    // println!("tajima_pos_fin={:?}", tajima_pos_fin);
+    // println!("tajima_d={:?}", tajima_d);
+    // println!("tajima_width={:?}", tajima_width);
+    
+    /////////////////////////////////////////////////////////
+    // Extract pairwise Fst per window per population pair
+    // println!("fst_row_labels={:?}", fst_row_labels);
+    // println!("fst_col_labels={:?}", fst_col_labels);
+    // println!("fst={:?}", fst);
+    // println!("fst_row_labels.len()={:?}", fst_row_labels.len());
+    // println!("fst_col_labels.len()={:?}", fst_col_labels.len());
+    // println!("fst.len()={:?}", fst.len());
+    // println!("fst[0].len()={:?}", fst[0].len());
+    let mut fst_pop_a: Vec<String> = vec![];
+    let mut fst_pop_b: Vec<String> = vec![];
+    let mut fst_chr: Vec<Vec<String>> = vec![]; // each sub-vector represents a population
+    let mut fst_pos_ini: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
+    let mut fst_pos_fin: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
+    let mut fst_f: Vec<Vec<f64>> = vec![]; // each sub-vector represents a population
+    let mut fst_mean_f: Vec<f64> = vec![];
+    for j in 0..fst_col_labels.len() {
+        let pops = fst_col_labels[j].split("_vs_").collect::<Vec<&str>>();
+        fst_pop_a.push(pops[0].to_owned());
+        fst_pop_b.push(pops[1].to_owned());
+        fst_chr.push(vec![]);
+        fst_pos_ini.push(vec![]);
+        fst_pos_fin.push(vec![]);
+        fst_f.push(vec![]);
+        for i in 0..fst_row_labels.len() {
+            let window = fst_row_labels[i].split("__-__").collect::<Vec<&str>>();
+            fst_chr[j].push(window[0].to_owned());
+            fst_pos_ini[j].push(window[1].parse::<u64>().unwrap());
+            fst_pos_fin[j].push(window[2].parse::<u64>().unwrap());
+            fst_f[j].push(fst[i][j]);
+        }
+        fst_mean_f.push(fst_f[j]
+            .clone()
+            .into_iter()
+            .filter(|&x| x.is_nan() == false)
+            .collect::<Vec<f64>>()
+            .mean());
+    }
+    // println!("fst_pop_a={:?}", fst_pop_a);
+    // println!("fst_pop_b={:?}", fst_pop_b);
+    // println!("fst_chr={:?}", fst_chr);
+    // println!("fst_pos_ini={:?}", fst_pos_ini);
+    // println!("fst_pos_fin={:?}", fst_pos_fin);
+    // println!("fst_f={:?}", fst_f);
+    // println!("fst_mean_f={:?}", fst_mean_f);
+
+    /////////////////////////////////////////////////////////
+    // PER PAIR OF POPULATIONS: find the significant deviations in Fst 
+    // within the above-identified Tajima's D peaks and troughs
+
+    let mut pop_a: Vec<String> = vec![];
+    let mut pop_b: Vec<String> = vec![];
+    let mut chr: Vec<Vec<String>> = vec![];
+    let mut pos_ini: Vec<Vec<u64>> = vec![];
+    let mut pos_fin: Vec<Vec<u64>> = vec![];
+    let mut tajima_width_pop_b: Vec<Vec<u64>> = vec![];
+
+    // NEXT ADD DEVIATION OF WIDTH FROM EXPECTATIONS BASED ON RECOMBINATION RATE! 2023/09/28
+
+    let mut fst_delta: Vec<Vec<f64>> = vec![];
+    'outer: for i in 0..fst_pop_a.len() {
+        let a = fst_pop_a[i].clone();
+        let b = fst_pop_b[i].clone();
+        let idx_tajima = match tajima_pop.iter().position(|x| x == &b) {
+            Some(x) => x,
+            None => continue 'outer,
+        };
+        pop_a.push(a);
+        pop_b.push(b);
+        chr.push(vec![]);
+        pos_ini.push(vec![]);
+        pos_fin.push(vec![]);
+        tajima_width_pop_b.push(vec![]);
+        fst_delta.push(vec![]);
+        'inner: for j in 0..tajima_d[idx_tajima].len() {
+            let tajima_window_id = tajima_chr[idx_tajima][j].to_owned() 
+                + ":" 
+                + &tajima_pos_ini[idx_tajima][j].to_string() 
+                + "-"
+                + &tajima_pos_fin[idx_tajima][j].to_string();
+            // println!("tajima_window_id={:?}", tajima_window_id);
+            let idx_fst = match (0..fst_chr[i].len())
+                .position(|idx| tajima_window_id == fst_chr[i][idx].to_owned()
+                    + ":"
+                    + &fst_pos_ini[i][idx].to_string()
+                    + "-"
+                    + &fst_pos_fin[i][idx].to_string()) {
+                Some(x) => x,
+                None => continue 'inner,
+            };
+            // println!("idx_fst={:?}", idx_fst);
+            chr[i].push(tajima_chr[idx_tajima][j].to_owned());
+            pos_ini[i].push(tajima_pos_ini[idx_tajima][j]);
+            pos_fin[i].push(tajima_pos_fin[idx_tajima][j]);
+            tajima_width_pop_b[i].push(tajima_width[idx_tajima][j]);
+            fst_delta[i].push(fst_f[i][idx_fst] - fst_mean_f[i]);
+        }
     }
 
-    // PER PAIR OF POPULATIONS: find the significant deviations in Fst within the above-identified Tajima's D peaks and troughs
+
+    println!("pop_a={:?}", pop_a);
+    println!("pop_b={:?}", pop_b);
+    println!("chr={:?}", chr);
+    println!("pos_ini={:?}", pos_ini);
+    println!("pos_fin={:?}", pos_fin);
+    println!("tajima_width_pop_b={:?}", tajima_width_pop_b);
+    println!("fst_delta={:?}", fst_delta);
+
+
 
     Ok(0)
 }
@@ -146,62 +318,41 @@ mod tests {
     use super::*;
     #[test]
     fn test_gudmc() {
-        let x: Array2<f64> = Array2::from_shape_vec(
-            (5, 6),
-            vec![
-                1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.5, 0.5, 0.0,
-                0.5, 0.5, 1.0, 0.7, 0.2, 0.1, 0.7, 0.3, 1.0, 0.7, 0.2, 0.1, 0.7, 0.3,
-            ],
-        )
-        .unwrap();
-        let y: Array2<f64> = Array2::from_shape_vec(
-            (5, 2),
-            vec![2.0, 0.5, 1.0, 0.2, 2.0, 0.5, 4.0, 0.0, 5.0, 0.5],
-        )
-        .unwrap();
-        let genotypes_and_phenotypes = GenotypesAndPhenotypes {
-            chromosome: vec![
-                "Intercept".to_owned(),
-                "X".to_owned(),
-                "X".to_owned(),
-                "X".to_owned(),
-                "Y".to_owned(),
-                "Y".to_owned(),
-            ],
-            position: vec![0, 123, 123, 123, 456, 456],
-            allele: vec![
-                "Intercept".to_owned(),
-                "a".to_string(),
-                "g".to_string(),
-                "d".to_string(),
-                "c".to_string(),
-                "t".to_string(),
-            ],
-            intercept_and_allele_frequencies: x.clone(),
-            phenotypes: y.clone(),
-            pool_names: vec![
-                "Pop1".to_owned(),
-                "Pop2".to_owned(),
-                "Pop3".to_owned(),
-                "Pop4".to_owned(),
-                "Pop5".to_owned(),
-            ],
-            coverages: Array2::from_shape_vec(
-                (5, 2),
-                vec![
-                    10.0, 10.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
-                ],
-            )
-            .unwrap(),
+        let file_sync = FileSync {
+            filename: "./tests/test.sync".to_owned(),
+            test: "gudmc".to_owned(),
         };
+
+        let file_phen = FilePhen {
+            filename: "./tests/test.csv".to_owned(),
+            delim: ",".to_owned(),
+            names_column_id: 0,
+            sizes_column_id: 1,
+            trait_values_column_ids: vec![3],
+            format: "default".to_owned(),
+        };
+        let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+        let filter_stats = FilterStats {
+            remove_ns: false,
+            min_quality: 0.01,
+            min_coverage: 1,
+            min_allele_frequency: 0.001,
+            pool_sizes: vec![42.0, 42.0, 42.0, 42.0, 42.0],
+        };
+        let genotypes_and_phenotypes = file_sync_phen
+                .into_genotypes_and_phenotypes(&filter_stats, false, &2)
+                .unwrap(); // we need all alleles in each locus
+
+
         // Outputs
         let out = gudmc(
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
+            &2.0,
             &3.14e-6,
             &100,
             &50,
-            &1,
+            &20,
             &"test.something".to_owned(),
             &"".to_owned(),
         )

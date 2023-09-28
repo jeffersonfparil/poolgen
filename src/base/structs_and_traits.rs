@@ -26,7 +26,8 @@ pub struct FileSync {
 /// - `delim` - string delimiter of the phenotype file (e.g. `","` or `"\t"`)
 /// - `names_column_id` - index of the column containing the names of the pools or populations
 /// - `sizes_column_id` - index of the column contating the sizes of each pool or population
-/// - `trait_values_column_ids` -
+/// - `trait_values_column_ids` - vector of indexes corresponding to the column containing the trait values to be included in the analyses (Note that multi-trait analyese may not be available to all analyses types)
+/// - `format` - string defining the format of the phenotype file as `default` for simple delimited file or `gwalpha_fmt` for GWAlpha-required format (for back-compatibility with github.com/aflevel/GWAlpha/GWAlpha.py)
 #[derive(Debug, Clone)]
 pub struct FilePhen {
     pub filename: String,
