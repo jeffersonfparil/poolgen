@@ -348,20 +348,26 @@ pub fn load_sliding_window_tables(
     data_start_col: &usize,
     data_end_col: &usize,
 ) -> io::Result<(Vec<String>, Vec<String>, Vec<Vec<f64>>)> {
-
     let file = File::open(fname).unwrap();
     let mut reader = BufReader::new(file);
     let mut lines = reader.lines();
     let column_labels = match lines.next() {
-        Some(x) => x.unwrap().split(delimiter.as_str()).map(|x| x.to_owned()).collect::<Vec<String>>(),
-        None => return Err(Error::new(ErrorKind::Other, "No lines found."))
+        Some(x) => x
+            .unwrap()
+            .split(delimiter.as_str())
+            .map(|x| x.to_owned())
+            .collect::<Vec<String>>(),
+        None => return Err(Error::new(ErrorKind::Other, "No lines found.")),
     };
     let data_end_col = if column_labels.len() < *data_end_col {
         column_labels.len()
     } else {
         *data_end_col
     };
-    let column_labels = column_labels[*data_start_col..data_end_col].into_iter().map(|x| x.to_owned()).collect::<Vec<String>>();
+    let column_labels = column_labels[*data_start_col..data_end_col]
+        .into_iter()
+        .map(|x| x.to_owned())
+        .collect::<Vec<String>>();
     let mut row_labels: Vec<String> = vec![];
     let mut data: Vec<Vec<f64>> = vec![];
     while let Some(line) = lines.next() {
@@ -378,16 +384,17 @@ pub fn load_sliding_window_tables(
             lab.push(line[*i].to_owned())
         }
         row_labels.push(lab.join("__-__"));
-        data.push(line[*data_start_col..data_end_col]
-            .into_iter()
-            .map(|x| match x.parse::<f64>(){Ok(x)=>x, Err(_)=>f64::NAN})
-            .collect::<Vec<f64>>());
+        data.push(
+            line[*data_start_col..data_end_col]
+                .into_iter()
+                .map(|x| match x.parse::<f64>() {
+                    Ok(x) => x,
+                    Err(_) => f64::NAN,
+                })
+                .collect::<Vec<f64>>(),
+        );
     }
-    Ok((
-        row_labels,
-        column_labels,
-        data,
-    ))
+    Ok((row_labels, column_labels, data))
 }
 
 /// Implementation of pseudo-inverse using singlar-value decomposition where $\Sigma_{j,j} < \epsilon_{machine}$ are set to zero
@@ -537,9 +544,11 @@ mod tests {
         let (row_labels, column_labels, data) = load_sliding_window_tables(
             &"./tests/test.csv".to_owned(),
             &",".to_owned(),
-            &vec![0,1],
+            &vec![0, 1],
             &2,
-            &6).unwrap();
+            &6,
+        )
+        .unwrap();
         println!("row_labels={:?}", row_labels);
         println!("column_labels={:?}", column_labels);
         println!("data={:?}", data);
