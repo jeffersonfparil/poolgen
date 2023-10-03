@@ -134,6 +134,8 @@ pub fn gudmc(
     let mut tajima_pos_ini: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
     let mut tajima_pos_fin: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
     let mut tajima_d: Vec<Vec<f64>> = vec![]; // each sub-vector represents a population
+    let mut tajima_d_mean: Vec<Vec<f64>> = vec![]; // each sub-vector represents a population
+    let mut tajima_d_sd: Vec<Vec<f64>> = vec![]; // each sub-vector represents a population
     let mut tajima_width: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
     for i in 0..n {
         // Instatntiate the information for the current population
@@ -142,6 +144,8 @@ pub fn gudmc(
         tajima_pos_ini.push(vec![]);
         tajima_pos_fin.push(vec![]);
         tajima_d.push(vec![]);
+        tajima_d_mean.push(vec![]);
+        tajima_d_sd.push(vec![]);
         tajima_width.push(vec![]);
         let d = Array1::from_vec(
             tajima[i]
@@ -176,6 +180,8 @@ pub fn gudmc(
                 tajima_pos_ini[i].push(window_id[window_id.len() - 2].parse::<u64>().unwrap());
                 tajima_pos_fin[i].push(window_id[window_id.len() - 1].parse::<u64>().unwrap());
                 tajima_d[i].push(d[j]);
+                tajima_d_mean[i].push(solution[0]);
+                tajima_d_sd[i].push(solution[1]);
                 tajima_width[i]
                     .push(tajima_pos_fin[i].last().unwrap() - tajima_pos_ini[i].last().unwrap());
                 // Estimate trough and peak widths
@@ -197,6 +203,8 @@ pub fn gudmc(
                     tajima_pos_ini[i].pop();
                     tajima_pos_fin[i].pop();
                     tajima_d[i].pop();
+                    tajima_d_mean[i].pop();
+                    tajima_d_sd[i].pop();
                     tajima_width[i].pop();
                 }
             }
@@ -224,8 +232,8 @@ pub fn gudmc(
     let mut fst_pos_ini: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
     let mut fst_pos_fin: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
     let mut fst_f: Vec<Vec<f64>> = vec![]; // each sub-vector represents a population
-    let mut fst_mean_f: Vec<f64> = vec![];
-    let mut fst_sd_f: Vec<f64> = vec![];
+    let mut fst_f_mean: Vec<f64> = vec![];
+    let mut fst_f_sd: Vec<f64> = vec![];
     // let mut test: Vec<f64> = vec![];
     for j in 0..fst_col_labels.len() {
         let pops = fst_col_labels[j].split("_vs_").collect::<Vec<&str>>();
@@ -255,18 +263,9 @@ pub fn gudmc(
             Some(x) => x,
             None => vec![f64::NAN, f64::NAN],
         };
-        fst_mean_f.push(solution[0]);
-        fst_sd_f.push(solution[1]);
-        // test.push(f.mean());
+        fst_f_mean.push(solution[0]);
+        fst_f_sd.push(solution[1]);
     }
-    // println!("fst_pop_a={:?}", fst_pop_a);
-    // println!("fst_pop_b={:?}", fst_pop_b);
-    // println!("fst_chr={:?}", fst_chr);
-    // println!("fst_pos_ini={:?}", fst_pos_ini);
-    // println!("fst_pos_fin={:?}", fst_pos_fin);
-    // println!("fst_f={:?}", fst_f);
-    // println!("fst_mean_f={:?}", fst_mean_f);
-    // println!("test={:?}", test);
 
     /////////////////////////////////////////////////////////
     // PER PAIR OF POPULATIONS: find the significant deviations in Fst
@@ -276,6 +275,10 @@ pub fn gudmc(
     let mut chr: Vec<Vec<String>> = vec![];
     let mut pos_ini: Vec<Vec<u64>> = vec![];
     let mut pos_fin: Vec<Vec<u64>> = vec![];
+    let mut mean_tajima_d_pop_b: Vec<Vec<f64>> = vec![];
+    let mut mean_fst: Vec<Vec<f64>> = vec![];
+    let mut sd_tajima_d_pop_b: Vec<Vec<f64>> = vec![];
+    let mut sd_fst: Vec<Vec<f64>> = vec![];
     let mut tajima_d_pop_b: Vec<Vec<f64>> = vec![];
     let mut tajima_width_pop_b: Vec<Vec<f64>> = vec![];
     let mut tajima_width_deviation_from_r_pop_b: Vec<Vec<f64>> = vec![];
@@ -299,6 +302,10 @@ pub fn gudmc(
         chr.push(vec![]);
         pos_ini.push(vec![]);
         pos_fin.push(vec![]);
+        mean_tajima_d_pop_b.push(vec![]);
+        mean_fst.push(vec![]);
+        sd_tajima_d_pop_b.push(vec![]);
+        sd_fst.push(vec![]);
         tajima_d_pop_b.push(vec![]);
         tajima_width_pop_b.push(vec![]);
         tajima_width_deviation_from_r_pop_b.push(vec![]);
@@ -327,13 +334,17 @@ pub fn gudmc(
             chr[i].push(tajima_chr[idx_tajima][j].to_owned());
             pos_ini[i].push(tajima_pos_ini[idx_tajima][j]);
             pos_fin[i].push(tajima_pos_fin[idx_tajima][j]);
+            mean_tajima_d_pop_b[i].push(tajima_d_mean[idx_tajima][j]);
+            sd_tajima_d_pop_b[i].push(tajima_d_sd[idx_tajima][j]);
             tajima_d_pop_b[i].push(tajima_d[idx_tajima][j]);
             let width = tajima_width[idx_tajima][j] as f64;
             tajima_width_pop_b[i].push(width);
             tajima_width_deviation_from_r_pop_b[i].push(width - recombination_width_bp);
-            fst_delta[i].push(fst_f[i][idx_fst] - fst_mean_f[i]);
-            let dist = Normal::new(fst_mean_f[i], fst_sd_f[i]).unwrap();
-            let pval = if fst_f[i][idx_fst] < fst_mean_f[i] {
+            fst_delta[i].push(fst_f[i][idx_fst] - fst_f_mean[i]);
+            mean_fst[i].push(fst_f_mean[i]); // redundant copying but I just want the all output vectors to be generated here - will need to refactor!
+            sd_fst[i].push(fst_f_sd[i]); // redundant copying but I just want the all output vectors to be generated here - will need to refactor!
+            let dist = Normal::new(fst_f_mean[i], fst_f_sd[i]).unwrap();
+            let pval = if fst_f[i][idx_fst] < fst_f_mean[i] {
                 dist.cdf(fst_f[i][idx_fst])
             } else {
                 1.0 - dist.cdf(fst_f[i][idx_fst])
@@ -358,25 +369,6 @@ pub fn gudmc(
             tajima_width_one_tail_pval_pop_b[i].push(pval);
         }
     }
-
-    println!("pop_a={:?}", pop_a);
-    println!("pop_b={:?}", pop_b);
-    println!("chr={:?}", chr);
-    println!("pos_ini={:?}", pos_ini);
-    println!("pos_fin={:?}", pos_fin);
-    println!("tajima_d_pop_b={:?}", tajima_d_pop_b);
-    println!("tajima_width_pop_b={:?}", tajima_width_pop_b);
-    println!(
-        "tajima_width_deviation_from_r_pop_b={:?}",
-        tajima_width_deviation_from_r_pop_b
-    );
-    println!(
-        "tajima_width_one_tail_pval_pop_b={:?}",
-        tajima_width_one_tail_pval_pop_b
-    );
-    println!("fst_delta={:?}", fst_delta);
-    println!("fst_delta_one_tail_pval={:?}", fst_delta_one_tail_pval);
-
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
@@ -413,6 +405,10 @@ pub fn gudmc(
         "chr",
         "pos_ini",
         "pos_fin",
+        "mean_tajima_d_pop_b",
+        "mean_fst",
+        "sd_tajima_d_pop_b",
+        "sd_fst",
         "tajima_d_pop_b",
         "tajima_width_pop_b",
         "tajima_width_deviation_from_r_pop_b",
@@ -433,6 +429,10 @@ pub fn gudmc(
                 chr[i][j].clone(),
                 pos_ini[i][j].to_string(),
                 pos_fin[i][j].to_string(),
+                parse_f64_roundup_and_own(mean_tajima_d_pop_b[i][j], 7),
+                parse_f64_roundup_and_own(mean_fst[i][j], 7),
+                parse_f64_roundup_and_own(sd_tajima_d_pop_b[i][j], 7),
+                parse_f64_roundup_and_own(sd_fst[i][j], 7),
                 tajima_d_pop_b[i][j].to_string(),
                 tajima_width_pop_b[i][j].to_string(),
                 tajima_width_deviation_from_r_pop_b[i][j].to_string(),
