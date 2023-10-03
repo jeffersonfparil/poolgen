@@ -5,7 +5,7 @@ use argmin::solver::neldermead::NelderMead;
 use ndarray::{prelude::*, Zip};
 use statrs::distribution::{Continuous, ContinuousCDF, Normal};
 use statrs::statistics::Statistics;
-use std::fs::OpenOptions;
+use std::fs;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -225,6 +225,7 @@ pub fn gudmc(
     let mut fst_pos_fin: Vec<Vec<u64>> = vec![]; // each sub-vector represents a population
     let mut fst_f: Vec<Vec<f64>> = vec![]; // each sub-vector represents a population
     let mut fst_mean_f: Vec<f64> = vec![];
+    let mut fst_sd_f: Vec<f64> = vec![];
     // let mut test: Vec<f64> = vec![];
     for j in 0..fst_col_labels.len() {
         let pops = fst_col_labels[j].split("_vs_").collect::<Vec<&str>>();
@@ -255,6 +256,7 @@ pub fn gudmc(
             None => vec![f64::NAN, f64::NAN],
         };
         fst_mean_f.push(solution[0]);
+        fst_sd_f.push(solution[1]);
         // test.push(f.mean());
     }
     // println!("fst_pop_a={:?}", fst_pop_a);
@@ -279,6 +281,7 @@ pub fn gudmc(
     let mut tajima_width_deviation_from_r_pop_b: Vec<Vec<f64>> = vec![];
     let mut tajima_width_one_tail_pval_pop_b: Vec<Vec<f64>> = vec![];
     let mut fst_delta: Vec<Vec<f64>> = vec![];
+    let mut fst_delta_one_tail_pval: Vec<Vec<f64>> = vec![];
     // The recombination width in bp below is the estimated minimum width of Tajima's D troughs and peaks, however
     //      this is likely an overestimation as a function of the sparsity of the genotyping coverage.
     //      Hence, we are modeling the widths of Tajima's D as a normal distribution ,
@@ -301,6 +304,7 @@ pub fn gudmc(
         tajima_width_deviation_from_r_pop_b.push(vec![]);
         tajima_width_one_tail_pval_pop_b.push(vec![]);
         fst_delta.push(vec![]);
+        fst_delta_one_tail_pval.push(vec![]);
         'inner: for j in 0..tajima_d[idx_tajima].len() {
             let tajima_window_id = tajima_chr[idx_tajima][j].to_owned()
                 + ":"
@@ -328,6 +332,13 @@ pub fn gudmc(
             tajima_width_pop_b[i].push(width);
             tajima_width_deviation_from_r_pop_b[i].push(width - recombination_width_bp);
             fst_delta[i].push(fst_f[i][idx_fst] - fst_mean_f[i]);
+            let dist = Normal::new(fst_mean_f[i], fst_sd_f[i]).unwrap();
+            let pval = if fst_f[i][idx_fst] < fst_mean_f[i] {
+                dist.cdf(fst_f[i][idx_fst])
+            } else {
+                1.0 - dist.cdf(fst_f[i][idx_fst])
+            };
+            fst_delta_one_tail_pval[i].push(pval);
         }
         // Model the widths of the siginificantly deviating troughs and peaks of Tajima's D as a normal distribution
         //  and attach their respective one-tailed p-values
@@ -364,6 +375,81 @@ pub fn gudmc(
         tajima_width_one_tail_pval_pop_b
     );
     println!("fst_delta={:?}", fst_delta);
+    println!("fst_delta_one_tail_pval={:?}", fst_delta_one_tail_pval);
+
+    // Write output
+    let mut fname_output = fname_output.to_owned();
+    if fname_output == "".to_owned() {
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        let bname = fname_input
+            .split(".")
+            .map(|a| a.to_owned())
+            .collect::<Vec<String>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()[1..]
+            .to_owned()
+            .into_iter()
+            .rev()
+            .collect::<Vec<String>>()
+            .join(".");
+        fname_output = bname.to_owned() + "-gudmc-" + &time.to_string() + ".csv";
+    }
+    // Instantiate output file
+    let error_writing_file = "Unable to create file: ".to_owned() + &fname_output;
+    let mut file_out = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .append(false)
+        .open(&fname_output)
+        .expect(&error_writing_file);
+    // Header
+    let mut line: Vec<String> = vec![
+        "pop_a",
+        "pop_b",
+        "chr",
+        "pos_ini",
+        "pos_fin",
+        "tajima_d_pop_b",
+        "tajima_width_pop_b",
+        "tajima_width_deviation_from_r_pop_b",
+        "tajima_width_one_tail_pval_pop_b",
+        "fst_delta",
+        "fst_delta_one_tail_pval",
+    ]
+    .iter()
+    .map(|&x| x.to_owned())
+    .collect();
+    let line = line.join(",") + "\n";
+    file_out.write_all(line.as_bytes()).unwrap();
+    for i in 0..pop_a.len() {
+        for j in 0..chr[i].len() {
+            let line = vec![
+                pop_a[i].clone(),
+                pop_b[i].clone(),
+                chr[i][j].clone(),
+                pos_ini[i][j].to_string(),
+                pos_fin[i][j].to_string(),
+                tajima_d_pop_b[i][j].to_string(),
+                tajima_width_pop_b[i][j].to_string(),
+                tajima_width_deviation_from_r_pop_b[i][j].to_string(),
+                parse_f64_roundup_and_own(tajima_width_one_tail_pval_pop_b[i][j], 7),
+                parse_f64_roundup_and_own(fst_delta[i][j], 7),
+                parse_f64_roundup_and_own(fst_delta_one_tail_pval[i][j], 7),
+            ]
+            .join(",")
+                + "\n";
+            file_out.write_all(line.as_bytes()).unwrap();
+        }
+    }
+
+    // Cleanup
+    let _ = fs::remove_file("gudmc_intermediate_file_tajimasD.tmp");
+    let _ = fs::remove_file("gudmc_intermediate_file_Fst.tmp");
+    let _ = fs::remove_file(fname_fst);
 
     Ok(0)
 }
@@ -416,6 +502,6 @@ mod tests {
 
         // Assertions
         assert_eq!(out, 0);
-    //     assert_eq!(0, 1);
+        // assert_eq!(0, 1);
     }
 }
