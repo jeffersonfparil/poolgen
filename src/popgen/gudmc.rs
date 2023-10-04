@@ -92,7 +92,6 @@ pub fn gudmc(
         &(PARAMETER_UPPER_LIMIT as usize),
     )
     .unwrap();
-    println!("tajima_row_labels={:?}", tajima_row_labels);
     // println!("tajima_col_labels={:?}", tajima_col_labels);
     // println!("tajima={:?}", tajima);
     /////////////////////////////////////////////////////////
@@ -203,7 +202,8 @@ pub fn gudmc(
             }
         }
     }
-    // println!("tajima_pop={:?}", tajima_pop);
+    println!("tajima_row_labels={:?}", tajima_row_labels);
+    println!("tajima_pop={:?}", tajima_pop);
     // println!("tajima_chr={:?}", tajima_chr);
     // println!("tajima_pos_ini={:?}", tajima_pos_ini);
     // println!("tajima_pos_fin={:?}", tajima_pos_fin);
