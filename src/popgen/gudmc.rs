@@ -203,6 +203,7 @@ pub fn gudmc(
         }
     }
     println!("tajima_row_labels={:?}", tajima_row_labels);
+    println!("tajima_row_labels.len()={:?}", tajima_row_labels.len());
     println!("tajima_pop={:?}", tajima_pop);
     // println!("tajima_chr={:?}", tajima_chr);
     // println!("tajima_pos_ini={:?}", tajima_pos_ini);
