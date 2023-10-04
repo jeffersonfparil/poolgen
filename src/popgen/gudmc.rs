@@ -363,6 +363,8 @@ pub fn gudmc(
             print!("pval={:?}", pval);
         }
     }
+    println!("tajima_pop={:?}", tajima_pop);
+
     // Write output
     let mut fname_output = fname_output.to_owned();
     if fname_output == "".to_owned() {
