@@ -170,7 +170,7 @@ pub fn gudmc(
         // Find troughs and peaks above the `sigma_threshold`
         for j in 0..d.len() {
             if (d[j] - solution[0]).abs() >= *sigma_threshold {
-                // println!("tajima_col_labels[j]={:?}", tajima_col_labels[j]);
+                println!("tajima_col_labels[j]={:?}", tajima_col_labels[j]);
                 let window_id = tajima_col_labels[j].split("-").collect::<Vec<&str>>()[1]
                     .to_owned()
                     .split("_")
@@ -446,9 +446,9 @@ pub fn gudmc(
         }
     }
     // Cleanup
-    // let _ = fs::remove_file("gudmc_intermediate_file_tajimasD.tmp");
-    // let _ = fs::remove_file("gudmc_intermediate_file_Fst.tmp");
-    // let _ = fs::remove_file(fname_fst);
+    let _ = fs::remove_file("gudmc_intermediate_file_tajimasD.tmp");
+    let _ = fs::remove_file("gudmc_intermediate_file_Fst.tmp");
+    let _ = fs::remove_file(fname_fst);
     Ok(fname_output)
 }
 
