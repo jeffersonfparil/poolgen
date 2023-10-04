@@ -14,8 +14,8 @@ use gp::{
     ols, penalise_glmnet, penalise_lasso_like, penalise_lasso_like_with_iterative_proxy_norms,
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
-use gwas::{mle_with_covariate, ols_with_covariate};
-use popgen::{fst, pi, tajima_d, watterson_estimator};
+use gwas::*;
+use popgen::*;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -25,7 +25,7 @@ use popgen::{fst, pi, tajima_d, watterson_estimator};
     long_about = "Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust."
 )]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity", "watterson_estimator", "tajima_d")
+    /// Analysis to perform (i.e. "pileup2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity", "watterson_estimator", "tajima_d", "gudmc")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -95,6 +95,14 @@ struct Args {
     /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: minimum number of loci per window
     #[clap(long, default_value_t = 10)]
     min_loci_per_window: u64,
+    /// Genomewide unbiased discernment of modes of convergent evolution (gudmc), i.e. the minimum deviation from the genomewide Tajima's D to be considered as interesting troughs (selective sweeps) and peaks (sites under balancing selection)
+    #[clap(long, default_value_t = 2.0)]
+    sigma_threshold: f64,
+    /// Genomewide unbiased discernment of modes of convergent evolution (gudmc), i.e. recombination rate in centiMorgan per megabase (default from cM/Mb estimate in maize from https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7)
+    #[clap(long, default_value_t = 0.73)]
+    recombination_rate_cM_per_Mb: f64,
+    
+    
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
@@ -363,7 +371,24 @@ fn main() {
                 &args.output,
             )
             .unwrap();
-        } else if args.analysis == String::from("test") {
+        } else if args.analysis == String::from("gudmc") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            let genotypes_and_phenotypes = file_sync_phen
+                .into_genotypes_and_phenotypes(&filter_stats, false, &args.n_threads)
+                .unwrap(); // we need all alleles in each locus
+            output = gudmc(
+                &genotypes_and_phenotypes,
+                &file_sync_phen.pool_sizes,
+                &args.sigma_threshold,
+                &args.recombination_rate_cM_per_Mb,
+                &args.window_size_bp,
+                &args.window_slide_size_bp,
+                &args.min_loci_per_window,
+                &args.fname,
+                &args.output,
+            )
+            .unwrap();
+        } else {
             let output = 0;
             println!("TEST={:?}", output);
         }

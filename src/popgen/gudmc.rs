@@ -71,7 +71,7 @@ pub fn gudmc(
     min_loci_per_window: &u64,
     fname_input: &String,
     fname_output: &String,
-) -> io::Result<i32> {
+) -> io::Result<String> {
     /////////////////////////////////////////////////////////
     // Calculate Tajima's D
     let fname_tajima = tajima_d(
@@ -445,13 +445,11 @@ pub fn gudmc(
             file_out.write_all(line.as_bytes()).unwrap();
         }
     }
-
     // Cleanup
     let _ = fs::remove_file("gudmc_intermediate_file_tajimasD.tmp");
     let _ = fs::remove_file("gudmc_intermediate_file_Fst.tmp");
     let _ = fs::remove_file(fname_fst);
-
-    Ok(0)
+    Ok(fname_output)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -496,12 +494,12 @@ mod tests {
             &50,
             &20,
             &"test.something".to_owned(),
-            &"".to_owned(),
+            &"test-gudmc.csv".to_owned(),
         )
         .unwrap();
 
         // Assertions
-        assert_eq!(out, 0);
+        assert_eq!(out, "test-gudmc.csv".to_owned());
         // assert_eq!(0, 1);
     }
 }
