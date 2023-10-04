@@ -311,7 +311,7 @@ pub fn gudmc(
                 + &tajima_pos_ini[idx_tajima][j].to_string()
                 + "-"
                 + &tajima_pos_fin[idx_tajima][j].to_string();
-            // println!("tajima_window_id={:?}", tajima_window_id);
+            println!("tajima_window_id={:?}", tajima_window_id);
             let idx_fst = match (0..fst_chr[i].len()).position(|idx| {
                 tajima_window_id
                     == fst_chr[i][idx].to_owned()
@@ -323,7 +323,7 @@ pub fn gudmc(
                 Some(x) => x,
                 None => continue 'inner,
             };
-            // println!("idx_fst={:?}", idx_fst);
+            println!("idx_fst={:?}", idx_fst);
             chr[i].push(tajima_chr[idx_tajima][j].to_owned());
             pos_ini[i].push(tajima_pos_ini[idx_tajima][j]);
             pos_fin[i].push(tajima_pos_fin[idx_tajima][j]);
@@ -360,6 +360,7 @@ pub fn gudmc(
                 1.0 - dist.cdf(tajima_width_pop_b[i][j])
             };
             tajima_width_one_tail_pval_pop_b[i].push(pval);
+            print!("pval={:?}", pval);
         }
     }
     // Write output
