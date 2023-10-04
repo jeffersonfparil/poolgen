@@ -100,7 +100,7 @@ struct Args {
     sigma_threshold: f64,
     /// Genomewide unbiased discernment of modes of convergent evolution (gudmc), i.e. recombination rate in centiMorgan per megabase (default from cM/Mb estimate in maize from https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7)
     #[clap(long, default_value_t = 0.73)]
-    recombination_rate_cM_per_Mb: f64,
+    recombination_rate_cm_per_mb: f64,
     
     
 }
@@ -380,7 +380,7 @@ fn main() {
                 &genotypes_and_phenotypes,
                 &file_sync_phen.pool_sizes,
                 &args.sigma_threshold,
-                &args.recombination_rate_cM_per_Mb,
+                &args.recombination_rate_cm_per_mb,
                 &args.window_size_bp,
                 &args.window_slide_size_bp,
                 &args.min_loci_per_window,
