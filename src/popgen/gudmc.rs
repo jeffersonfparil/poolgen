@@ -160,13 +160,6 @@ pub fn gudmc(
             Some(x) => x,
             None => vec![f64::NAN, f64::NAN],
         };
-        // println!("d={:?}", d);
-        // println!("solution={:?}", solution);
-        // println!("mean={:?}; sd={:?}; min={:?}; max={:?}",
-        //     &d.mean(),
-        //     &d.std(1.0),
-        //     d.iter().fold(d[0], |min, &x| if x<min{x}else{min}),
-        //     d.iter().fold(d[0], |max, &x| if x>max{x}else{max}));
         // Find troughs and peaks above the `sigma_threshold`
         for j in 0..d.len() {
             if (d[j] - solution[0]).abs() >= *sigma_threshold {
@@ -210,22 +203,14 @@ pub fn gudmc(
             }
         }
     }
-    println!("tajima_pop={:?}", tajima_pop);
-    println!("tajima_chr={:?}", tajima_chr);
-    println!("tajima_pos_ini={:?}", tajima_pos_ini);
-    println!("tajima_pos_fin={:?}", tajima_pos_fin);
-    println!("tajima_d={:?}", tajima_d);
-    println!("tajima_width={:?}", tajima_width);
-
+    // println!("tajima_pop={:?}", tajima_pop);
+    // println!("tajima_chr={:?}", tajima_chr);
+    // println!("tajima_pos_ini={:?}", tajima_pos_ini);
+    // println!("tajima_pos_fin={:?}", tajima_pos_fin);
+    // println!("tajima_d={:?}", tajima_d);
+    // println!("tajima_width={:?}", tajima_width);
     /////////////////////////////////////////////////////////
     // Extract pairwise Fst per window per population pair
-    // println!("fst_row_labels={:?}", fst_row_labels);
-    // println!("fst_col_labels={:?}", fst_col_labels);
-    // println!("fst={:?}", fst);
-    // println!("fst_row_labels.len()={:?}", fst_row_labels.len());
-    // println!("fst_col_labels.len()={:?}", fst_col_labels.len());
-    // println!("fst.len()={:?}", fst.len());
-    // println!("fst[0].len()={:?}", fst[0].len());
     let mut fst_pop_a: Vec<String> = vec![];
     let mut fst_pop_b: Vec<String> = vec![];
     let mut fst_chr: Vec<Vec<String>> = vec![]; // each sub-vector represents a population
@@ -266,7 +251,14 @@ pub fn gudmc(
         fst_f_mean.push(solution[0]);
         fst_f_sd.push(solution[1]);
     }
-
+    println!("fst_pop_a={:?}", fst_pop_a);
+    println!("fst_pop_b={:?}", fst_pop_b);
+    println!("fst_chr={:?}", fst_chr);
+    println!("fst_pos_ini={:?}", fst_pos_ini);
+    println!("fst_pos_fin={:?}", fst_pos_fin);
+    println!("fst_f={:?}", fst_f);
+    println!("fst_f_mean={:?}", fst_f_mean);
+    println!("fst_f_sd={:?}", fst_f_sd);
     /////////////////////////////////////////////////////////
     // PER PAIR OF POPULATIONS: find the significant deviations in Fst
     // within the above-identified Tajima's D peaks and troughs
