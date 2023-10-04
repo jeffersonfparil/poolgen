@@ -446,9 +446,9 @@ pub fn gudmc(
         }
     }
     // Cleanup
-    let _ = fs::remove_file("gudmc_intermediate_file_tajimasD.tmp");
-    let _ = fs::remove_file("gudmc_intermediate_file_Fst.tmp");
-    let _ = fs::remove_file(fname_fst);
+    // let _ = fs::remove_file("gudmc_intermediate_file_tajimasD.tmp");
+    // let _ = fs::remove_file("gudmc_intermediate_file_Fst.tmp");
+    // let _ = fs::remove_file(fname_fst);
     Ok(fname_output)
 }
 
