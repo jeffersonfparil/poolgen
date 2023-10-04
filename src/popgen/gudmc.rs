@@ -189,8 +189,6 @@ pub fn gudmc(
                 // Skip if if have smaller than expected window sizes (Note: we expect at least half the window size in size, we can get smaller window sizes as function of the minimum coverage per window and we are noting window sizes based on the coordinates of the loci covered)
                 if tajima_width[i].last().unwrap() < &((*window_size_bp as f64 / 2.0).ceil() as u64)
                 {
-                    // if tajima_width[i].last().unwrap() < &1 {
-                    tajima_pop[i].pop();
                     tajima_chr[i].pop();
                     tajima_pos_ini[i].pop();
                     tajima_pos_fin[i].pop();
@@ -202,9 +200,9 @@ pub fn gudmc(
             }
         }
     }
-    println!("tajima_row_labels={:?}", tajima_row_labels);
-    println!("tajima_row_labels.len()={:?}", tajima_row_labels.len());
-    println!("tajima_pop={:?}", tajima_pop);
+    // println!("tajima_row_labels={:?}", tajima_row_labels);
+    // println!("tajima_row_labels.len()={:?}", tajima_row_labels.len());
+    // println!("tajima_pop={:?}", tajima_pop);
     // println!("tajima_chr={:?}", tajima_chr);
     // println!("tajima_pos_ini={:?}", tajima_pos_ini);
     // println!("tajima_pos_fin={:?}", tajima_pos_fin);
