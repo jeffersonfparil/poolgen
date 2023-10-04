@@ -170,7 +170,7 @@ pub fn gudmc(
         // Find troughs and peaks above the `sigma_threshold`
         for j in 0..d.len() {
             if (d[j] - solution[0]).abs() >= *sigma_threshold {
-                println!("tajima_col_labels[j]={:?}", tajima_col_labels[j]);
+                // println!("tajima_col_labels[j]={:?}", tajima_col_labels[j]);
                 let window_id = tajima_col_labels[j].split("-").collect::<Vec<&str>>()[1]
                     .to_owned()
                     .split("_")
@@ -210,12 +210,12 @@ pub fn gudmc(
             }
         }
     }
-    // println!("tajima_pop={:?}", tajima_pop);
-    // println!("tajima_chr={:?}", tajima_chr);
-    // println!("tajima_pos_ini={:?}", tajima_pos_ini);
-    // println!("tajima_pos_fin={:?}", tajima_pos_fin);
-    // println!("tajima_d={:?}", tajima_d);
-    // println!("tajima_width={:?}", tajima_width);
+    println!("tajima_pop={:?}", tajima_pop);
+    println!("tajima_chr={:?}", tajima_chr);
+    println!("tajima_pos_ini={:?}", tajima_pos_ini);
+    println!("tajima_pos_fin={:?}", tajima_pos_fin);
+    println!("tajima_d={:?}", tajima_d);
+    println!("tajima_width={:?}", tajima_width);
 
     /////////////////////////////////////////////////////////
     // Extract pairwise Fst per window per population pair
