@@ -285,6 +285,7 @@ pub fn gudmc(
     'outer: for i in 0..fst_pop_a.len() {
         let a = fst_pop_a[i].clone();
         let b = fst_pop_b[i].clone();
+        println!("a={:?}; b={:?}", a, b);
         let idx_tajima = match tajima_pop.iter().position(|x| x == &b) {
             Some(x) => x,
             None => continue 'outer,
@@ -310,7 +311,7 @@ pub fn gudmc(
                 + &tajima_pos_ini[idx_tajima][j].to_string()
                 + "-"
                 + &tajima_pos_fin[idx_tajima][j].to_string();
-            println!("tajima_window_id={:?}", tajima_window_id);
+            // println!("tajima_window_id={:?}", tajima_window_id);
             let idx_fst = match (0..fst_chr[i].len()).position(|idx| {
                 tajima_window_id
                     == fst_chr[i][idx].to_owned()
@@ -322,7 +323,7 @@ pub fn gudmc(
                 Some(x) => x,
                 None => continue 'inner,
             };
-            println!("idx_fst={:?}", idx_fst);
+            // println!("idx_fst={:?}", idx_fst);
             chr[i].push(tajima_chr[idx_tajima][j].to_owned());
             pos_ini[i].push(tajima_pos_ini[idx_tajima][j]);
             pos_fin[i].push(tajima_pos_fin[idx_tajima][j]);
