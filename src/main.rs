@@ -101,8 +101,6 @@ struct Args {
     /// Genomewide unbiased discernment of modes of convergent evolution (gudmc), i.e. recombination rate in centiMorgan per megabase (default from cM/Mb estimate in maize from https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7)
     #[clap(long, default_value_t = 0.73)]
     recombination_rate_cm_per_mb: f64,
-    
-    
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
