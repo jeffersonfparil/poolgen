@@ -359,7 +359,7 @@ pub fn gudmc(
                 1.0 - dist.cdf(tajima_width_pop_b[i][j])
             };
             tajima_width_one_tail_pval_pop_b[i].push(pval);
-            print!("pval={:?}", pval);
+            println!("pval={:?}", pval);
         }
     }
     println!("tajima_pop={:?}", tajima_pop);
@@ -441,9 +441,9 @@ pub fn gudmc(
         }
     }
     // Cleanup
-    let _ = fs::remove_file("gudmc_intermediate_file_tajimasD.tmp");
-    let _ = fs::remove_file("gudmc_intermediate_file_Fst.tmp");
-    let _ = fs::remove_file(fname_fst);
+    // let _ = fs::remove_file("gudmc_intermediate_file_tajimasD.tmp");
+    // let _ = fs::remove_file("gudmc_intermediate_file_Fst.tmp");
+    // let _ = fs::remove_file(fname_fst);
     Ok(fname_output)
 }
 
