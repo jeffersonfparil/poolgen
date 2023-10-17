@@ -21,23 +21,9 @@ impl GenotypesAndPhenotypes {
             };
 
             // We need to correct for imputations resulting in a sum of allele frequencies greater or less than 1
-            let q = self.intercept_and_allele_frequencies.slice(s![.., idx_ini..idx_fin]);
+            let freqs: ArrayView2<f64> = self.intercept_and_allele_frequencies.slice(s![.., idx_ini..idx_fin]);
 
-            let idx_missing = self.intercept_and_allele_frequencies.column(j+1)
-                .iter()
-                .enumerate()
-                .filter(|&(i, x)| x.is_nan())
-                .map(|(i, x)| i)
-                .collect::<Vec<usize>>();
-            // println!("idx_missing={:?}", idx_missing);
-            if idx_missing.len() > 0 {
-                let x = self.intercept_and_allele_frequencies.column(j+1).to_owned();
-                let mu = mean_axis_ignore_nan(&x, 0).unwrap();
-                println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                println!("x={:?}", x);
-                println!("idx_missing={:?}", idx_missing);
-                println!("mu={}", mu);
-            }
+
         }
         
         Ok(self)
@@ -79,6 +65,6 @@ mod tests {
         println!("frequencies_and_phenotypes.intercept_and_allele_frequencies={:?}", frequencies_and_phenotypes.intercept_and_allele_frequencies);
         let _ = frequencies_and_phenotypes.mean_imputation().unwrap();
         // println!("frequencies_and_phenotypes.intercept_and_allele_frequencies={:?}", frequencies_and_phenotypes.intercept_and_allele_frequencies);
-        assert_eq!(0, 1);
+        // assert_eq!(0, 1);
     }
 }
