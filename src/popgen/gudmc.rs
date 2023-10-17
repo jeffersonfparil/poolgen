@@ -356,7 +356,6 @@ pub fn gudmc(
                 1.0 - dist.cdf(fst_f[i][idx_fst])
             };
             fst_delta_one_tail_pval[i].push(pval);
-        
         }
         // Model the widths of the significantly deviating troughs and peaks of Tajima's D as a normal distribution
         //  and attach their respective one-tailed p-values
