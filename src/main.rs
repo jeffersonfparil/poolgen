@@ -5,6 +5,7 @@ use ndarray::prelude::*;
 #[allow(warnings)]
 use std::io;
 mod base;
+mod imputation;
 mod gp;
 mod gwas;
 mod popgen;
@@ -33,7 +34,7 @@ struct Args {
     /// Output filename
     #[clap(short, long, default_value = "")]
     output: String,
-    /// Minimum base quality
+    /// Minimum base quality in terms of base calling error rate, i.e. lower values means higher quality
     #[clap(long, default_value_t = 0.01)]
     min_quality: f64,
     /// Minimum depth of coverage

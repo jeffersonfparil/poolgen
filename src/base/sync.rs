@@ -1130,6 +1130,7 @@ impl LoadAll for FileSyncPhen {
         let mut l: usize = 0; // locus index
         let mut mat: Array2<f64> = Array2::from_elem((n, p), 1.0);
         let mut j: usize = 1; // SNP index across loci, start after the intercept
+        let mut start_index_of_each_locus: Vec<u64> = vec![];
         assert_eq!(
             freqs.len(),
             cnts.len(),
@@ -1138,6 +1139,7 @@ impl LoadAll for FileSyncPhen {
         for i in 0..freqs.len() {
             // Allele frequencies
             let f = &freqs[i];
+            start_index_of_each_locus.push(j as u64); // For grouping allele frequencies by locus
             for j_ in 0..f.matrix.ncols() {
                 chromosome.push(f.chromosome.clone());
                 position.push(f.position);
@@ -1168,6 +1170,7 @@ impl LoadAll for FileSyncPhen {
             chromosome: chromosome,
             position: position,
             allele: allele,
+            start_index_of_each_locus: start_index_of_each_locus,
             intercept_and_allele_frequencies: mat,
             phenotypes: self.phen_matrix.clone(),
             pool_names: self.pool_names.clone(),
@@ -1253,6 +1256,7 @@ mod tests {
                 .iter()
                 .map(|&x| x.to_owned())
                 .collect(),
+            start_index_of_each_locus: (0..8).collect::<Vec<u64>>(),
             intercept_and_allele_frequencies: Array2::from_shape_vec(
                 (5, 9),
                 dist_unif.sample_iter(rng.clone()).take(5 * 9).collect(),

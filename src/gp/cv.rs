@@ -507,12 +507,13 @@ mod tests {
                 .collect(),
             position: (0..p + 1).map(|x| x as u64).collect(),
             allele: std::iter::repeat("A".to_owned()).take(p + 1).collect(),
+            start_index_of_each_locus: (0..p).map(|x| x as u64).collect::<Vec<u64>>(),
             intercept_and_allele_frequencies: f.clone(),
             phenotypes: y,
             pool_names: (0..n)
                 .map(|x| "pool-".to_owned() + &x.to_string()[..])
                 .collect(),
-            coverages: Array2::from_elem((n, p + 1), 100.0),
+            coverages: Array2::from_elem((n, p), 100.0),
         };
         let (_a, _k, _s) = frequencies_and_phenotypes.k_split(10).unwrap();
         let models: Vec<
