@@ -215,7 +215,9 @@ impl GenotypesAndPhenotypes {
                                         .start_index_of_each_locus
                                         .iter()
                                         .enumerate()
-                                        .filter(|&(_i, &x)| (x > 0) & ((x as usize - 1) == j + idx_ini))
+                                        .filter(|&(_i, &x)| {
+                                            (x > 0) & ((x as usize - 1) == j + idx_ini)
+                                        })
                                         .map(|(i, _x)| i)
                                         .collect::<Vec<usize>>();
                                     let idx_idx_locus_fin = if idx_idx_locus_fin.len() > 0 {
@@ -255,8 +257,8 @@ impl GenotypesAndPhenotypes {
             let p = idx_fin - idx_ini;
             for i in 0..n {
                 for j in 0..p {
-                    self.intercept_and_allele_frequencies[(i, idx_ini + j)] = 
-                    vec_windows_freqs[a][(i, j)];
+                    self.intercept_and_allele_frequencies[(i, idx_ini + j)] =
+                        vec_windows_freqs[a][(i, j)];
                 }
             }
         }
@@ -284,197 +286,198 @@ impl GenotypesAndPhenotypes {
         //             };
         //         }
         //     }
-        //     // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-        //     // println!(
-        //     //     "freqs\n={:?}",
-        //     //     &self
-        //     //         .intercept_and_allele_frequencies
-        //     //         .slice(s![.., idx_ini..idx_fin])
-        //     // );
-        //     // println!("corr:\n={:?}", corr);
+        //     println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+        //     println!("idx_ini={}", idx_ini);
+        //     println!(
+        //         "freqs\n={:?}",
+        //         &self
+        //             .intercept_and_allele_frequencies
+        //             .slice(s![.., idx_ini..idx_fin])
+        //     );
+        //     println!("corr:\n={:?}", corr);
         //     // Iterate across alleles and impute when there is/are missing data
-        //     // for j in 0..p {
-        //     //     if self
-        //     //         .intercept_and_allele_frequencies
-        //     //         .column(idx_ini + j)
-        //     //         .fold(0, |sum, &x| if x.is_nan() { sum + 1 } else { sum })
-        //     //         > 0
-        //     //     {
-        //     //         // Find the indexes of the linked (positively correlated) alleles to be used in calculating the distances between pools to find the nearest neighbours
-        //     //         let idx_linked_alleles = corr
-        //     //             .column(j)
-        //     //             .iter()
-        //     //             .enumerate()
-        //     //             .filter(|&(_i, x)| !x.is_nan())
-        //     //             .filter(|&(_i, x)| x >= min_correlation)
-        //     //             .map(|(i, _x)| idx_ini + i)
-        //     //             .collect::<Vec<usize>>();
-        //     //         // Use all the alleles to estimate distances between pools to find the nearest neighbours
-        //     //         let idx_linked_alleles = if idx_linked_alleles.len() < 2 {
-        //     //             (idx_ini..idx_fin).collect()
-        //     //         } else {
-        //     //             idx_linked_alleles
-        //     //         };
-        //     //         // Calculate the Euclidean distances between pools using the most positively correlated alleles (or all the alleles if none passed the minimum correlation threshold or if there is less that 2 loci that are most correlated - these minimum 2 is the allele itself and another allele)
-        //     //         let mut dist: Array2<f64> = Array2::from_elem((n, n), f64::NAN);
-        //     //         for i0 in 0..n {
-        //     //             let pool0 = self
-        //     //                 .intercept_and_allele_frequencies
-        //     //                 .select(Axis(1), &idx_linked_alleles)
-        //     //                 .row(i0)
-        //     //                 .to_owned();
-        //     //             // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-        //     //             // println!("idx_linked_alleles:\n{:?}", &idx_linked_alleles);
-        //     //             // println!("pool0:\n{:?}", &pool0);
-        //     //             for i1 in i0..n {
-        //     //                 let pool1 = self
-        //     //                     .intercept_and_allele_frequencies
-        //     //                     .select(Axis(1), &idx_linked_alleles)
-        //     //                     .row(i1)
-        //     //                     .to_owned();
-        //     //                 // Keep only the loci present in both pools
-        //     //                 let (pool0, pool1): (Vec<f64>, Vec<f64>) = pool0
-        //     //                     .iter()
-        //     //                     .zip(pool1.iter())
-        //     //                     .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
-        //     //                     .unzip();
-        //     //                 if pool0.len() == 0 {
-        //     //                     continue;
-        //     //                 } else {
-        //     //                     let d = (&Array1::from_vec(pool0) - &Array1::from_vec(pool1))
-        //     //                         .map(|&x| x.powf(2.0))
-        //     //                         .sum()
-        //     //                         .sqrt();
-        //     //                     match d.is_nan() {
-        //     //                         true => continue,
-        //     //                         false => {
-        //     //                             dist[(i0, i1)] = d;
-        //     //                             dist[(i1, i0)] = d
-        //     //                         }
-        //     //                     };
-        //     //                 }
-        //     //             }
-        //     //         }
-        //     //         // println!("dist={:?}", dist);
-        //     //         // Now, let's find the pools needing imputation and impute them using the k-nearest neighbours
-        //     //         for i in 0..n {
-        //     //             let mut k = *k_neighbours as usize; // define the adaptive k for use later
-        //     //             if self.intercept_and_allele_frequencies[(i, idx_ini + j)].is_nan() {
-        //     //                 // Find the k-nearest neighbours
-        //     //                 let mut idx_pools: Vec<usize> = (0..n).collect();
-        //     //                 idx_pools.sort_by(|&j0, &j1| {
-        //     //                     let a = match dist[(i, j0)].is_nan() {
-        //     //                         true => f64::INFINITY,
-        //     //                         false => dist[(i, j0)],
-        //     //                     };
-        //     //                     let b = match dist[(i, j1)].is_nan() {
-        //     //                         true => f64::INFINITY,
-        //     //                         false => dist[(i, j1)],
-        //     //                     };
-        //     //                     a.partial_cmp(&b).unwrap()
-        //     //                 });
-        //     //                 // println!("dist.column(i):\n{:?}", dist.column(i));
-        //     //                 // println!("idx_pools:\n{:?}", idx_pools);
-        //     //                 let freqs_sorted_neighbours = self
-        //     //                     .intercept_and_allele_frequencies
-        //     //                     .select(Axis(0), &idx_pools)
-        //     //                     .column(idx_ini + j)
-        //     //                     .to_owned();
-        //     //                 // println!("freqs_sorted_neighbours:\n{:?}", freqs_sorted_neighbours);
-        //     //                 // println!("freqs_unsorted_neighbours:\n{:?}", self.intercept_and_allele_frequencies.column(idx_ini + j));
-        //     //                 // Extract the allele frequencies and distances of the k-neighbours from sorted lists using idx_pools whose indexes are sorted
-        //     //                 let mut freqs_k_neighbours = freqs_sorted_neighbours
-        //     //                     .select(Axis(0), &(0..k).collect::<Vec<usize>>());
-        //     //                 let mut dist_k_neighbours = dist
-        //     //                     .column(i)
-        //     //                     .select(Axis(0), &idx_pools)
-        //     //                     .select(Axis(0), &(0..k).collect::<Vec<usize>>());
-        //     //                 // println!("freqs_k_neighbours:\n{:?}", freqs_k_neighbours);
-        //     //                 // println!("dist_k_neighbours:\n{:?}", dist_k_neighbours);
-        //     //                 while freqs_k_neighbours
-        //     //                     .fold(0, |sum, &x| if x.is_nan() { sum + 1 } else { sum })
-        //     //                     == k
-        //     //                 {
-        //     //                     k += 1;
-        //     //                     if k > n {
-        //     //                         break;
-        //     //                     }
-        //     //                     freqs_k_neighbours = freqs_sorted_neighbours
-        //     //                         .select(Axis(0), &(0..k).collect::<Vec<usize>>());
-        //     //                     dist_k_neighbours = dist
-        //     //                         .column(i)
-        //     //                         .select(Axis(0), &idx_pools)
-        //     //                         .select(Axis(0), &(0..k).collect::<Vec<usize>>());
-        //     //                 }
-        //     //                 // Keep only non-missing frequencies and distances among the k-neighbours
-        //     //                 let (freqs_k_neighbours, dist_k_neighbours): (Vec<f64>, Vec<f64>) =
-        //     //                     freqs_k_neighbours
-        //     //                         .iter()
-        //     //                         .zip(dist_k_neighbours.iter())
-        //     //                         .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
-        //     //                         .unzip();
-        //     //                 if freqs_k_neighbours.len() == 0 {
-        //     //                     continue;
-        //     //                 }
-        //     //                 // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-        //     //                 // println!("freqs_k_neighbours:\n{:?}", freqs_k_neighbours);
-        //     //                 // println!("dist_k_neighbours:\n{:?}", dist_k_neighbours);
-        //     //                 // Impute the missing data using the weighted allele frequencies from the k-nearest neighbours
-        //     //                 let dist_sum = dist_k_neighbours.iter().fold(0.0, |sum, &x| sum + x);
-        //     //                 // println!("dist_sum:\n{:?}", dist_sum);
-        //     //                 let weights = dist_k_neighbours
-        //     //                     .iter()
-        //     //                     .map(|&x| 1.0 - (x / dist_sum) + f64::EPSILON)
-        //     //                     .collect::<Vec<f64>>(); // add epsilon that we keep the weight of non-zero distance neighbours when zero distance neighbours exist
-        //     //                                             // println!("weights:\n{:?}", weights);
-        //     //                 let weights_sum = weights.iter().fold(0.0, |sum, &x| sum + x);
-        //     //                 let weights = Array1::from_vec(
-        //     //                     weights
-        //     //                         .iter()
-        //     //                         .map(|&x| x / weights_sum)
-        //     //                         .collect::<Vec<f64>>(),
-        //     //                 ); // re-weigh after adding epsilon so that the weights still sum up to one
-        //     //                 let values = Array1::from_vec(freqs_k_neighbours);
-        //     //                 // println!("weights:\n{:?}", weights);
-        //     //                 // println!("(values * weights).sum():\n{:?}", (&values * &weights).sum());
-        //     //                 self.intercept_and_allele_frequencies[(i, idx_ini + j)] =
-        //     //                     (values * weights).sum();
-        //     //                 // Need to correct for when the imputed allele frequencies do not add up to one!
-        //     //                 if j > 0 {
-        //     //                     // Find the index of the index of each locus' end position
-        //     //                     let idx_idx_locus_fin = self
-        //     //                         .start_index_of_each_locus
-        //     //                         .iter()
-        //     //                         .enumerate()
-        //     //                         .filter(|&(_i, &x)| (x > 0) & ((x as usize - 1) == j))
-        //     //                         .map(|(i, _x)| i)
-        //     //                         .collect::<Vec<usize>>();
-        //     //                     let idx_idx_locus_fin = if idx_idx_locus_fin.len() > 0 {
-        //     //                         idx_idx_locus_fin[0]
-        //     //                     } else {
-        //     //                         continue;
-        //     //                     };
-        //     //                     let idx_idx_locus_ini = idx_idx_locus_fin - 1;
-        //     //                     let idx_locus_ini =
-        //     //                         self.start_index_of_each_locus[idx_idx_locus_ini] as usize;
-        //     //                     let idx_locus_fin =
-        //     //                         self.start_index_of_each_locus[idx_idx_locus_fin] as usize;
-        //     //                     let locus_freqs_imputed = self
-        //     //                         .intercept_and_allele_frequencies
-        //     //                         .slice(s![i, idx_locus_ini..idx_locus_fin])
-        //     //                         .to_owned();
-        //     //                     let locus_sum = locus_freqs_imputed.sum();
-        //     //                     let locus_freqs_imputed =
-        //     //                         locus_freqs_imputed.map(|&x| x / locus_sum);
-        //     //                     for j_ in idx_locus_ini..idx_locus_fin {
-        //     //                         self.intercept_and_allele_frequencies[(i, j_)] =
-        //     //                             locus_freqs_imputed[j_ - idx_locus_ini];
-        //     //                     }
-        //     //                 }
-        //     //             }
-        //     //         }
-        //     //     }
-        //     // }
+        //     for j in 0..p {
+        //         if self
+        //             .intercept_and_allele_frequencies
+        //             .column(idx_ini + j)
+        //             .fold(0, |sum, &x| if x.is_nan() { sum + 1 } else { sum })
+        //             > 0
+        //         {
+        //             // Find the indexes of the linked (positively correlated) alleles to be used in calculating the distances between pools to find the nearest neighbours
+        //             let idx_linked_alleles = corr
+        //                 .column(j)
+        //                 .iter()
+        //                 .enumerate()
+        //                 .filter(|&(_i, x)| !x.is_nan())
+        //                 .filter(|&(_i, x)| x >= min_correlation)
+        //                 .map(|(i, _x)| idx_ini + i)
+        //                 .collect::<Vec<usize>>();
+        //             // Use all the alleles to estimate distances between pools to find the nearest neighbours
+        //             let idx_linked_alleles = if idx_linked_alleles.len() < 2 {
+        //                 (idx_ini..idx_fin).collect()
+        //             } else {
+        //                 idx_linked_alleles
+        //             };
+        //             // Calculate the Euclidean distances between pools using the most positively correlated alleles (or all the alleles if none passed the minimum correlation threshold or if there is less that 2 loci that are most correlated - these minimum 2 is the allele itself and another allele)
+        //             let mut dist: Array2<f64> = Array2::from_elem((n, n), f64::NAN);
+        //             for i0 in 0..n {
+        //                 let pool0 = self
+        //                     .intercept_and_allele_frequencies
+        //                     .select(Axis(1), &idx_linked_alleles)
+        //                     .row(i0)
+        //                     .to_owned();
+        //                 // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+        //                 // println!("idx_linked_alleles:\n{:?}", &idx_linked_alleles);
+        //                 // println!("pool0:\n{:?}", &pool0);
+        //                 for i1 in i0..n {
+        //                     let pool1 = self
+        //                         .intercept_and_allele_frequencies
+        //                         .select(Axis(1), &idx_linked_alleles)
+        //                         .row(i1)
+        //                         .to_owned();
+        //                     // Keep only the loci present in both pools
+        //                     let (pool0, pool1): (Vec<f64>, Vec<f64>) = pool0
+        //                         .iter()
+        //                         .zip(pool1.iter())
+        //                         .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
+        //                         .unzip();
+        //                     if pool0.len() == 0 {
+        //                         continue;
+        //                     } else {
+        //                         let d = (&Array1::from_vec(pool0) - &Array1::from_vec(pool1))
+        //                             .map(|&x| x.powf(2.0))
+        //                             .sum()
+        //                             .sqrt();
+        //                         match d.is_nan() {
+        //                             true => continue,
+        //                             false => {
+        //                                 dist[(i0, i1)] = d;
+        //                                 dist[(i1, i0)] = d
+        //                             }
+        //                         };
+        //                     }
+        //                 }
+        //             }
+        //             // println!("dist={:?}", dist);
+        //             // Now, let's find the pools needing imputation and impute them using the k-nearest neighbours
+        //             for i in 0..n {
+        //                 let mut k = *k_neighbours as usize; // define the adaptive k for use later
+        //                 if self.intercept_and_allele_frequencies[(i, idx_ini + j)].is_nan() {
+        //                     // Find the k-nearest neighbours
+        //                     let mut idx_pools: Vec<usize> = (0..n).collect();
+        //                     idx_pools.sort_by(|&j0, &j1| {
+        //                         let a = match dist[(i, j0)].is_nan() {
+        //                             true => f64::INFINITY,
+        //                             false => dist[(i, j0)],
+        //                         };
+        //                         let b = match dist[(i, j1)].is_nan() {
+        //                             true => f64::INFINITY,
+        //                             false => dist[(i, j1)],
+        //                         };
+        //                         a.partial_cmp(&b).unwrap()
+        //                     });
+        //                     // println!("dist.column(i):\n{:?}", dist.column(i));
+        //                     // println!("idx_pools:\n{:?}", idx_pools);
+        //                     let freqs_sorted_neighbours = self
+        //                         .intercept_and_allele_frequencies
+        //                         .select(Axis(0), &idx_pools)
+        //                         .column(idx_ini + j)
+        //                         .to_owned();
+        //                     // println!("freqs_sorted_neighbours:\n{:?}", freqs_sorted_neighbours);
+        //                     // println!("freqs_unsorted_neighbours:\n{:?}", self.intercept_and_allele_frequencies.column(idx_ini + j));
+        //                     // Extract the allele frequencies and distances of the k-neighbours from sorted lists using idx_pools whose indexes are sorted
+        //                     let mut freqs_k_neighbours = freqs_sorted_neighbours
+        //                         .select(Axis(0), &(0..k).collect::<Vec<usize>>());
+        //                     let mut dist_k_neighbours = dist
+        //                         .column(i)
+        //                         .select(Axis(0), &idx_pools)
+        //                         .select(Axis(0), &(0..k).collect::<Vec<usize>>());
+        //                     // println!("freqs_k_neighbours:\n{:?}", freqs_k_neighbours);
+        //                     // println!("dist_k_neighbours:\n{:?}", dist_k_neighbours);
+        //                     while freqs_k_neighbours
+        //                         .fold(0, |sum, &x| if x.is_nan() { sum + 1 } else { sum })
+        //                         == k
+        //                     {
+        //                         k += 1;
+        //                         if k > n {
+        //                             break;
+        //                         }
+        //                         freqs_k_neighbours = freqs_sorted_neighbours
+        //                             .select(Axis(0), &(0..k).collect::<Vec<usize>>());
+        //                         dist_k_neighbours = dist
+        //                             .column(i)
+        //                             .select(Axis(0), &idx_pools)
+        //                             .select(Axis(0), &(0..k).collect::<Vec<usize>>());
+        //                     }
+        //                     // Keep only non-missing frequencies and distances among the k-neighbours
+        //                     let (freqs_k_neighbours, dist_k_neighbours): (Vec<f64>, Vec<f64>) =
+        //                         freqs_k_neighbours
+        //                             .iter()
+        //                             .zip(dist_k_neighbours.iter())
+        //                             .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
+        //                             .unzip();
+        //                     if freqs_k_neighbours.len() == 0 {
+        //                         continue;
+        //                     }
+        //                     // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+        //                     // println!("freqs_k_neighbours:\n{:?}", freqs_k_neighbours);
+        //                     // println!("dist_k_neighbours:\n{:?}", dist_k_neighbours);
+        //                     // Impute the missing data using the weighted allele frequencies from the k-nearest neighbours
+        //                     let dist_sum = dist_k_neighbours.iter().fold(0.0, |sum, &x| sum + x);
+        //                     // println!("dist_sum:\n{:?}", dist_sum);
+        //                     let weights = dist_k_neighbours
+        //                         .iter()
+        //                         .map(|&x| 1.0 - (x / dist_sum) + f64::EPSILON)
+        //                         .collect::<Vec<f64>>(); // add epsilon that we keep the weight of non-zero distance neighbours when zero distance neighbours exist
+        //                                                 // println!("weights:\n{:?}", weights);
+        //                     let weights_sum = weights.iter().fold(0.0, |sum, &x| sum + x);
+        //                     let weights = Array1::from_vec(
+        //                         weights
+        //                             .iter()
+        //                             .map(|&x| x / weights_sum)
+        //                             .collect::<Vec<f64>>(),
+        //                     ); // re-weigh after adding epsilon so that the weights still sum up to one
+        //                     let values = Array1::from_vec(freqs_k_neighbours);
+        //                     // println!("weights:\n{:?}", weights);
+        //                     // println!("(values * weights).sum():\n{:?}", (&values * &weights).sum());
+        //                     self.intercept_and_allele_frequencies[(i, idx_ini + j)] =
+        //                         (values * weights).sum();
+        //                     // Need to correct for when the imputed allele frequencies do not add up to one!
+        //                     if j > 0 {
+        //                         // Find the index of the index of each locus' end position
+        //                         let idx_idx_locus_fin = self
+        //                             .start_index_of_each_locus
+        //                             .iter()
+        //                             .enumerate()
+        //                             .filter(|&(_i, &x)| (x > 0) & ((x as usize - 1) == j))
+        //                             .map(|(i, _x)| i)
+        //                             .collect::<Vec<usize>>();
+        //                         let idx_idx_locus_fin = if idx_idx_locus_fin.len() > 0 {
+        //                             idx_idx_locus_fin[0]
+        //                         } else {
+        //                             continue;
+        //                         };
+        //                         let idx_idx_locus_ini = idx_idx_locus_fin - 1;
+        //                         let idx_locus_ini =
+        //                             self.start_index_of_each_locus[idx_idx_locus_ini] as usize;
+        //                         let idx_locus_fin =
+        //                             self.start_index_of_each_locus[idx_idx_locus_fin] as usize;
+        //                         let locus_freqs_imputed = self
+        //                             .intercept_and_allele_frequencies
+        //                             .slice(s![i, idx_locus_ini..idx_locus_fin])
+        //                             .to_owned();
+        //                         let locus_sum = locus_freqs_imputed.sum();
+        //                         let locus_freqs_imputed =
+        //                             locus_freqs_imputed.map(|&x| x / locus_sum);
+        //                         for j_ in idx_locus_ini..idx_locus_fin {
+        //                             self.intercept_and_allele_frequencies[(i, j_)] =
+        //                                 locus_freqs_imputed[j_ - idx_locus_ini];
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
         // }
         Ok(self)
     }
@@ -548,6 +551,18 @@ mod tests {
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)],
             0.19663299601190515
         );
-        assert_eq!(0, 1);
+        assert_eq!(
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 2)],
+            0.8033670039880948
+        );
+        assert_eq!(
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 13923)],
+            0.02733470369319045
+        );
+        assert_eq!(
+            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 13924)],
+            0.9726652963068096
+        );
+        // assert_eq!(0, 1);
     }
 }
