@@ -71,6 +71,92 @@ An extension of [popoolation2's](https://academic.oup.com/bioinformatics/article
 - *Line 5*: cummulative pool sizes percentiles (e.g. 0.2,0.4,0.6,0.8,1.0)
 - *Line 6*: phenotype values corresponding to each percentile (e.g. 0.16,0.20,0.23,0.27,0.42)
 
+## Utilities
+
+### pileup2sync
+
+Convert pileup from `samtools mpileup` into a [synchronised pileup format](#Sync). Pileup from alignments can be generated similar to below:
+
+```shell
+samtools mpileup \
+    -b /list/of/samtools/-/indexed/bam/or/cram/files.txt \
+    -l /list/of/SNPs/in/tab/-/delimited/format/or/bed/-/like.txt \
+    -d 100000 \
+    -q 30 \
+    -Q 30 \
+    -f /reference/genome.fna \
+    -o /output/file.pileup
+```
+
+### sync2csv
+
+Convert [synchronised pileup format](#Sync) into a matrix ($n$ pools x $p$ alleles across loci) and write into a comma-delimited (csv) file.
+
+### fisher_exact_test
+
+Perform Fisher's exact test per locus.
+
+### chisq_test
+
+Perform Chi-square test per locus.
+
+### pearson_corr
+
+Calculate correlations between allele frequencies per locus and phenotype data.
+
+### ols_iter
+
+Perform ordinary linear least squares regression between allele frequencies and phenotypes per locus, independently.
+
+### ols_iter_with_kinship
+
+Perform ordinary linear least squares regression between allele frequencies and phenotypes using a kinship matrix ($XX' \over p$) as a covariate per locus, independently.
+
+### mle_iter
+
+Perform linear regression between allele frequencies and phenotypes using maximum likelihood estimation per locus, independently.
+
+### mle_iter_with_kinship
+
+Perform linear regression between allele frequencies and phenotypes using maximum likelihood estimation a kinship matrix ($XX' \over p$) as a covariate per locus, independently.
+
+### gwalpha
+
+Perform parametric genomewide association study using pool sequencing data, i.e. pool-GWAS. Refer to [Fournier-Level, et al, 2017](https://academic.oup.com/bioinformatics/article/33/8/1246/2729762) for more details.
+
+### ridge_iter
+
+Perform ridge regression between allele frequencies and phenotypes per locus, independently.
+
+### genomic_prediction_cross_validation
+
+Perform genomic prediction cross-validation using various models including ordinary least squares (OLS), ridge regression (RR), least absolute shrinkage and selection operator (LASSO), and elastic-net ([glmnet](https://glmnet.stanford.edu/articles/glmnet.html)).
+
+### fst
+
+Estimate pairwise genetic differentiation between pools using unbiased estimates of heterozygosity ($\pi$ or $\theta_{\pi}=4N_{e}\mu$ - similar to [Korunes & Samuk 2019](https://doi.org/10.1111/1755-0998.13326) which assumes biallelic loci). Mean genomewide estimates, and per sliding (overlapping/non-overlapping) window estimates are generated.
+
+### heterozygosity
+
+Estimates per sliding window heterozygosities within populations using the unbiased method discussed [above](#fst).
+
+### watterson_estimator
+
+Estimates of Watterson's estimator of $\theta$ which is the expected heterozygosity given the number of polymorphic loci per sliding window (overlappining/non-overlapping).
+
+### tajima_d
+
+Computes [Tajima's D](https://en.wikipedia.org/wiki/Tajima%27s_D) per sliding (overlapping/non-overlapping) window.
+
+### gudmc
+
+Genomewide unbiased determination of the modes of convergent evolution. Per population, significant troughs (selective sweeps) and peaks (balancing selection) are detected and the widths of which are measured. Per population pair, significant deviations from mean genomewide Fst within the identified significant Tajima's D peaks and troughs are also identified. Narrow Tajima's D troughs/peaks imply *de novo* mutation as the source of the genomic segment under selection, while wider ones imply standing genetic variation as the source. Pairwise Fst which are significantly higher than genomewide Fst imply migration of causal variants between populations, significantly lower implies independent evolution within each population, and non-significantly deviated pairwise Fst implies a shared source of the variants under selection.
+
+### In the works
+
+- **imputation**: imputation of missing loci
+- **vcf2sync**: converting the most widely used genotype format `vcf` into the succint `sync` format.
+
 ## Details
 
 ### Ordinary least squares regression
@@ -82,7 +168,7 @@ The simplest regression model implemented is the ordinary least squares (OLS), w
 
 where: $n$ is the number of observations, $p$ is the number of predictors, $X$ is an $n \times p$ matrix consisting of a vector of ones and a vector or matrix of allele frequences, and $y$ is the vector of phenotype values. The inverses are calculated as the [Moore-Penrose pseudoinverse via singular value decomposition](https://en.wikipedia.org/wiki/Moore%E2%80%93Penrose_inverse#Singular_value_decomposition_(SVD)), where the tolerance value uses the machine epsilon (`f64::EPSILON`).
 
-### GWAlpha: genome-wide estimation of additive effects based on quantile distributions from pool-sequencing experiments
+### GWAlpha: genomewide estimation of additive effects based on quantile distributions from pool-sequencing experiments
 
 GWAlpha ([Fournier-Level, et al, 2016](https://doi.org/10.1093/bioinformatics/btw805)) iteratively estimates for each locus the effect of each allele on the phenotypic ranking of each pool. This allele effect is defined as $\hat{\alpha} = W {{(\hat{\mu}_{0} - \hat{\mu}_{1})} \over {\sigma_{y}}}$, where:
 
