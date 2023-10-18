@@ -31,7 +31,7 @@ impl GenotypesAndPhenotypes {
         assert_eq!(l, l_);
         assert_eq!(w, w_);
 
-        // Testing parallel processing
+        // Parallel processing per window
         let mut vec_windows_freqs: Vec<Array2<f64>> = vec![Array2::from_elem((1, 1), f64::NAN); w];
         let idx_windows: Vec<usize> = (0..w).collect();
         Zip::from(&mut vec_windows_freqs)
@@ -246,7 +246,7 @@ impl GenotypesAndPhenotypes {
                     }
                 }
             });
-        println!("vec_windows_freqs[0]:\n{:?}", vec_windows_freqs[0]);
+        // println!("vec_windows_freqs[0]:\n{:?}", vec_windows_freqs[0]);
         // Write-out the imputed data
         for a in 0..w {
             // Use the indexes of each locus
@@ -548,6 +548,6 @@ mod tests {
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)],
             0.19663299601190515
         );
-        // assert_eq!(0, 1);
+        assert_eq!(0, 1);
     }
 }
