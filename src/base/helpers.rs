@@ -201,6 +201,15 @@ pub fn multiply_views_xxt(
     Ok(out)
 }
 
+/// Calculate the mean of a 1D array ignoring NaN
+pub fn mean_array1_ignore_nan(
+    x: &ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>>,
+) -> io::Result<f64> {
+    let sum = x.fold(0.0, |sum, &a| if a.is_nan() { sum } else { sum + a });
+    let counts = x.iter().filter(|&a| !a.is_nan()).count() as f64;
+    Ok(sum / counts)
+}
+
 /// Calculate the axis-wise means of an array while ignoring NaN
 pub fn mean_axis_ignore_nan<D>(
     a: &Array<f64, D>,
@@ -520,6 +529,8 @@ mod tests {
         println!("windows_idx_tail={:?}", windows_idx_tail);
         assert_eq!(windows_idx_head, vec![0, 3]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
         assert_eq!(windows_idx_tail, vec![2, 4]); // filtered out window start:2-end:3 which is a complete subset of window start:1-end:3
+        let array1d: Array1<f64> = Array1::from_vec(vec![0.1, 0.2, 0.3, f64::NAN, 0.5]);
+        assert_eq!(mean_array1_ignore_nan(&array1d.view()).unwrap(), 0.275);
         let mut array2d: Array2<f64> =
             Array2::from_shape_vec((2, 5), (0..10).map(|x| x as f64).collect::<Vec<f64>>())
                 .unwrap();
@@ -533,7 +544,6 @@ mod tests {
             Array1::from_shape_vec(2, vec![2.5, 7.0]).unwrap(),
             mean_axis_ignore_nan(&array2d, 1).unwrap()
         );
-
         let fname = "./tests/test.csv".to_owned();
         let delimiter = ",".to_owned();
         let chr_col = 0;

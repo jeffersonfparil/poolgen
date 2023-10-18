@@ -5,9 +5,9 @@ use ndarray::prelude::*;
 #[allow(warnings)]
 use std::io;
 mod base;
-mod imputation;
 mod gp;
 mod gwas;
+mod imputation;
 mod popgen;
 mod tables;
 use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse};

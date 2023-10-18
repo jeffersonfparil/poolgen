@@ -7,6 +7,7 @@ use statrs::distribution::{ContinuousCDF, StudentsT};
 pub fn pearsons_correlation(
     x: &ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>>,
     y: &ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>>,
+    method: &String,
 ) -> io::Result<(f64, f64)> {
     let n = x.len();
     if n != y.len() {
@@ -15,17 +16,42 @@ pub fn pearsons_correlation(
             "Input vectors are not the same size.",
         ));
     }
-    let mu_x = x.mean().unwrap();
-    let mu_y = y.mean().unwrap();
-    let x_less_mu_x = x.map(|x| x - mu_x);
-    let y_less_mu_y = y.map(|y| y - mu_y);
+    // Only use the dangerous "pairwise.complete.obs" correlation computation method when asked.
+    // Use only the pairs of values with non-missing data across the pair of vectors.
+    let (x, y) = if (method != &"pairwise.complete.obs".to_owned()) {
+        let filtered_vectors: (Vec<f64>, Vec<f64>) = x
+            .iter()
+            .zip(y.iter())
+            .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
+            .unzip();
+        // println!("q.0={:?}; q.1={:?}", q.0, q.1);
+        (
+            Array1::from_vec(filtered_vectors.0),
+            Array1::from_vec(filtered_vectors.1),
+        )
+    } else {
+        (x.to_owned(), y.to_owned())
+    };
+    // Make sure we are handling NAN properly
+    let mu_x = mean_array1_ignore_nan(&x.view()).unwrap();
+    let mu_y = mean_array1_ignore_nan(&y.view()).unwrap();
+    let x_less_mu_x = x
+        .iter()
+        .filter(|&x| !x.is_nan())
+        .map(|x| x - mu_x)
+        .collect::<Array1<f64>>();
+    let y_less_mu_y = y
+        .iter()
+        .filter(|&y| !y.is_nan())
+        .map(|y| y - mu_y)
+        .collect::<Array1<f64>>();
     let x_less_mu_x_squared = x_less_mu_x.map(|x| x.powf(2.0));
     let y_less_mu_y_squared = y_less_mu_y.map(|y| y.powf(2.0));
     let numerator = (x_less_mu_x * y_less_mu_y).sum();
     let denominator = x_less_mu_x_squared.sum().sqrt() * y_less_mu_y_squared.sum().sqrt();
     let r_tmp = numerator / denominator;
     let r = match r_tmp.is_nan() {
-        true => 0.0,
+        true => return Ok((f64::NAN, f64::NAN)),
         false => r_tmp,
     };
     let sigma_r_denominator = (1.0 - r.powf(2.0)) / (n as f64 - 2.0);
@@ -35,9 +61,13 @@ pub fn pearsons_correlation(
     }
     let sigma_r = sigma_r_denominator.sqrt();
     let t = r / sigma_r;
-    let d = StudentsT::new(0.0, 1.0, n as f64 - 2.0).unwrap();
-    let pval = 2.00 * (1.00 - d.cdf(t.abs()));
-    Ok((r, pval))
+    let pval = if n > 2 {
+        let d = StudentsT::new(0.0, 1.0, n as f64 - 2.0).unwrap();
+        2.00 * (1.00 - d.cdf(t.abs()))
+    } else {
+        f64::NAN
+    };
+    Ok((sensible_round(r, 7), pval))
 }
 
 pub fn correlation(
@@ -89,7 +119,7 @@ pub fn correlation(
             line.push(x.mean().unwrap().to_string());
             line.push("Pheno_".to_string() + &(j.to_string())[..]);
             let y: ArrayBase<ndarray::ViewRepr<&f64>, Dim<[usize; 1]>> = y_matrix.column(j);
-            (corr, pval) = pearsons_correlation(&x, &y).unwrap();
+            (corr, pval) = pearsons_correlation(&x, &y, &"sensible_corr".to_owned()).unwrap();
             line.push(parse_f64_roundup_and_own(corr, 6));
             line.push(pval.to_string() + "\n");
         }
@@ -105,7 +135,7 @@ mod tests {
     #[test]
     fn test_correlation() {
         // Expected
-        let expected_output1: f64 = 0.3849001794597505;
+        let expected_output1: f64 = sensible_round(0.3849001794597505, 7);
         let expected_output2: f64 = 0.5223146158470686;
         let expected_output3: String =
             "Chromosome1,12345,A,0.3,Pheno_0,0.3849,0.5223146158470686\n".to_owned();
@@ -139,12 +169,36 @@ mod tests {
                 .collect::<Vec<String>>(),
         };
         // Outputs
-        let (corr, pval) = pearsons_correlation(&x, &y).unwrap();
+        let (corr, pval) = pearsons_correlation(&x, &y, &"sensible_corr".to_owned()).unwrap();
         let correlation_line =
             correlation(&mut locus_counts_and_phenotypes, &filter_stats).unwrap();
         // Assertions
         assert_eq!(expected_output1, corr);
         assert_eq!(expected_output2, pval);
         assert_eq!(expected_output3, correlation_line);
+        let corr_with_2_nan = pearsons_correlation(
+            &Array1::from_vec(vec![0.1, 0.2, f64::NAN, f64::NAN, 0.5, 0.6]).view(),
+            &Array1::from_vec(vec![0.1, 0.2, f64::NAN, f64::NAN, 0.5, 0.6]).view(),
+            &"sensible_corr".to_owned(),
+        )
+        .unwrap();
+        println!("corr_with_2_nan={:?}", corr_with_2_nan);
+        assert_eq!(sensible_round(corr_with_2_nan.0, 2), 1.00);
+        let corr_with_3_nan = pearsons_correlation(
+            &Array1::from_vec(vec![0.1, 0.2, f64::NAN, f64::NAN, 0.5, 0.6]).view(),
+            &Array1::from_vec(vec![0.1, 0.2, f64::NAN, 0.4, f64::NAN, 0.6]).view(),
+            &"sensible_corr".to_owned(),
+        )
+        .unwrap();
+        println!("corr_with_3_nan={:?}", corr_with_3_nan);
+        assert_eq!(sensible_round(corr_with_3_nan.0, 2), 1.00);
+        let corr_with_nan = pearsons_correlation(
+            &Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN]).view(),
+            &Array1::from_vec(vec![f64::NAN, f64::NAN, f64::NAN]).view(),
+            &"sensible_corr".to_owned(),
+        )
+        .unwrap();
+        println!("corr_with_nan={:?}", corr_with_nan);
+        assert_eq!(corr_with_nan.0.is_nan(), true);
     }
 }

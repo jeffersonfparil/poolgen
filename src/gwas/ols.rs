@@ -35,7 +35,11 @@ impl Regression for UnivariateOrdinaryLeastSquares {
         while i < self.x.ncols() {
             j = i + 1;
             while j < self.x.ncols() {
-                (cor, _) = match pearsons_correlation(&self.x.column(i), &self.x.column(j)) {
+                (cor, _) = match pearsons_correlation(
+                    &self.x.column(i),
+                    &self.x.column(j),
+                    &"sensible_corr".to_owned(),
+                ) {
                     Ok(x) => x,
                     Err(_) => (0.0, f64::NAN),
                 };

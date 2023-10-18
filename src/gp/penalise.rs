@@ -399,7 +399,12 @@ fn error_index(
         let max = y_true_j
             .iter()
             .fold(y_true_j[(0, 0)], |max, &x| if x > max { x } else { max });
-        let (cor, _pval) = pearsons_correlation(&y_true_j.column(0), &y_pred_j.column(0)).unwrap();
+        let (cor, _pval) = pearsons_correlation(
+            &y_true_j.column(0),
+            &y_pred_j.column(0),
+            &"sensible_corr".to_owned(),
+        )
+        .unwrap();
         // let mbe = (y_true_j - &y_pred_j).mean() / (max - min);vec![0.0]
         let mae = (&y_true_j - &y_pred_j)
             .iter()

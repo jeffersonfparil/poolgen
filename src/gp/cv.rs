@@ -77,7 +77,12 @@ impl
                 .column(j)
                 .iter()
                 .fold(y_true[(0, j)], |max, &x| if x > max { x } else { max });
-            let (cor_, _pval) = pearsons_correlation(&y_true.column(j), &y_pred.column(j)).unwrap();
+            let (cor_, _pval) = pearsons_correlation(
+                &y_true.column(j),
+                &y_pred.column(j),
+                &"sensible_corr".to_owned(),
+            )
+            .unwrap();
             cor[j] = cor_;
             mbe[j] = y_true.column(j).sub(&y_pred.column(j)).mean().unwrap();
             mae[j] = y_true
