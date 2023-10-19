@@ -84,7 +84,7 @@ pub fn gudmc(
         &"gudmc_intermediate_file_tajimasD.tmp".to_owned(),
     )
     .unwrap();
-    let (tajima_row_labels, tajima_col_labels, tajima) = load_sliding_window_tables(
+    let (tajima_row_labels, tajima_col_labels, tajima) = load_table(
         &fname_tajima,
         &",".to_owned(), // rows are the populations, and columns are the windows
         &vec![0],        // population ID
@@ -107,7 +107,7 @@ pub fn gudmc(
         &"gudmc_intermediate_file_Fst.tmp".to_owned(),
     )
     .unwrap();
-    let (fst_row_labels, fst_col_labels, fst) = load_sliding_window_tables(
+    let (fst_row_labels, fst_col_labels, fst) = load_table(
         &fname_fst,
         &",".to_owned(), // rows are the windows, and columns are population pairs
         &vec![0, 1, 2],  // chr, pos_ini, and pos_fin

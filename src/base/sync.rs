@@ -1026,85 +1026,6 @@ impl LoadAll for FileSyncPhen {
         Ok((freq, cnts))
     }
 
-    fn write_csv(
-        &self,
-        filter_stats: &FilterStats,
-        keep_p_minus_1: bool,
-        out: &String,
-        n_threads: &usize,
-    ) -> io::Result<String> {
-        // Output filename
-        let out = if *out == "".to_owned() {
-            let time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs_f64();
-            let bname = self
-                .filename_sync
-                .split(".")
-                .collect::<Vec<&str>>()
-                .into_iter()
-                .map(|a| a.to_owned())
-                .collect::<Vec<String>>()
-                .into_iter()
-                .rev()
-                .collect::<Vec<String>>()[1..]
-                .to_owned()
-                .into_iter()
-                .rev()
-                .collect::<Vec<String>>()
-                .join(".");
-            bname.to_owned() + "-" + &time.to_string() + "-allele_frequencies.csv"
-        } else {
-            out.clone()
-        };
-        // Instantiate output file
-        let error_writing_file = "Unable to create file: ".to_owned() + &out;
-        let mut file_out = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .append(false)
-            .open(&out)
-            .expect(&error_writing_file);
-        // Load the full sync file in parallel and sort
-        let (freqs, _cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
-        // Make sure that we have the same number of pools in the genotype and phenotype files
-        assert!(
-            freqs[0].matrix.nrows() == (&self.pool_names).len(),
-            "Please check that the pools are consistent across the genotype and phenotype files."
-        );
-        // Write the header
-        file_out
-            .write_all(
-                ("#chr,pos,allele,".to_owned() + &self.pool_names.join(",") + "\n").as_bytes(),
-            )
-            .unwrap();
-
-        // Write allele frequencies line by line
-        for f in freqs.iter() {
-            for i in 0..f.alleles_vector.len() {
-                let freqs_per_pool = f
-                    .matrix
-                    .column(i)
-                    .iter()
-                    .map(|x| parse_f64_roundup_and_own(*x, 6))
-                    .collect::<Vec<String>>()
-                    .join(",");
-                let line = vec![
-                    f.chromosome.to_owned(),
-                    f.position.to_string(),
-                    f.alleles_vector[i].to_owned(),
-                    freqs_per_pool,
-                ]
-                .join(",")
-                    + "\n";
-                file_out.write_all(line.as_bytes()).unwrap();
-            }
-        }
-
-        Ok(out)
-    }
-
     fn into_genotypes_and_phenotypes(
         &self,
         filter_stats: &FilterStats,
@@ -1176,6 +1097,160 @@ impl LoadAll for FileSyncPhen {
             pool_names: self.pool_names.clone(),
             coverages: coverages,
         })
+    }
+}
+
+impl SaveCsv for FileSyncPhen {
+    fn write_csv(
+        &self,
+        filter_stats: &FilterStats,
+        keep_p_minus_1: bool,
+        out: &String,
+        n_threads: &usize,
+    ) -> io::Result<String> {
+        // Output filename
+        let out = if *out == "".to_owned() {
+            let time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64();
+            let bname = self
+                .filename_sync
+                .split(".")
+                .collect::<Vec<&str>>()
+                .into_iter()
+                .map(|a| a.to_owned())
+                .collect::<Vec<String>>()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()[1..]
+                .to_owned()
+                .into_iter()
+                .rev()
+                .collect::<Vec<String>>()
+                .join(".");
+            bname.to_owned() + "-" + &time.to_string() + "-allele_frequencies.csv"
+        } else {
+            out.clone()
+        };
+        // Instantiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
+        // Load the full sync file in parallel and sort
+        let (freqs, _cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
+        // Make sure that we have the same number of pools in the genotype and phenotype files
+        assert!(
+            freqs[0].matrix.nrows() == (&self.pool_names).len(),
+            "Please check that the pools are consistent across the genotype and phenotype files."
+        );
+        // Write the header
+        file_out
+            .write_all(
+                ("#chr,pos,allele,".to_owned() + &self.pool_names.join(",") + "\n").as_bytes(),
+            )
+            .unwrap();
+        // Write allele frequencies line by line
+        for f in freqs.iter() {
+            for i in 0..f.alleles_vector.len() {
+                let freqs_per_pool = f
+                    .matrix
+                    .column(i)
+                    .iter()
+                    .map(|x| parse_f64_roundup_and_own(*x, 6))
+                    .collect::<Vec<String>>()
+                    .join(",");
+                let line = vec![
+                    f.chromosome.to_owned(),
+                    f.position.to_string(),
+                    f.alleles_vector[i].to_owned(),
+                    freqs_per_pool,
+                ]
+                .join(",")
+                    + "\n";
+                file_out.write_all(line.as_bytes()).unwrap();
+            }
+        }
+        Ok(out)
+    }
+}
+
+impl SaveCsv for GenotypesAndPhenotypes {
+    fn write_csv(
+        &self,
+        _filter_stats: &FilterStats,
+        _keep_p_minus_1: bool,
+        out: &String,
+        _n_threads: &usize,
+    ) -> io::Result<String> {
+        // Note: All input parameters are not used except for one - out, the rest are for other implementations of this trait i.e. filter_stats, keep_p_minus_1, and n_threads
+        // Sanity checks
+        let (n, p) = self.intercept_and_allele_frequencies.dim();
+        let (n_, l) = self.coverages.dim();
+        let (n__, _k) = self.phenotypes.dim();
+        let n___ = self.pool_names.len();
+        let p_ = self.chromosome.len();
+        let p__ = self.position.len();
+        let p___ = self.allele.len();
+        let l_ = self.start_index_of_each_locus.len();
+        assert_eq!(p_, p__, "Please check the genotypes and phenotypes data: the number of elements in the chromosome names vector is not equal to the number of elements in the positions vector.");
+        assert_eq!(p_, p___, "Please check the genotypes and phenotypes data: the number of elements in the chromosome names vector is not equal to the number of elements in the alleles vector.");
+        assert_eq!(p_, p, "Please check the genotypes and phenotypes data: the number of elements in the chromosome names vector is not equal to the number of columns in the allele frequencies matrix.");
+        assert_eq!(l_, l, "Please check the genotypes and phenotypes data: the number of elements in the start index of each locus vector is not equal to the number of columns in the coverages matrix.");
+        assert_eq!(n___, n__, "Please check the genotypes and phenotypes data: the number of elements in the pool names vector is not equal to the number of rows in the phenotypes matrix.");
+        assert_eq!(n___, n_, "Please check the genotypes and phenotypes data: the number of elements in the pool names vector is not equal to the number of rows in the coverages matrix.");
+        assert_eq!(n___, n, "Please check the genotypes and phenotypes data: the number of elements in the pool names vector is not equal to the number of rows in the allele frequencies matrix.");
+        // Output filename
+        let out = if *out == "".to_owned() {
+            let time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64();
+            "genotypes_and_phenotypes".to_owned()
+                + "-"
+                + &time.to_string()
+                + "-allele_frequencies.csv"
+        } else {
+            out.clone()
+        };
+        // Instantiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
+        // Write the header
+        file_out
+            .write_all(
+                ("#chr,pos,allele,".to_owned() + &self.pool_names.join(",") + "\n").as_bytes(),
+            )
+            .unwrap();
+        // Write allele frequencies line by line (skip the intercept)
+        for i in 1..p {
+            let freqs_per_pool = self
+                .intercept_and_allele_frequencies
+                .column(i)
+                .iter()
+                .map(|&x| parse_f64_roundup_and_own(x, 6))
+                .collect::<Vec<String>>()
+                .join(",");
+            let line = vec![
+                self.chromosome[i].to_owned(),
+                self.position[i].to_string(),
+                self.allele[i].to_owned(),
+                freqs_per_pool,
+            ]
+            .join(",")
+                + "\n";
+            file_out.write_all(line.as_bytes()).unwrap();
+        }
+        Ok(out)
     }
 }
 
@@ -1437,6 +1512,10 @@ mod tests {
         let frequencies_and_phenotypes = file_sync_phen
             .into_genotypes_and_phenotypes(&filter_stats, true, &n_threads)
             .unwrap();
+        let write_csv_outname = frequencies_and_phenotypes
+            .write_csv(&filter_stats, true, &"test-write_csv.csv".to_owned(), &1)
+            .unwrap();
+        assert_eq!(write_csv_outname, "test-write_csv.csv".to_owned());
         // println!("loaded_freqs={:?}", loaded_freqs);
         // println!("len(loaded_freqs)={:?}", loaded_freqs.len());
         // Assertions

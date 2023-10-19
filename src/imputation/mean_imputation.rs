@@ -1,6 +1,6 @@
 use crate::base::*;
 use ndarray::prelude::*;
-use std::io::{self, Error, ErrorKind};
+use std::io;
 
 impl GenotypesAndPhenotypes {
     pub fn mean_imputation(&mut self) -> io::Result<&mut Self> {
@@ -54,6 +54,29 @@ impl GenotypesAndPhenotypes {
     }
 }
 
+// Impute using mean allele frequencies across pools
+pub fn impute_mean(
+    file_sync_phen: &FileSyncPhen,
+    filter_stats: &FilterStats,
+    min_depth_set_to_missing: &f64,
+    n_threads: &usize,
+    out: &String,
+) -> io::Result<String> {
+    // All non-zero alleles across pools are kept, i.e. biallelic loci have 2 columns, triallelic have 3, and so on.
+    let keep_p_minus_1 = false;
+    let mut genotypes_and_phenotypes = file_sync_phen
+        .into_genotypes_and_phenotypes(filter_stats, keep_p_minus_1, n_threads)
+        .unwrap();
+    genotypes_and_phenotypes
+            .set_missing_by_depth(min_depth_set_to_missing)
+            .unwrap();
+    genotypes_and_phenotypes.mean_imputation().unwrap();
+    let out = genotypes_and_phenotypes
+        .write_csv(filter_stats, keep_p_minus_1, out, n_threads)
+        .unwrap();
+    Ok(out)
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[cfg(test)]
 mod tests {
@@ -101,6 +124,17 @@ mod tests {
             "After imputation:\n{:?}",
             frequencies_and_phenotypes.intercept_and_allele_frequencies
         );
+
+        let outname = impute_mean(
+            &file_sync_phen,
+            &filter_stats,
+            &min_depth_set_to_missing,
+            &n_threads,
+            &"test-impute_mean.csv".to_owned(),
+        )
+        .unwrap();
+        assert_eq!(outname, "test-impute_mean.csv".to_owned()); // Do better!!! Load data - thus working on improving load_table()
+
         assert_eq!(
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)],
             Array1::from_vec(vec![0.3333333333333333, 0.2, 0.14285714285714285])

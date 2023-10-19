@@ -10,7 +10,8 @@ mod gwas;
 mod imputation;
 mod popgen;
 mod tables;
-use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse};
+use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse, SaveCsv};
+use imputation::*;
 use gp::{
     ols, penalise_glmnet, penalise_lasso_like, penalise_lasso_like_with_iterative_proxy_norms,
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
@@ -26,7 +27,7 @@ use popgen::*;
     long_about = "Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust."
 )]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity", "watterson_estimator", "tajima_d", "gudmc")
+    /// Analysis to perform (i.e. "pileup2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity", "watterson_estimator", "tajima_d", "gudmc", "impute")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -96,12 +97,24 @@ struct Args {
     /// Estimation of population genetics parameters per window, i.e. fst, pi, Watterson's theta, and Tajima's D per population per window: minimum number of loci per window
     #[clap(long, default_value_t = 10)]
     min_loci_per_window: u64,
-    /// Genomewide unbiased discernment of modes of convergent evolution (gudmc), i.e. the minimum deviation from the genomewide Tajima's D to be considered as interesting troughs (selective sweeps) and peaks (sites under balancing selection)
+    /// Genomewide unbiased determination of modes of convergent evolution (gudmc), i.e. the minimum deviation from the genomewide Tajima's D to be considered as interesting troughs (selective sweeps) and peaks (sites under balancing selection)
     #[clap(long, default_value_t = 2.0)]
     sigma_threshold: f64,
-    /// Genomewide unbiased discernment of modes of convergent evolution (gudmc), i.e. recombination rate in centiMorgan per megabase (default from cM/Mb estimate in maize from https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7)
+    /// Genomewide unbiased determination of modes of convergent evolution (gudmc), i.e. recombination rate in centiMorgan per megabase (default from cM/Mb estimate in maize from https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7)
     #[clap(long, default_value_t = 0.73)]
     recombination_rate_cm_per_mb: f64,
+    /// Imputation parameter, i.e. minimum depth to set to missing data for imputation
+    #[clap(long, default_value_t = 5.00)]
+    min_depth_set_to_missing: f64,
+    /// Imputation parameter, i.e. imputation method, select from "mean" for simple imputation using mean allele frequencies across non-missing pools, or "aLD-kNNi" for adaptive linkage disequillibrium (estimated using correlations within a window) k-nearest neighbour weighted allele frequencies imputation
+    #[clap(long, default_value = "aLD-kNNi")]
+    imputation_method: String,
+    /// Imputation parameter, i.e. minimum Pearson's correlation value at with loci within the window are considered in linkage disequillibrium (LD) with the locus requiring imputation. The resulting loci will be used to calculate pairwise distances (adaptive if we have too much missing data in the window at which point we use all the loci within the window).
+    #[clap(long, default_value_t = 0.80)]
+    min_correlation: f64,
+    /// Imputation parameter, i.e. number of nearest neighbours from which the imputed weighted (weights based on distance from the pool requiring imputation) mean allele frequencies will be calculated from (adaptive if all k neighbours are also requiring imputation at the locus, at which point we increase k until at least one pool in non-missing at the locus).
+    #[clap(long, default_value_t = 5)]
+    k_neighbours: u64
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
@@ -281,6 +294,28 @@ fn main() {
                     &args.n_threads,
                 )
                 .unwrap();
+        } else if args.analysis == String::from("impute") {
+            let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+            output = if &args.imputation_method == &"mean".to_owned() {
+                impute_mean(&file_sync_phen,
+                    &filter_stats,
+                    &args.min_depth_set_to_missing,
+                    &args.n_threads,
+                    &args.output,
+                )
+                .unwrap()
+            } else {
+                impute_aLDkNN(&file_sync_phen,
+                    &filter_stats, 
+                    &args.min_depth_set_to_missing, 
+                    &args.window_size_bp, 
+                    &args.window_slide_size_bp, 
+                    &args.min_loci_per_window, 
+                    &args.min_correlation,
+                    &args.k_neighbours,
+                    &args.n_threads, 
+                    &args.output).unwrap()
+            }
         } else if args.analysis == String::from("genomic_prediction_cross_validation") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             let genotypes_and_phenotypes = file_sync_phen

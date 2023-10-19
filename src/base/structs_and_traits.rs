@@ -256,19 +256,22 @@ pub trait LoadAll {
         keep_n_minus_1: bool,
         n_threads: &usize,
     ) -> io::Result<(Vec<LocusFrequencies>, Vec<LocusCounts>)>; // Allele frequencies and counts across pools and alleles per locus
-    fn write_csv(
-        &self,
-        filter_stats: &FilterStats,
-        keep_n_minus_1: bool,
-        out: &String,
-        n_threads: &usize,
-    ) -> io::Result<String>;
     fn into_genotypes_and_phenotypes(
         &self,
         filter_stats: &FilterStats,
         keep_n_minus_1: bool,
         n_threads: &usize,
     ) -> io::Result<GenotypesAndPhenotypes>;
+}
+
+pub trait SaveCsv {
+    fn write_csv(
+        &self,
+        filter_stats: &FilterStats,
+        keep_p_minus_1: bool,
+        out: &String,
+        n_threads: &usize,
+    ) -> io::Result<String>;
 }
 
 pub trait Regression {

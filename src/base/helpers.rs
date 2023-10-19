@@ -349,8 +349,8 @@ pub fn define_sliding_windows(
     Ok((out_idx_head, out_idx_tail))
 }
 
-/// Load tables of sliding window metrics
-pub fn load_sliding_window_tables(
+/// Load table from a delimited text file
+pub fn load_table(
     fname: &String,
     delimiter: &String,
     idx_row_labels: &Vec<usize>,
@@ -551,7 +551,7 @@ mod tests {
         let pos_end_col = 1;
         let data_start_col = 2;
         let data_end_col = 6;
-        let (row_labels, column_labels, data) = load_sliding_window_tables(
+        let (row_labels, column_labels, data) = load_table(
             &"./tests/test.csv".to_owned(),
             &",".to_owned(),
             &vec![0, 1],
