@@ -370,7 +370,7 @@ mod tests {
         let outname = impute_aLDkNN(
             &file_sync_phen,
             &filter_stats,
-    &min_depth_set_to_missing,
+            &min_depth_set_to_missing,
             &window_size_bp,
             &window_slide_size_bp,
             &min_loci_per_window,
