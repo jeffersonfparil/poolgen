@@ -11,12 +11,12 @@ mod imputation;
 mod popgen;
 mod tables;
 use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse, SaveCsv};
-use imputation::*;
 use gp::{
     ols, penalise_glmnet, penalise_lasso_like, penalise_lasso_like_with_iterative_proxy_norms,
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
 };
 use gwas::*;
+use imputation::*;
 use popgen::*;
 
 #[derive(Parser, Debug)]
@@ -114,7 +114,7 @@ struct Args {
     min_correlation: f64,
     /// Imputation parameter, i.e. number of nearest neighbours from which the imputed weighted (weights based on distance from the pool requiring imputation) mean allele frequencies will be calculated from (adaptive if all k neighbours are also requiring imputation at the locus, at which point we increase k until at least one pool in non-missing at the locus).
     #[clap(long, default_value_t = 5)]
-    k_neighbours: u64
+    k_neighbours: u64,
 }
 
 /// # poolgen: quantitative and population genetics on pool sequencing (Pool-seq) data
@@ -297,7 +297,8 @@ fn main() {
         } else if args.analysis == String::from("impute") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = if &args.imputation_method == &"mean".to_owned() {
-                impute_mean(&file_sync_phen,
+                impute_mean(
+                    &file_sync_phen,
                     &filter_stats,
                     &args.min_depth_set_to_missing,
                     &args.n_threads,
@@ -305,16 +306,19 @@ fn main() {
                 )
                 .unwrap()
             } else {
-                impute_aLDkNN(&file_sync_phen,
-                    &filter_stats, 
-                    &args.min_depth_set_to_missing, 
-                    &args.window_size_bp, 
-                    &args.window_slide_size_bp, 
-                    &args.min_loci_per_window, 
+                impute_aLDkNN(
+                    &file_sync_phen,
+                    &filter_stats,
+                    &args.min_depth_set_to_missing,
+                    &args.window_size_bp,
+                    &args.window_slide_size_bp,
+                    &args.min_loci_per_window,
                     &args.min_correlation,
                     &args.k_neighbours,
-                    &args.n_threads, 
-                    &args.output).unwrap()
+                    &args.n_threads,
+                    &args.output,
+                )
+                .unwrap()
             }
         } else if args.analysis == String::from("genomic_prediction_cross_validation") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();

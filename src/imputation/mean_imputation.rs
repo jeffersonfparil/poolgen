@@ -68,8 +68,8 @@ pub fn impute_mean(
         .into_genotypes_and_phenotypes(filter_stats, keep_p_minus_1, n_threads)
         .unwrap();
     genotypes_and_phenotypes
-            .set_missing_by_depth(min_depth_set_to_missing)
-            .unwrap();
+        .set_missing_by_depth(min_depth_set_to_missing)
+        .unwrap();
     genotypes_and_phenotypes.mean_imputation().unwrap();
     let out = genotypes_and_phenotypes
         .write_csv(filter_stats, keep_p_minus_1, out, n_threads)

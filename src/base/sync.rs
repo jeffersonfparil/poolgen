@@ -1596,7 +1596,11 @@ mod tests {
         // );
 
         let file_sync = FileSync {
+<<<<<<< HEAD
             filename: "./tests/test.sparse.sync".to_owned(),
+=======
+            filename: "./tests/test.sync".to_owned(),
+>>>>>>> cf3419c (trying to account for sparsity)
             test: "load".to_owned(),
         };
         let file_phen = FilePhen {
@@ -1616,7 +1620,11 @@ mod tests {
         };
         let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
         let frequencies_and_phenotypes = file_sync_phen
+<<<<<<< HEAD
             .into_genotypes_and_phenotypes(&filter_stats, true, &1)
+=======
+            .into_genotypes_and_phenotypes(&filter_stats, true, &n_threads)
+>>>>>>> cf3419c (trying to account for sparsity)
             .unwrap();
         println!(
             "frequencies_and_phenotypes={:?}",

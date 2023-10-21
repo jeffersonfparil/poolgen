@@ -285,8 +285,8 @@ pub fn impute_aLDkNN(
         .into_genotypes_and_phenotypes(filter_stats, keep_p_minus_1, n_threads)
         .unwrap();
     genotypes_and_phenotypes
-            .set_missing_by_depth(min_depth_set_to_missing)
-            .unwrap();
+        .set_missing_by_depth(min_depth_set_to_missing)
+        .unwrap();
     genotypes_and_phenotypes
         .adaptive_ld_knn_imputation(
             window_size_bp,
@@ -377,7 +377,9 @@ mod tests {
             &min_correlation,
             &k_neighbours,
             &n_threads,
-            &"test-impute_aLDkNN.csv".to_owned()).unwrap();
+            &"test-impute_aLDkNN.csv".to_owned(),
+        )
+        .unwrap();
         assert_eq!(outname, "test-impute_aLDkNN.csv".to_owned()); // Do better!!! Load data - thus working on improving load_table()
 
         assert_eq!(
