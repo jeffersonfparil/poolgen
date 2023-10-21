@@ -487,6 +487,7 @@ mod tests {
             min_quality: 0.01,
             min_coverage: 1,
             min_allele_frequency: 0.001,
+            min_missingness_rate: 0.0,
             pool_sizes: vec![42.0, 42.0, 42.0, 42.0, 42.0],
         };
         let genotypes_and_phenotypes = file_sync_phen

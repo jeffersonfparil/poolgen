@@ -44,6 +44,9 @@ struct Args {
     /// Minimum allele frequency for associating the genotypes with the phenotype/s
     #[clap(long, default_value_t = 0.001)]
     min_allele_frequency: f64,
+    /// Minimum missingness rate, i.e. the minimum fraction of pools missing in each locus
+    #[clap(long, default_value_t = 0.0)]
+    min_missingness_rate: f64,
     /// Keep ambiguous reads during SNP filtering, i.e. keep them coded as Ns
     #[clap(long, action)]
     keep_ns: bool,
@@ -178,6 +181,7 @@ fn main() {
         min_quality: args.min_quality,
         min_coverage: args.min_coverage,
         min_allele_frequency: args.min_allele_frequency,
+        min_missingness_rate: args.min_missingness_rate,
         pool_sizes: phen.pool_sizes.clone(),
     };
     if args.analysis == String::from("pileup2sync") {

@@ -66,6 +66,7 @@ mod tests {
             min_quality: 1.0,
             min_coverage: 0,
             min_allele_frequency: 0.000001,
+            min_missingness_rate: 0.0,
             pool_sizes: vec![20., 20., 20., 20., 20.],
         };
         let n_threads = 2;

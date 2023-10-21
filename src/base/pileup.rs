@@ -542,6 +542,7 @@ mod tests {
             min_quality: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.0,
+            min_missingness_rate: 0.0,
             pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
         };
         let mut filtered_pileup = pileup_line.clone();

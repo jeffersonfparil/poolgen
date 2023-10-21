@@ -63,6 +63,7 @@ pub struct FilterStats {
     pub min_quality: f64,
     pub min_coverage: u64,
     pub min_allele_frequency: f64,
+    pub min_missingness_rate: f64,
     pub pool_sizes: Vec<f64>,
 }
 
