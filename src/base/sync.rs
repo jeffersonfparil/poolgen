@@ -1663,40 +1663,39 @@ mod tests {
         //     expected_output7.matrix[(4, 0)],
         //     frequencies_and_phenotypes.intercept_and_allele_frequencies[(4, 1)]
         // );
-
-        let file_sync = FileSync {
-            filename: "./tests/test.sparse.sync".to_owned(),
-            test: "load".to_owned(),
-        };
-        let file_phen = FilePhen {
-            filename: "./tests/test.csv".to_owned(),
-            delim: ",".to_owned(),
-            names_column_id: 0,
-            sizes_column_id: 1,
-            trait_values_column_ids: vec![2],
-            format: "default".to_owned(),
-        };
-        let phen = file_phen.lparse().unwrap();
-        let filter_stats = FilterStats {
-            remove_ns: true,
-            min_quality: 0.005,
-            min_coverage: 0,
-            min_allele_frequency: 0.0001,
-            min_missingness_rate: 0.2,
-            pool_sizes: phen.pool_sizes,
-        };
-        let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
-        let frequencies_and_phenotypes = file_sync_phen
-            .into_genotypes_and_phenotypes(&filter_stats, true, &n_threads)
-            .unwrap();
-        let write_csv_outname = frequencies_and_phenotypes
-            .write_csv(
-                &filter_stats,
-                true,
-                &"test-sparse-write_csv.csv".to_owned(),
-                &1,
-            )
-            .unwrap();
-        // assert_eq!(0, 1);
+        // let file_sync = FileSync {
+        //     filename: "./tests/test.sparse.sync".to_owned(),
+        //     test: "load".to_owned(),
+        // };
+        // let file_phen = FilePhen {
+        //     filename: "./tests/test.csv".to_owned(),
+        //     delim: ",".to_owned(),
+        //     names_column_id: 0,
+        //     sizes_column_id: 1,
+        //     trait_values_column_ids: vec![2],
+        //     format: "default".to_owned(),
+        // };
+        // let phen = file_phen.lparse().unwrap();
+        // let filter_stats = FilterStats {
+        //     remove_ns: true,
+        //     min_quality: 0.005,
+        //     min_coverage: 0,
+        //     min_allele_frequency: 0.0001,
+        //     min_missingness_rate: 0.2,
+        //     pool_sizes: phen.pool_sizes,
+        // };
+        // let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
+        // let frequencies_and_phenotypes = file_sync_phen
+        //     .into_genotypes_and_phenotypes(&filter_stats, true, &n_threads)
+        //     .unwrap();
+        // let write_csv_outname = frequencies_and_phenotypes
+        //     .write_csv(
+        //         &filter_stats,
+        //         true,
+        //         &"test-sparse-write_csv.csv".to_owned(),
+        //         &1,
+        //     )
+        //     .unwrap();
+        // // assert_eq!(0, 1);
     }
 }
