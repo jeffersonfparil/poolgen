@@ -187,7 +187,11 @@ impl Filter for LocusCounts {
         let mut matrix: Array2<f64> = Array2::from_elem((n, p), 0.0 as f64);
         for i in 0..n {
             for j in 0..p {
-                matrix[(i, j)] = self.matrix[(i, j)] as f64 / row_sums[i] as f64;
+                matrix[(i, j)] = if row_sums[i] == 0.0 {
+                    f64::NAN
+                } else {
+                    self.matrix[(i, j)] as f64 / row_sums[i] 
+                };
             }
         }
         Ok(Box::new(LocusFrequencies {
@@ -201,8 +205,15 @@ impl Filter for LocusCounts {
     // Filter PileupLine by minimum coverage, minimum quality
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
-        self.check().unwrap(); // preliminary check of the structure format
-                               // Remove Ns
+        // Preliminary check of the structure format
+        self.check().unwrap();
+        // Filter out if the locus is missing across all pools using the first allele where if the locus is missing then all 
+        let (n, _p) = self.matrix.dim();
+        let n_missing_across_pools = self.matrix.slice(s![.., 0]).fold(0, |sum, &x| if (x as f64).is_nan() {sum + 1}else{sum});
+        if n_missing_across_pools == n {
+            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+        }
+        // Remove Ns
         if filter_stats.remove_ns {
             let i = match self
                 .alleles_vector
@@ -219,12 +230,18 @@ impl Filter for LocusCounts {
         }
         // println!("self={:?}", self);
         // Filter by minimum coverage
-        let sum_coverage = self.matrix.sum_axis(Axis(1)); // summation across the columns which means sum of all elements per row
-        let min_sum_coverage =
+        // let sum_coverage = self.matrix.sum_axis(Axis(1)); // summation across the columns which means sum of all elements per row
+        let sum_coverage = self.matrix.map_axis(Axis(1), |r| {
+            r.map(|&x| x as f64)
+                .iter()
+                .filter(|&&x| !x.is_nan())
+                .fold(0.0, |sum, &x| sum + x)
+            }); // summation across the columns which means sum of all elements per row while ignoring NANs!
+            let min_sum_coverage =
             sum_coverage
                 .iter()
                 .fold(sum_coverage[0], |min, &x| if x < min { x } else { min });
-        if min_sum_coverage < filter_stats.min_coverage {
+        if min_sum_coverage < filter_stats.min_coverage as f64 {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         // Filter by minimum allele frequency
@@ -263,9 +280,12 @@ impl Filter for LocusCounts {
                 j += 1;
             }
         }
+        //
+        // Check if all alleles have failed the minimum allele frequency, i.e. the locus has been filtered out
         if p < 2 {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
+        // Return the locus if it passed all the filtering steps
         self.matrix = matrix;
         Ok(self)
     }
@@ -314,21 +334,25 @@ impl Filter for LocusFrequencies {
                 .filter(|&&x| !x.is_nan())
                 .fold(0.0, |sum, &x| sum + x)
         }); // summation across the columns which means sum of all elements per row while ignoring NANs!
-        // // Make sure all pools have been convered
-        // if row_sums
-        //     .iter()
-        //     .fold(row_sums[0], |min, &x| if x < min { x } else { min })
-        //     == 0.0
-        // {
-        //     return Err(Error::new(
-        //         ErrorKind::Other,
-        //         "At least one pool did not have coverage.",
-        //     ));
-        // }
+            // // Make sure all pools have been convered
+            // if row_sums
+            //     .iter()
+            //     .fold(row_sums[0], |min, &x| if x < min { x } else { min })
+            //     == 0.0
+            // {
+            //     return Err(Error::new(
+            //         ErrorKind::Other,
+            //         "At least one pool did not have coverage.",
+            //     ));
+            // }
         let mut matrix: Array2<f64> = Array2::from_elem((n, p), 0.0 as f64);
         for i in 0..n {
             for j in 0..p {
-                matrix[(i, j)] = self.matrix[(i, j)] / row_sums[i];
+                matrix[(i, j)] = if row_sums[i] == 0.0 {
+                    f64::NAN
+                } else {
+                    self.matrix[(i, j)] as f64 / row_sums[i] 
+                };
             }
         }
         Ok(Box::new(LocusFrequencies {
@@ -430,7 +454,7 @@ impl Sort for LocusFrequencies {
                 .filter(|&&x| !x.is_nan())
                 .fold(0.0, |sum, &x| sum + x)
         }); // ignoring NANs!
-        // println!("self={:?}", self);
+            // println!("self={:?}", self);
         if decreasing {
             idx.sort_by(|&a, &b| column_sums[b].partial_cmp(&column_sums[a]).unwrap());
         } else {
@@ -1088,7 +1112,12 @@ impl LoadAll for FileSyncPhen {
             }
             // Coverages
             let c = &cnts[i];
-            let cov: Array1<f64> = c.matrix.sum_axis(Axis(1)).map(|&x| x as f64);
+            let cov: Array1<f64> = c.matrix.map_axis(Axis(1), |r| {
+                r.map(|&x| x as f64)
+                    .iter()
+                    .filter(|&&x| !x.is_nan())
+                    .fold(0.0, |sum, &x| sum + x)
+                }); // summation across the columns which means sum of all elements per row while ignoring NANs!
             for l_ in 0..cov.len() {
                 coverages[(l_, l)] = cov[l_];
             }
@@ -1384,6 +1413,12 @@ mod tests {
             .into_iter()
             .map(|x| x as f64)
             .collect::<Vec<f64>>();
+        let row_sums: Array1<f64> = counts_matrix.map_axis(Axis(1), |r| {
+            r.map(|&x| x as f64)
+                .iter()
+                .filter(|&&x| !x.is_nan())
+                .fold(0.0, |sum, &x| sum + x)
+            }); // summation across the columns which means sum of all elements per row while ignoring NANs!
         for i in 0..counts_matrix.nrows() {
             for j in 0..counts_matrix.ncols() {
                 frequencies_matrix[(i, j)] = counts_matrix[(i, j)] as f64 / row_sums[i];
@@ -1596,11 +1631,7 @@ mod tests {
         // );
 
         let file_sync = FileSync {
-<<<<<<< HEAD
             filename: "./tests/test.sparse.sync".to_owned(),
-=======
-            filename: "./tests/test.sync".to_owned(),
->>>>>>> cf3419c (trying to account for sparsity)
             test: "load".to_owned(),
         };
         let file_phen = FilePhen {
@@ -1620,11 +1651,10 @@ mod tests {
         };
         let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
         let frequencies_and_phenotypes = file_sync_phen
-<<<<<<< HEAD
-            .into_genotypes_and_phenotypes(&filter_stats, true, &1)
-=======
             .into_genotypes_and_phenotypes(&filter_stats, true, &n_threads)
->>>>>>> cf3419c (trying to account for sparsity)
+            .unwrap();
+        let write_csv_outname = frequencies_and_phenotypes
+            .write_csv(&filter_stats, true, &"test-sparse-write_csv.csv".to_owned(), &1)
             .unwrap();
         println!(
             "frequencies_and_phenotypes={:?}",
