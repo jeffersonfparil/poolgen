@@ -113,6 +113,19 @@ pub struct LocusCountsAndPhenotypes {
     pub pool_names: Vec<String>,
 }
 
+// Struct of allele frequencies and phenotypes for genomic prediction
+#[derive(Debug, Clone)]
+pub struct GenotypesAndPhenotypes {
+    pub chromosome: Vec<String>,                       // 1 + p
+    pub position: Vec<u64>,                            // 1 + p
+    pub allele: Vec<String>,                           // 1 + p
+    pub start_index_of_each_locus: Vec<u64>,           // m loci
+    pub intercept_and_allele_frequencies: Array2<f64>, // n pools x 1 + p alleles across loci
+    pub phenotypes: Array2<f64>,                       // n pools x k traits
+    pub pool_names: Vec<String>,                       // n
+    pub coverages: Array2<f64>,                        // n pools x m loci
+}
+
 // Struct for GWAlpha's least squares cost function minimisation
 #[derive(Debug, Clone)]
 pub struct LeastSquaresBeta {
@@ -161,19 +174,6 @@ pub struct UnivariateMaximumLikelihoodEstimation {
     pub v_b: Array1<f64>,
     pub t: Array1<f64>,
     pub pval: Array1<f64>,
-}
-
-// Struct of allele frequencies and phenotypes for genomic prediction
-#[derive(Debug, Clone)]
-pub struct GenotypesAndPhenotypes {
-    pub chromosome: Vec<String>,                       // 1 + p
-    pub position: Vec<u64>,                            // 1 + p
-    pub allele: Vec<String>,                           // 1 + p
-    pub start_index_of_each_locus: Vec<u64>,           // m loci
-    pub intercept_and_allele_frequencies: Array2<f64>, // n pools x 1 + p alleles across loci
-    pub phenotypes: Array2<f64>,                       // n pools x k traits
-    pub pool_names: Vec<String>,                       // n
-    pub coverages: Array2<f64>,                        // n pools x m loci
 }
 
 #[derive(Debug, Clone)]

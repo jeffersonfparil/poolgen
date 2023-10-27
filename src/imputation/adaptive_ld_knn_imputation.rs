@@ -247,6 +247,7 @@ impl GenotypesAndPhenotypes {
                         }
                     }
                 }
+                println!("*window_freqs:\n{:?}", *window_freqs);
             });
         // println!("vec_windows_freqs[0]:\n{:?}", vec_windows_freqs[0]);
         // Write-out the imputed data
@@ -281,12 +282,23 @@ pub fn impute_aLDkNN(
 ) -> io::Result<String> {
     // All non-zero alleles across pools are kept, i.e. biallelic loci have 2 columns, triallelic have 3, and so on.
     let keep_p_minus_1 = false;
+    let start = std::time::SystemTime::now();
     let mut genotypes_and_phenotypes = file_sync_phen
         .into_genotypes_and_phenotypes(filter_stats, keep_p_minus_1, n_threads)
         .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!("Parsing the sync into allele frequncies: {} seconds", duration.as_secs());
+    println!("genotypes_and_phenotypes.intercept_and_allele_frequencies:\n{:?}", genotypes_and_phenotypes.intercept_and_allele_frequencies);
+    let start = std::time::SystemTime::now();
     genotypes_and_phenotypes
         .set_missing_by_depth(min_depth_set_to_missing)
         .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!("Set missing loci below the minimum depth: {} seconds", duration.as_secs());
+    println!("genotypes_and_phenotypes.intercept_and_allele_frequencies:\n{:?}", genotypes_and_phenotypes.intercept_and_allele_frequencies);
+    let start = std::time::SystemTime::now();
     genotypes_and_phenotypes
         .adaptive_ld_knn_imputation(
             window_size_bp,
@@ -296,6 +308,9 @@ pub fn impute_aLDkNN(
             k_neighbours,
         )
         .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!("Imputation: {} seconds", duration.as_secs());
     let out = genotypes_and_phenotypes
         .write_csv(filter_stats, keep_p_minus_1, out, n_threads)
         .unwrap();
@@ -402,3 +417,28 @@ mod tests {
         // assert_eq!(0, 1);
     }
 }
+
+
+// SYNC=/home/jeff/poolgen/tests/test.10k_loci.sync
+// PHEN=/home/jeff/poolgen/tests/test.10k_loci.csv
+// NCORES=7
+// OUT=/home/jeff/poolgen/tests/test-impute.10k_loci.csv
+// time cargo run -- impute \
+//     -f ${SYNC} \
+//     -p ${PHEN} \
+//     --phen-delim , \
+//     --phen-name-col 0 \
+//     --phen-pool-size-col 1 \
+//     --phen-value-col 2 \
+//     --min-allele-frequency 0.0001 \
+//     --min-coverage 0 \
+//     --min-quality 0.01 \
+//     --min-missingness-rate 0.2 \
+//     --min-depth-set-to-missing 5 \
+//     --window-size-bp 1000000 \
+//     --window-slide-size-bp 1000000 \
+//     --min-loci-per-window 1 \
+//     --min-correlation 0.5 \
+//     --k-neighbours 5 \
+//     --n-threads ${NCORES} \
+//     -o ${OUT}

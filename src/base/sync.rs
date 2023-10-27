@@ -254,6 +254,7 @@ impl Filter for LocusCounts {
         //// Next account for pool sizes to get the proper minmum allele frequency across all pools
         let n = allele_frequencies.matrix.nrows();
         let mut p = allele_frequencies.matrix.ncols();
+        assert!(n == filter_stats.pool_sizes.len(), "Please make that the number of pools and the pool sizes in FilterStats match.");
         let mut q: f64;
         let mut j: usize = 0;
         while j < p {
@@ -1129,9 +1130,9 @@ impl LoadAll for FileSyncPhen {
             cnts.len(),
             "Frequencies and counts not the same length."
         );
-        for i in 0..freqs.len() {
+        for idx in 0..freqs.len() {
             // Allele frequencies
-            let f = &freqs[i];
+            let f = &freqs[idx];
             start_index_of_each_locus.push(j as u64); // For grouping allele frequencies by locus
             for j_ in 0..f.matrix.ncols() {
                 chromosome.push(f.chromosome.clone());
@@ -1143,15 +1144,15 @@ impl LoadAll for FileSyncPhen {
                 j += 1; // next allele
             }
             // Coverages
-            let c = &cnts[i];
+            let c = &cnts[idx];
             let cov: Array1<f64> = c.matrix.map_axis(Axis(1), |r| {
                 r.map(|&x| x as f64)
                     .iter()
                     .filter(|&&x| !x.is_nan())
                     .fold(0.0, |sum, &x| sum + x)
             }); // summation across the columns which means sum of all elements per row while ignoring NANs!
-            for l_ in 0..cov.len() {
-                coverages[(l_, l)] = cov[l_];
+            for i in 0..cov.len() {
+                coverages[(i, l)] = cov[i];
             }
             l += 1; // next locus
         }
