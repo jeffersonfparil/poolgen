@@ -419,8 +419,8 @@ mod tests {
 }
 
 
-// SYNC=/home/jeff/poolgen/tests/test.10k_loci.sync
-// PHEN=/home/jeff/poolgen/tests/test.10k_loci.csv
+// SYNC=/home/jeff/poolgen/tests/test-10k_loci.sync
+// PHEN=/home/jeff/poolgen/tests/test-10k_loci.csv
 // NCORES=7
 // OUT=/home/jeff/poolgen/tests/test-impute.10k_loci.csv
 // time cargo run -- impute \
