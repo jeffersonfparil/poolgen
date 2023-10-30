@@ -13,7 +13,7 @@ impl GenotypesAndPhenotypes {
         k_neighbours: &u64,
     ) -> io::Result<&mut Self> {
         // We are assuming that all non-zero alleles across pools are kept, i.e. biallelic loci have 2 columns, triallelic have 3, and so on.
-        let (n, p) = self.intercept_and_allele_frequencies.dim();
+        let (n, _p) = self.intercept_and_allele_frequencies.dim();
         let (n_, l) = self.coverages.dim();
         let l_ = self.start_index_of_each_locus.len();
         let (idx_window_head, idx_window_tail) = define_sliding_windows(
@@ -34,13 +34,15 @@ impl GenotypesAndPhenotypes {
         // Parallel processing per window
         let mut vec_windows_freqs: Vec<Array2<f64>> = vec![Array2::from_elem((1, 1), f64::NAN); w];
         let idx_windows: Vec<usize> = (0..w).collect();
-        Zip::from(&mut vec_windows_freqs)
-            .and(&idx_windows)
-            .par_for_each(|window_freqs, &a| {
+        // Zip::from(&mut vec_windows_freqs)
+        //     .and(&idx_windows)
+        //     .par_for_each(|window_freqs, &a| {
+        for a in 0..idx_windows.len() {
                 let idx_ini = idx_window_head[a];
                 let idx_fin = idx_window_tail[a];
                 let p = idx_fin - idx_ini;
-                *window_freqs = self
+                // *window_freqs = self
+                let mut window_freqs = self
                     .intercept_and_allele_frequencies
                     .slice(s![.., idx_ini..idx_fin])
                     .to_owned();
@@ -57,10 +59,11 @@ impl GenotypesAndPhenotypes {
                                 corr[(j0, j1)] = x.0;
                                 corr[(j1, j0)] = x.0
                             }
-                            Err(x) => continue,
+                            Err(_) => continue,
                         };
                     }
                 }
+                println!("corr:\n{:?}", corr);
                 for j in 0..p {
                     if window_freqs
                         .column(j)
@@ -121,7 +124,7 @@ impl GenotypesAndPhenotypes {
                                 }
                             }
                         }
-                        // println!("dist={:?}", dist);
+                        println!("dist={:?}", dist);
                         // Now, let's find the pools needing imputation and impute them using the k-nearest neighbours
                         for i in 0..n {
                             let mut k = *k_neighbours as usize; // define the adaptive k for use later
@@ -185,9 +188,9 @@ impl GenotypesAndPhenotypes {
                                 if freqs_k_neighbours.len() == 0 {
                                     continue;
                                 }
-                                // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                                // println!("freqs_k_neighbours:\n{:?}", freqs_k_neighbours);
-                                // println!("dist_k_neighbours:\n{:?}", dist_k_neighbours);
+                                println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+                                println!("freqs_k_neighbours:\n{:?}", freqs_k_neighbours);
+                                println!("dist_k_neighbours:\n{:?}", dist_k_neighbours);
                                 // Impute the missing data using the weighted allele frequencies from the k-nearest neighbours
                                 let dist_sum =
                                     dist_k_neighbours.iter().fold(0.0, |sum, &x| sum + x);
@@ -205,8 +208,8 @@ impl GenotypesAndPhenotypes {
                                         .collect::<Vec<f64>>(),
                                 ); // re-weigh after adding epsilon so that the weights still sum up to one
                                 let values = Array1::from_vec(freqs_k_neighbours);
-                                // println!("weights:\n{:?}", weights);
-                                // println!("(values * weights).sum():\n{:?}", (&values * &weights).sum());
+                                println!("weights:\n{:?}", weights);
+                                println!("(values * weights).sum():\n{:?}", (&values * &weights).sum());
                                 window_freqs[(i, j)] = (values * weights).sum();
                                 // Need to correct for when the imputed allele frequencies do not add up to one!
                                 if j > 0 {
@@ -247,8 +250,10 @@ impl GenotypesAndPhenotypes {
                         }
                     }
                 }
-                println!("*window_freqs:\n{:?}", *window_freqs);
-            });
+                // println!("*window_freqs:\n{:?}", *window_freqs);
+                println!("*window_freqs:\n{:?}", window_freqs);
+            // });
+            }
         // println!("vec_windows_freqs[0]:\n{:?}", vec_windows_freqs[0]);
         // Write-out the imputed data
         for a in 0..w {
