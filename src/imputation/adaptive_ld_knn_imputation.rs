@@ -87,20 +87,17 @@ impl GenotypesAndPhenotypes {
                         };
                         // Calculate the Euclidean distances between pools using the most positively correlated alleles (or all the alleles if none passed the minimum correlation threshold or if there is less that 2 loci that are most correlated - these minimum 2 is the allele itself and another allele)
                         let mut dist: Array2<f64> = Array2::from_elem((n, n), f64::NAN);
+                        let window_freqs_linked_alleles = window_freqs.select(Axis(1), &idx_linked_alleles);
                         for i0 in 0..n {
-                            let pool0 = window_freqs
-                                .select(Axis(1), &idx_linked_alleles)
-                                .row(i0)
-                                .to_owned();
+                            let pool0 = window_freqs_linked_alleles
+                                .row(i0);
                             // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
                             // println!("idx_linked_alleles:\n{:?}", &idx_linked_alleles);
                             // println!("pool0:\n{:?}", &pool0);
                             for i1 in i0..n {
-                                let pool1 = window_freqs
-                                    .select(Axis(1), &idx_linked_alleles)
+                                let pool1 = window_freqs_linked_alleles
                                     .row(i1)
                                     .to_owned();
-
                                 // Keep only the loci present in both pools
                                 let (pool0, pool1): (Vec<f64>, Vec<f64>) = pool0
                                     .iter()
