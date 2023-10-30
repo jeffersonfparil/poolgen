@@ -254,7 +254,10 @@ impl Filter for LocusCounts {
         //// Next account for pool sizes to get the proper minmum allele frequency across all pools
         let n = allele_frequencies.matrix.nrows();
         let mut p = allele_frequencies.matrix.ncols();
-        assert!(n == filter_stats.pool_sizes.len(), "Please make that the number of pools and the pool sizes in FilterStats match.");
+        assert!(
+            n == filter_stats.pool_sizes.len(),
+            "Please make that the number of pools and the pool sizes in FilterStats match."
+        );
         let mut q: f64;
         let mut j: usize = 0;
         while j < p {
