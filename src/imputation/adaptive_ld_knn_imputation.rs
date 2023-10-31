@@ -270,33 +270,45 @@ impl GenotypesAndPhenotypes {
                                     //     println!("values={:?}", &values);
                                     //     println!("window_freqs[(i, j)]={:?}", window_freqs[(i, j)]);
                                     // }
-                                    // Need to correct for when the imputed allele frequencies do not add up to one!
-                                    if j > 0 {
-                                        let loci_start_indexes_within_the_current_window = &loci_idx[idx_window_head[a]..(idx_window_tail[a]+1)];
-                                        let mut j_ini = j-1;
-                                        for j_ in 1..loci_start_indexes_within_the_current_window.len() {
-                                            // Are we at the last allele of the locus?
-                                            if ((loci_start_indexes_within_the_current_window[j_] - idx_ini) - 1) == j {
-                                                // If we are then we find the start of this locus, i.e. its local index
-                                                j_ini = loci_start_indexes_within_the_current_window[j_-1] - idx_ini;
-                                                break;
-                                            }
-                                        }
+                                }
+                            }
+                            // Need to correct for when the imputed allele frequencies do not add up to one!
+                            if j > 0 {
+                                // Include the start of the next window, i.e. the marker for the end of the last locus in the current window
+                                let loci_start_indexes_within_the_current_window = &loci_idx[idx_window_head[a]..(idx_window_tail[a]+2)];
+                                // if (self.chromosome[idx_ini..idx_fin][j] == "Chromosome1") & (self.position[idx_ini..idx_fin][j] == 28043452) {
+                                //     println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+                                //     println!("i={:?}", i);
+                                //     println!("j={:?}", j);
+                                //     println!("self.chromosome[idx_ini..idx_fin][j]={:?}", self.chromosome[idx_ini..idx_fin][j]);
+                                //     println!("self.position[idx_ini..idx_fin][j]={:?}", self.position[idx_ini..idx_fin][j]);
+                                //     println!("loci_start_indexes_within_the_current_window={:?}", loci_start_indexes_within_the_current_window);
+                                //     println!("window_freqs={:?}", window_freqs);
+                                // }
+                                for j_ in 1..loci_start_indexes_within_the_current_window.len() {
+                                    // Are we at the last allele of the locus?
+                                    if (loci_start_indexes_within_the_current_window[j_] - 1) == (idx_ini + j) {
+                                        // If we are then we find the start of this locus, i.e. its local index
+                                        let j_ini = loci_start_indexes_within_the_current_window[j_-1] - idx_ini;
                                         let freqs_sum = window_freqs.slice(s![i, j_ini..(j+1)]).fold(0.0 ,|sum, &x| if !x.is_nan() {sum + x} else {sum}) + f64::EPSILON;
-                                        if (self.chromosome[idx_ini..idx_fin][j] == "Chromosome1") & (self.position[idx_ini..idx_fin][j] == 48525060) {
-                                            println!("i={:?}", i);
-                                            println!("j={:?}", j);
-                                            println!("j_ini={:?}", j_ini);
-                                            println!("loci_start_indexes_within_the_current_window={:?}", loci_start_indexes_within_the_current_window);
-                                            println!("window_freqs={:?}", window_freqs);
-                                            println!("window_freqs.slice(s![i, j_ini..(j+1)])={:?}", window_freqs.slice(s![i, j_ini..(j+1)]));
-                                            println!("freqs_sum={:?}", freqs_sum);
-                                        }
+                                        // if (self.chromosome[idx_ini..idx_fin][j] == "Chromosome1") & (self.position[idx_ini..idx_fin][j] == 28043452) {
+                                        //     println!("----------------------------------------------------------------");
+                                        //     println!("i={:?}", i);
+                                        //     println!("j={:?}", j);
+                                        //     println!("j_ini={:?}", j_ini);
+                                        //     println!("self.chromosome[idx_ini..idx_fin][j]={:?}", self.chromosome[idx_ini..idx_fin][j]);
+                                        //     println!("self.position[idx_ini..idx_fin][j]={:?}", self.position[idx_ini..idx_fin][j]);
+                                        //     println!("loci_start_indexes_within_the_current_window={:?}", loci_start_indexes_within_the_current_window);
+                                        //     println!("window_freqs={:?}", window_freqs);
+                                        //     println!("window_freqs.slice(s![i, j_ini..(j+1)])={:?}", window_freqs.slice(s![i, j_ini..(j+1)]));
+                                        //     println!("freqs_sum={:?}", freqs_sum);
+                                        // }
                                         if freqs_sum != 1.0 {
                                             for j_ in j_ini..(j+1) {
                                                 window_freqs[(i, j_)] = window_freqs[(i, j_)] / freqs_sum;
                                             }
                                         }
+                                        break;
                                     }
                                 }
                             }
@@ -468,23 +480,25 @@ mod tests {
         .unwrap();
         assert_eq!(outname, "test-impute_aLDkNN.csv".to_owned()); // Do better!!! Load data - thus working on improving load_table()
 
+        // NOTE: ADD TESTS TO MAKE SURE FREQUENCIES IN EACH LOCUS ADDS UP TO ONE
+
         assert_eq!(
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)],
-            0.19663299601190515
+            0.20596581159779487
         );
         assert_eq!(
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 2)],
-            0.8033670039880948
+            0.7940341884022049
         );
         assert_eq!(
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 13923)],
-            0.02733470369319045
+            0.02710654974164676
         );
         assert_eq!(
             frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 13924)],
-            0.9726652963068096
+            0.972893450258353
         );
-        assert_eq!(0, 1);
+        // assert_eq!(0, 1);
     }
 }
 
