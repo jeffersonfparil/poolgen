@@ -10,19 +10,20 @@ impl GenotypesAndPhenotypes {
     ) -> io::Result<&mut Self> {
         let (n, p) = self.intercept_and_allele_frequencies.dim();
         let (n_, l) = self.coverages.dim();
-        let l_ = self.start_index_of_each_locus.len();
+        let (loci_idx, loci_chr, loci_pos) = self.count_loci().unwrap();
+        let l_ = loci_idx.len();
         // println!("n={}; p={}; n_={}; l={}; l_={}", n, p, n_, l, l_);
         assert_eq!(n, n_);
-        assert_eq!(l, l_);
+        assert_eq!(l, l_-1); // less trailing locus
         for i in 0..n {
             for j in 0..l {
                 if self.coverages[(i, j)] < *min_depth_set_to_missing {
                     // Use the indexes of the locus to set missing values to all alleles in the locus
-                    let idx_ini = self.start_index_of_each_locus[j] as usize;
+                    let idx_ini = loci_idx[j] as usize;
                     let idx_fin = if j < (l - 1) {
-                        self.start_index_of_each_locus[j + 1] as usize
+                        loci_idx[j + 1] as usize
                     } else {
-                        self.start_index_of_each_locus[l - 1] as usize
+                        loci_idx[l - 1] as usize
                     };
                     for k in idx_ini..idx_fin {
                         self.intercept_and_allele_frequencies[(i, k)] = f64::NAN;

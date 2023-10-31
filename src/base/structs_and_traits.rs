@@ -119,7 +119,6 @@ pub struct GenotypesAndPhenotypes {
     pub chromosome: Vec<String>,                       // 1 + p
     pub position: Vec<u64>,                            // 1 + p
     pub allele: Vec<String>,                           // 1 + p
-    pub start_index_of_each_locus: Vec<u64>,           // m loci
     pub intercept_and_allele_frequencies: Array2<f64>, // n pools x 1 + p alleles across loci
     pub phenotypes: Array2<f64>,                       // n pools x k traits
     pub pool_names: Vec<String>,                       // n

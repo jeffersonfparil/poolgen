@@ -7,14 +7,15 @@ impl GenotypesAndPhenotypes {
         // We are assuming that all non-zero alleles across pools are kept, i.e. biallelic loci have 2 columns, triallelic have 3, and so on.
         let (n, p) = self.intercept_and_allele_frequencies.dim();
         let (n_, l) = self.coverages.dim();
-        let l_ = self.start_index_of_each_locus.len();
+        let (loci_idx, loci_chr, loci_pos) = self.count_loci().unwrap();
+        let l_ = loci_idx.len();
         assert_eq!(n, n_);
-        assert_eq!(l, l_);
+        assert_eq!(l, l_-1); // less trailing locus
         for j in 0..l {
             // Use the indexes of each locus
-            let idx_ini = self.start_index_of_each_locus[j] as usize;
+            let idx_ini = loci_idx[j] as usize;
             let idx_fin = if j < (l - 1) {
-                self.start_index_of_each_locus[j + 1] as usize
+                loci_idx[j + 1] as usize
             } else {
                 p
             };
@@ -40,11 +41,11 @@ impl GenotypesAndPhenotypes {
                     };
                 }
             }
-            // println!("self.start_index_of_each_locus={:?}", self.start_index_of_each_locus);
+            // println!("loci_idx={:?}", loci_idx);
             // println!("n={}; p={}; n_={}; l={}; l_={}", n, p, n_, l, l_);
-            // println!("self.start_index_of_each_locus.len()={:?}", self.start_index_of_each_locus.len());
-            // println!("self.start_index_of_each_locus[l-2]={:?}", self.start_index_of_each_locus[l-2]);
-            // println!("self.start_index_of_each_locus[l-1]={:?}", self.start_index_of_each_locus[l-1]);
+            // println!("loci_idx.len()={:?}", loci_idx.len());
+            // println!("loci_idx[l-2]={:?}", loci_idx[l-2]);
+            // println!("loci_idx[l-1]={:?}", loci_idx[l-1]);
             // println!("idx_ini={:?}", idx_ini);
             // println!("idx_fin={:?}", idx_fin);
             // println!("freqs={:?}", freqs);

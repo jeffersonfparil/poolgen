@@ -513,7 +513,6 @@ mod tests {
                 .collect(),
             position: (0..p + 1).map(|x| x as u64).collect(),
             allele: std::iter::repeat("A".to_owned()).take(p + 1).collect(),
-            start_index_of_each_locus: (0..p).map(|x| x as u64).collect::<Vec<u64>>(),
             intercept_and_allele_frequencies: f.clone(),
             phenotypes: y,
             pool_names: (0..n)

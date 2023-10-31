@@ -282,7 +282,6 @@ mod tests {
                 "c".to_string(),
                 "t".to_string(),
             ],
-            start_index_of_each_locus: vec![0, 1, 4],
             intercept_and_allele_frequencies: x.clone(),
             phenotypes: y.clone(),
             pool_names: vec![
