@@ -311,6 +311,8 @@ fn main() {
                     &file_sync_phen,
                     &filter_stats,
                     &args.min_depth_set_to_missing,
+                    &args.frac_top_missing_pools,
+                    &args.frac_top_missing_loci,
                     &args.n_threads,
                     &args.output,
                 )

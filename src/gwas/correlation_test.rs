@@ -18,7 +18,7 @@ pub fn pearsons_correlation(
     }
     // Only use the dangerous "pairwise.complete.obs" correlation computation method when asked.
     // Use only the pairs of values with non-missing data across the pair of vectors.
-    let (x, y) = if (method != &"pairwise.complete.obs".to_owned()) {
+    let (x, y) = if method != &"pairwise.complete.obs".to_owned() {
         let filtered_vectors: (Vec<f64>, Vec<f64>) = x
             .iter()
             .zip(y.iter())

@@ -2,9 +2,9 @@ use crate::base::*;
 use crate::popgen::*;
 use argmin::core::{self, CostFunction, Executor};
 use argmin::solver::neldermead::NelderMead;
-use ndarray::{prelude::*, Zip};
+use ndarray::prelude::*;
 use statrs::distribution::{Continuous, ContinuousCDF, Normal};
-use statrs::statistics::Statistics;
+
 use std::fs;
 use std::io::{self, prelude::*};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -408,7 +408,7 @@ pub fn gudmc(
         .open(&fname_output)
         .expect(&error_writing_file);
     // Header
-    let mut line: Vec<String> = vec![
+    let line: Vec<String> = vec![
         "pop_a",
         "pop_b",
         "chr",

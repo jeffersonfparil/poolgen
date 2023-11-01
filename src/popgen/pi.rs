@@ -2,7 +2,7 @@ use crate::base::*;
 use ndarray::{prelude::*, Zip};
 use std::fs::OpenOptions;
 use std::io::{self, prelude::*};
-use std::io::{Error, ErrorKind};
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unbiased multi-allelic nucleotide diversity per population ($\pi$ or $\theta_{\pi}=4N_{e}\mu$), which is similar to [Korunes & Samuk 2019](https://doi.org/10.1111/1755-0998.13326) which assumes biallelic loci

@@ -9,7 +9,7 @@ impl GenotypesAndPhenotypes {
         min_depth_set_to_missing: &f64,
     ) -> io::Result<&mut Self> {
         self.check().unwrap();
-        let (n, p) = self.intercept_and_allele_frequencies.dim();
+        let (n, _p) = self.intercept_and_allele_frequencies.dim();
         let (_n, l) = self.coverages.dim();
         let (loci_idx, _loci_chr, _loci_pos) = self.count_loci().unwrap();
         for i in 0..n {

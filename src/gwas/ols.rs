@@ -441,7 +441,7 @@ mod tests {
         distributions::{Bernoulli, Distribution},
         prelude::*,
     };
-    use std::slice::Iter;
+
     #[test]
     fn test_ols() {
         // Simulate
@@ -451,7 +451,7 @@ mod tests {
         let p = 50 as usize + 1; // number of predictors including the intercept
         let q = 10 as usize; // number of predictors with non-zero effects
         let d = Bernoulli::new(0.5).unwrap();
-        let mut x = Array2::from_shape_fn((n, p), |(i, j)| {
+        let mut x = Array2::from_shape_fn((n, p), |(_i, _j)| {
             d.sample(&mut rand::thread_rng()) as u64 as f64
         });
         for i in 0..n {

@@ -358,7 +358,7 @@ pub fn load_table(
     data_end_col: &usize,
 ) -> io::Result<(Vec<String>, Vec<String>, Vec<Vec<f64>>)> {
     let file = File::open(fname).unwrap();
-    let mut reader = BufReader::new(file);
+    let reader = BufReader::new(file);
     let mut lines = reader.lines();
     let column_labels = match lines.next() {
         Some(x) => x
@@ -544,13 +544,13 @@ mod tests {
             Array1::from_shape_vec(2, vec![2.5, 7.0]).unwrap(),
             mean_axis_ignore_nan(&array2d, 1).unwrap()
         );
-        let fname = "./tests/test.csv".to_owned();
-        let delimiter = ",".to_owned();
-        let chr_col = 0;
-        let pos_start_col = 1;
-        let pos_end_col = 1;
-        let data_start_col = 2;
-        let data_end_col = 6;
+        let _fname = "./tests/test.csv".to_owned();
+        let _delimiter = ",".to_owned();
+        let _chr_col = 0;
+        let _pos_start_col = 1;
+        let _pos_end_col = 1;
+        let _data_start_col = 2;
+        let _data_end_col = 6;
         let (row_labels, column_labels, data) = load_table(
             &"./tests/test.csv".to_owned(),
             &",".to_owned(),

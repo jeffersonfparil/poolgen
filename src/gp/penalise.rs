@@ -671,17 +671,17 @@ fn penalised_lambda_path_with_k_fold_cross_validation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::concatenate;
+
     use rand::distributions::{Bernoulli, Distribution};
 
     #[test]
     fn test_penalised() {
         let n: usize = 100 as usize;
         let p: usize = 10_000 as usize + 1;
-        let intercept: Array2<f64> = Array2::ones((50, 1));
+        let _intercept: Array2<f64> = Array2::ones((50, 1));
         let d = Bernoulli::new(0.5).unwrap();
-        let frequencies = d.sample(&mut rand::thread_rng()) as u64;
-        let mut x = Array2::from_shape_fn((n, p), |(i, j)| {
+        let _frequencies = d.sample(&mut rand::thread_rng()) as u64;
+        let mut x = Array2::from_shape_fn((n, p), |(_i, _j)| {
             d.sample(&mut rand::thread_rng()) as u64 as f64
         });
         for i in 0..n {
@@ -703,7 +703,7 @@ mod tests {
         .unwrap();
         let row_idx: Vec<usize> = (0..50).collect();
 
-        let (b_hat, name) = penalise_lasso_like(&x, &y, &row_idx).unwrap();
+        let (_b_hat, _name) = penalise_lasso_like(&x, &y, &row_idx).unwrap();
         // assert_eq!(0.009667742247346768, b_hat[(0,0)]);
 
         let b: Array2<f64> =

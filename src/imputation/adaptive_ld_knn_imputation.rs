@@ -65,7 +65,7 @@ fn find_k_nearest_neighbours(
     window_freqs: ArrayView2<f64>,
     dist: ArrayView2<f64>,
 ) -> io::Result<(Vec<f64>, Vec<f64>, Array1<f64>)> {
-    let (n, p) = window_freqs.dim();
+    let (n, _p) = window_freqs.dim();
     // Find the k-nearest neighbours
     let mut idx_pools: Vec<usize> = (0..n).collect();
     idx_pools.sort_by(|&j0, &j1| {
@@ -175,7 +175,6 @@ impl GenotypesAndPhenotypes {
         )
         .unwrap();
         let w = idx_window_head.len();
-        let w_ = idx_window_tail.len();
         // Parallel processing per window
         let mut vec_windows_freqs: Vec<Array2<f64>> = vec![Array2::from_elem((1, 1), f64::NAN); w];
         let idx_windows: Vec<usize> = (0..w).collect();
@@ -297,9 +296,9 @@ impl GenotypesAndPhenotypes {
                     } // Impute if we have missing data
                 } // Iterate across alleles across loci within the window
             }); // Parallel processing across windows
-        // }
-        // println!("vec_windows_freqs[0]:\n{:?}", vec_windows_freqs[0]);
-        // Write-out the imputed data
+                // }
+                // println!("vec_windows_freqs[0]:\n{:?}", vec_windows_freqs[0]);
+                // Write-out the imputed data
         for a in 0..w {
             // Use the indexes of each locus
             let idx_ini = loci_idx[idx_window_head[a]];
@@ -399,12 +398,11 @@ pub fn impute_aLDkNN(
         genotypes_and_phenotypes.coverages.ncols(),
         duration.as_secs()
     );
-    // Removing missing data, i.e. loci that cannot be imputed
-    // First remove missing data
+    // Remove 100% of the loci with missing data
     let start = std::time::SystemTime::now();
     genotypes_and_phenotypes
         .filter_out_top_missing_loci(&1.00)
-        .unwrap(); // Remove 100% of the loci with missing data
+        .unwrap();
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(

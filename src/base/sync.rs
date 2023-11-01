@@ -1268,7 +1268,7 @@ impl SaveCsv for GenotypesAndPhenotypes {
         // Note: All input parameters are not used except for one - out, the rest are for other implementations of this trait i.e. filter_stats, keep_p_minus_1, and n_threads
         // Sanity checks
         let (n, p) = self.intercept_and_allele_frequencies.dim();
-        let (n_, l) = self.coverages.dim();
+        let (n_, _l) = self.coverages.dim();
         let (n__, _k) = self.phenotypes.dim();
         let n___ = self.pool_names.len();
         let p_ = self.chromosome.len();
@@ -1438,7 +1438,7 @@ mod tests {
         .unwrap();
         let mut frequencies_matrix: Array2<f64> =
             Array2::zeros((counts_matrix.nrows(), counts_matrix.ncols()));
-        let row_sums: Vec<f64> = counts_matrix
+        let _row_sums: Vec<f64> = counts_matrix
             .sum_axis(Axis(1))
             .into_iter()
             .map(|x| x as f64)

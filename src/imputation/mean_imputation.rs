@@ -4,13 +4,11 @@ use std::io;
 
 impl GenotypesAndPhenotypes {
     pub fn mean_imputation(&mut self) -> io::Result<&mut Self> {
+        self.check().unwrap();
         // We are assuming that all non-zero alleles across pools are kept, i.e. biallelic loci have 2 columns, triallelic have 3, and so on.
         let (n, p) = self.intercept_and_allele_frequencies.dim();
-        let (n_, l) = self.coverages.dim();
-        let (loci_idx, loci_chr, loci_pos) = self.count_loci().unwrap();
-        let l_ = loci_idx.len();
-        assert_eq!(n, n_);
-        assert_eq!(l, l_ - 1); // less trailing locus
+        let (loci_idx, _loci_chr, _loci_pos) = self.count_loci().unwrap();
+        let l = loci_idx.len() - 1;
         for j in 0..l {
             // Use the indexes of each locus
             let idx_ini = loci_idx[j] as usize;
@@ -41,15 +39,6 @@ impl GenotypesAndPhenotypes {
                     };
                 }
             }
-            // println!("loci_idx={:?}", loci_idx);
-            // println!("n={}; p={}; n_={}; l={}; l_={}", n, p, n_, l, l_);
-            // println!("loci_idx.len()={:?}", loci_idx.len());
-            // println!("loci_idx[l-2]={:?}", loci_idx[l-2]);
-            // println!("loci_idx[l-1]={:?}", loci_idx[l-1]);
-            // println!("idx_ini={:?}", idx_ini);
-            // println!("idx_fin={:?}", idx_fin);
-            // println!("freqs={:?}", freqs);
-            // println!("self.intercept_and_allele_frequencies.slice(s![.., idx_ini..idx_fin])={:?}", self.intercept_and_allele_frequencies.slice(s![.., idx_ini..idx_fin]));
         }
         Ok(self)
     }
@@ -60,21 +49,89 @@ pub fn impute_mean(
     file_sync_phen: &FileSyncPhen,
     filter_stats: &FilterStats,
     min_depth_set_to_missing: &f64,
+    frac_top_missing_pools: &f64,
+    frac_top_missing_loci: &f64,
     n_threads: &usize,
     out: &String,
 ) -> io::Result<String> {
     // All non-zero alleles across pools are kept, i.e. biallelic loci have 2 columns, triallelic have 3, and so on.
     let keep_p_minus_1 = false;
+    let start = std::time::SystemTime::now();
     let mut genotypes_and_phenotypes = file_sync_phen
         .into_genotypes_and_phenotypes(filter_stats, keep_p_minus_1, n_threads)
         .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!(
+        "Parsed the sync file into allele frequncies: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    let start = std::time::SystemTime::now();
     genotypes_and_phenotypes
         .set_missing_by_depth(min_depth_set_to_missing)
         .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!(
+        "Set missing loci below the minimum depth: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    let start = std::time::SystemTime::now();
+    genotypes_and_phenotypes
+        .filter_out_top_missing_pools(frac_top_missing_pools)
+        .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!(
+        "Filtered out sparsest pools: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    let start = std::time::SystemTime::now();
+    genotypes_and_phenotypes
+        .filter_out_top_missing_loci(frac_top_missing_loci)
+        .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!(
+        "Filtered out sparsest loci: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    let start = std::time::SystemTime::now();
     genotypes_and_phenotypes.mean_imputation().unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!(
+        "Mean value imputation: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    // Remove 100% of the loci with missing data
+    let start = std::time::SystemTime::now();
+    genotypes_and_phenotypes
+        .filter_out_top_missing_loci(&1.00)
+        .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!(
+        "Missing data removed, i.e. loci which cannot be imputed because of extreme sparsity: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    // Output
     let out = genotypes_and_phenotypes
         .write_csv(filter_stats, keep_p_minus_1, out, n_threads)
         .unwrap();
+    
     Ok(out)
 }
 
@@ -131,6 +188,8 @@ mod tests {
             &file_sync_phen,
             &filter_stats,
             &min_depth_set_to_missing,
+            &0.2,
+            &0.5,
             &n_threads,
             &"test-impute_mean.csv".to_owned(),
         )
@@ -161,6 +220,6 @@ mod tests {
                 .mean()
                 .unwrap()
         );
-        // assert_eq!(0, 1);
+        assert_eq!(0, 1);
     }
 }
