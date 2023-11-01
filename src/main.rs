@@ -41,7 +41,7 @@ struct Args {
     /// Minimum depth of coverage (loci with at least one pool below this threshold will be omitted)
     #[clap(long, default_value_t = 1)]
     min_coverage: u64,
-    /// Minimum allele frequency for associating the genotypes with the phenotype/s
+    /// Minimum allele frequency (per locus, alleles which fail to pass this threshold will be omitted allowing control over multiallelic loci)
     #[clap(long, default_value_t = 0.001)]
     min_allele_frequency: f64,
     /// Maximum missingness rate, i.e. the maximum fraction of pools missing in each locus
