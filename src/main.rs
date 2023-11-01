@@ -38,15 +38,15 @@ struct Args {
     /// Minimum base quality in terms of base calling error rate, i.e. lower values means higher quality
     #[clap(long, default_value_t = 0.01)]
     min_quality: f64,
-    /// Minimum depth of coverage
+    /// Minimum depth of coverage (loci with at least one pool below this threshold will be omitted)
     #[clap(long, default_value_t = 1)]
     min_coverage: u64,
     /// Minimum allele frequency for associating the genotypes with the phenotype/s
     #[clap(long, default_value_t = 0.001)]
     min_allele_frequency: f64,
-    /// Minimum missingness rate, i.e. the minimum fraction of pools missing in each locus
+    /// Maximum missingness rate, i.e. the maximum fraction of pools missing in each locus
     #[clap(long, default_value_t = 0.0)]
-    min_missingness_rate: f64,
+    max_missingness_rate: f64,
     /// Keep ambiguous reads during SNP filtering, i.e. keep them coded as Ns
     #[clap(long, action)]
     keep_ns: bool,
@@ -109,6 +109,12 @@ struct Args {
     /// Imputation parameter, i.e. minimum depth to set to missing data for imputation
     #[clap(long, default_value_t = 5.00)]
     min_depth_set_to_missing: f64,
+    /// Imputation parameter, i.e. fraction of the pools with missing data to be ommited after sorting by rate of missingness
+    #[clap(long, default_value_t = 0.10)]
+    frac_top_missing_pools: f64,
+    /// Imputation parameter, i.e. fraction of the loci with missing data to be ommited after sorting by rate of missingness
+    #[clap(long, default_value_t = 0.10)]
+    frac_top_missing_loci: f64,
     /// Imputation parameter, i.e. imputation method, select from "mean" for simple imputation using mean allele frequencies across non-missing pools, or "aLD-kNNi" for adaptive linkage disequillibrium (estimated using correlations within a window) k-nearest neighbour weighted allele frequencies imputation
     #[clap(long, default_value = "aLD-kNNi")]
     imputation_method: String,
@@ -181,7 +187,7 @@ fn main() {
         min_quality: args.min_quality,
         min_coverage: args.min_coverage,
         min_allele_frequency: args.min_allele_frequency,
-        min_missingness_rate: args.min_missingness_rate,
+        max_missingness_rate: args.max_missingness_rate,
         pool_sizes: phen.pool_sizes.clone(),
     };
     if args.analysis == String::from("pileup2sync") {
@@ -314,6 +320,8 @@ fn main() {
                     &file_sync_phen,
                     &filter_stats,
                     &args.min_depth_set_to_missing,
+                    &args.frac_top_missing_pools,
+                    &args.frac_top_missing_loci,
                     &args.window_size_bp,
                     &args.window_slide_size_bp,
                     &args.min_loci_per_window,

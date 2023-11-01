@@ -10,7 +10,7 @@ impl GenotypesAndPhenotypes {
         let (loci_idx, loci_chr, loci_pos) = self.count_loci().unwrap();
         let l_ = loci_idx.len();
         assert_eq!(n, n_);
-        assert_eq!(l, l_-1); // less trailing locus
+        assert_eq!(l, l_ - 1); // less trailing locus
         for j in 0..l {
             // Use the indexes of each locus
             let idx_ini = loci_idx[j] as usize;
@@ -102,7 +102,7 @@ mod tests {
             min_quality: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.005,
-            min_missingness_rate: 0.0,
+            max_missingness_rate: 0.0,
             pool_sizes: vec![20., 20., 20., 20., 20.],
         };
         let n_threads = 2;

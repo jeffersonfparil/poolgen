@@ -173,17 +173,6 @@ impl Filter for LocusCounts {
                 .filter(|&&x| !x.is_nan())
                 .fold(0.0, |sum, &x| sum + x)
         }); // summation across the columns which means sum of all elements per row while ignoring NANs!
-            // // Make sure all pools have been convered
-            // if row_sums
-            //     .iter()
-            //     .fold(row_sums[0], |min, &x| if x < min { x } else { min })
-            //     == 0
-            // {
-            //     return Err(Error::new(
-            //         ErrorKind::Other,
-            //         "At least one pool has no coverage.",
-            //     ));
-            // }
         let mut matrix: Array2<f64> = Array2::from_elem((n, p), 0.0 as f64);
         for i in 0..n {
             for j in 0..p {
@@ -224,13 +213,13 @@ impl Filter for LocusCounts {
         }
         // println!("self={:?}", self);
         // Filter by minimum coverage
-        // let sum_coverage = self.matrix.sum_axis(Axis(1)); // summation across the columns which means sum of all elements per row
+        // Summation across the columns which means sum of all elements per row while ignoring NANs!
         let sum_coverage = self.matrix.map_axis(Axis(1), |r| {
             r.map(|&x| x as f64)
                 .iter()
                 .filter(|&&x| !x.is_nan())
                 .fold(0.0, |sum, &x| sum + x)
-        }); // summation across the columns which means sum of all elements per row while ignoring NANs!
+        });
         let min_sum_coverage =
             sum_coverage
                 .iter()
@@ -238,6 +227,14 @@ impl Filter for LocusCounts {
         if min_sum_coverage < filter_stats.min_coverage as f64 {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
+        // // TODO: convert loci failing the minimum coverage threshold into missing instead of omitting the entire locus
+        // for i in 0..self.matrix.nrows() {
+        //     if sum_coverage[i] < filter_stats.min_coverage as f64 {
+        //         for j in 0..self.matrix.ncols() {
+        //             self.matrix[(i, j)] = f64::NAN as u64;
+        //         }
+        //     }
+        // }
         // Filter by minimum allele frequency
         // Before anything else, we clone matrix of allele counts
         let mut matrix = self.matrix.clone();
@@ -297,7 +294,7 @@ impl Filter for LocusCounts {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         // Filter-out the locus if the rate of missingness, i.e. the fraction of the pools missing coverage of the current locus is below the minimum threshold
-        if (n_missing_across_pools as f64 / n as f64) > filter_stats.min_missingness_rate {
+        if (n_missing_across_pools as f64 / n as f64) > filter_stats.max_missingness_rate {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         // Return the locus if it passed all the filtering steps
@@ -468,7 +465,7 @@ impl Filter for LocusFrequencies {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         // Filter-out the locus if the rate of missingness, i.e. the fraction of the pools missing coverage of the current locus is below the minimum threshold
-        if (n_missing_across_pools as f64 / n as f64) > filter_stats.min_missingness_rate {
+        if (n_missing_across_pools as f64 / n as f64) > filter_stats.max_missingness_rate {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         // Return the locus if it passed all the filtering steps
@@ -509,6 +506,7 @@ impl Sort for LocusFrequencies {
 }
 
 impl RemoveMissing for LocusCountsAndPhenotypes {
+    // Remove pools with missing data in the phenotype file
     fn remove_missing(&mut self) -> io::Result<&mut Self> {
         let (n, k) = self.phenotypes.dim();
         let n_ = self.pool_names.len();
@@ -551,6 +549,7 @@ impl RemoveMissing for LocusCountsAndPhenotypes {
 }
 
 impl RemoveMissing for GenotypesAndPhenotypes {
+    // Remove pools with missing data in the phenotype file
     fn remove_missing(&mut self) -> io::Result<&mut Self> {
         let (n, k) = self.phenotypes.dim();
         let n_ = self.pool_names.len();
@@ -1573,7 +1572,7 @@ mod tests {
             min_quality: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.005,
-            min_missingness_rate: 0.0,
+            max_missingness_rate: 0.0,
             pool_sizes: vec![20., 20., 20., 20., 20.],
         };
         let mut filtered_counts = counts.clone();
@@ -1679,7 +1678,7 @@ mod tests {
         //     min_quality: 0.005,
         //     min_coverage: 0,
         //     min_allele_frequency: 0.0001,
-        //     min_missingness_rate: 0.2,
+        //     max_missingness_rate: 0.2,
         //     pool_sizes: phen.pool_sizes,
         // };
         // let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();

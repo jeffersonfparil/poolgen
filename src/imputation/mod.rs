@@ -1,5 +1,5 @@
-pub use self::{adaptive_ld_knn_imputation::*, mean_imputation::*, set_missing_by_depth::*};
+pub use self::{adaptive_ld_knn_imputation::*, filtering_missing::*, mean_imputation::*};
 
 mod adaptive_ld_knn_imputation;
+mod filtering_missing;
 mod mean_imputation;
-mod set_missing_by_depth;

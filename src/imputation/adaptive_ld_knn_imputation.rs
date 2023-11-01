@@ -1,7 +1,152 @@
 use crate::base::*;
 use crate::gwas::pearsons_correlation;
 use ndarray::{prelude::*, Zip};
-use std::io::{self, Error, ErrorKind};
+use std::io;
+
+fn calculate_euclidean_distances(
+    j: usize,
+    window_freqs: ArrayView2<f64>,
+    corr: ArrayView2<f64>,
+    min_correlation: &f64,
+) -> io::Result<Array2<f64>> {
+    let (n, p) = window_freqs.dim();
+    // Find the indexes of the linked (positively correlated) alleles to be used in calculating the distances between pools to find the nearest neighbours
+    let idx_linked_alleles = corr
+        .column(j)
+        .iter()
+        .enumerate()
+        .filter(|&(_i, x)| !x.is_nan())
+        .filter(|&(_i, x)| x >= min_correlation)
+        .map(|(i, _x)| i)
+        .collect::<Vec<usize>>();
+    // Use all the alleles to estimate distances between pools to find the nearest neighbours
+    let idx_linked_alleles = if idx_linked_alleles.len() < 2 {
+        (0..p).collect()
+    } else {
+        idx_linked_alleles
+    };
+    // Calculate the Euclidean distances between pools using the most positively correlated alleles (or all the alleles if none passed the minimum correlation threshold or if there is less that 2 loci that are most correlated - these minimum 2 is the allele itself and another allele)
+    let mut dist: Array2<f64> = Array2::from_elem((n, n), f64::NAN);
+    let window_freqs_linked_alleles = window_freqs.select(Axis(1), &idx_linked_alleles);
+    for i0 in 0..n {
+        let pool0 = window_freqs_linked_alleles.row(i0);
+        for i1 in i0..n {
+            let pool1 = window_freqs_linked_alleles.row(i1).to_owned();
+            // Keep only the loci present in both pools
+            let (pool0, pool1): (Vec<f64>, Vec<f64>) = pool0
+                .iter()
+                .zip(pool1.iter())
+                .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
+                .unzip();
+            if pool0.len() == 0 {
+                continue;
+            } else {
+                let d = (&Array1::from_vec(pool0) - &Array1::from_vec(pool1))
+                    .map(|&x| x.powf(2.0))
+                    .sum()
+                    .sqrt();
+                match d.is_nan() {
+                    true => continue,
+                    false => {
+                        dist[(i0, i1)] = d;
+                        dist[(i1, i0)] = d;
+                    }
+                };
+            }
+        }
+    }
+    Ok(dist)
+}
+
+fn find_k_nearest_neighbours(
+    j: usize,
+    i: usize,
+    k: &mut usize,
+    window_freqs: ArrayView2<f64>,
+    dist: ArrayView2<f64>,
+) -> io::Result<(Vec<f64>, Vec<f64>, Array1<f64>)> {
+    let (n, p) = window_freqs.dim();
+    // Find the k-nearest neighbours
+    let mut idx_pools: Vec<usize> = (0..n).collect();
+    idx_pools.sort_by(|&j0, &j1| {
+        let a = match dist[(i, j0)].is_nan() {
+            true => f64::INFINITY,
+            false => dist[(i, j0)],
+        };
+        let b = match dist[(i, j1)].is_nan() {
+            true => f64::INFINITY,
+            false => dist[(i, j1)],
+        };
+        a.partial_cmp(&b).unwrap()
+    });
+    let freqs_sorted_neighbours = window_freqs
+        .select(Axis(0), &idx_pools)
+        .column(j)
+        .to_owned();
+    // Extract the allele frequencies and distances of the k-neighbours from sorted lists using idx_pools whose indexes are sorted
+    let mut freqs_k_neighbours =
+        freqs_sorted_neighbours.select(Axis(0), &(0..*k).collect::<Vec<usize>>());
+    let mut dist_k_neighbours = dist
+        .column(i)
+        .select(Axis(0), &idx_pools)
+        .select(Axis(0), &(0..*k).collect::<Vec<usize>>());
+    while freqs_k_neighbours.fold(0, |sum, &x| if x.is_nan() { sum + 1 } else { sum }) == *k {
+        *k += 1;
+        if *k > n {
+            break;
+        }
+        freqs_k_neighbours =
+            freqs_sorted_neighbours.select(Axis(0), &(0..*k).collect::<Vec<usize>>());
+        dist_k_neighbours = dist
+            .column(i)
+            .select(Axis(0), &idx_pools)
+            .select(Axis(0), &(0..*k).collect::<Vec<usize>>());
+    }
+    // Keep only non-missing frequencies and distances among the k-neighbours
+    let (freqs_k_neighbours, dist_k_neighbours): (Vec<f64>, Vec<f64>) = freqs_k_neighbours
+        .iter()
+        .zip(dist_k_neighbours.iter())
+        .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
+        .unzip();
+    Ok((
+        freqs_k_neighbours,
+        dist_k_neighbours,
+        freqs_sorted_neighbours,
+    ))
+}
+
+fn correct_allele_frequencies_per_locus<'w>(
+    a: usize,
+    i: usize,
+    j: usize,
+    idx_ini: usize,
+    window_freqs: &'w mut Array2<f64>,
+    idx_window_head: &Vec<usize>,
+    idx_window_tail: &Vec<usize>,
+    loci_idx: &Vec<usize>,
+) -> io::Result<&'w mut Array2<f64>> {
+    // Include the start of the next window, i.e. the marker for the end of the last locus in the current window
+    let loci_start_indexes_within_the_current_window =
+        loci_idx[idx_window_head[a]..(idx_window_tail[a] + 2)].to_vec();
+    for j_ in 1..loci_start_indexes_within_the_current_window.len() {
+        // Are we at the last allele of the locus?
+        if (loci_start_indexes_within_the_current_window[j_] - 1) == (idx_ini + j) {
+            // If we are then we find the start of this locus, i.e. its local index
+            let j_ini = loci_start_indexes_within_the_current_window[j_ - 1] - idx_ini;
+            let freqs_sum = window_freqs
+                .slice(s![i, j_ini..(j + 1)])
+                .fold(0.0, |sum, &x| if !x.is_nan() { sum + x } else { sum })
+                + f64::EPSILON;
+            if freqs_sum != 1.0 {
+                for j_ in j_ini..(j + 1) {
+                    window_freqs[(i, j_)] = window_freqs[(i, j_)] / freqs_sum;
+                }
+            }
+            break;
+        }
+    }
+    Ok(window_freqs)
+}
 
 impl GenotypesAndPhenotypes {
     pub fn adaptive_ld_knn_imputation(
@@ -12,9 +157,9 @@ impl GenotypesAndPhenotypes {
         min_correlation: &f64,
         k_neighbours: &u64,
     ) -> io::Result<&mut Self> {
+        self.check().unwrap();
         // We are assuming that all non-zero alleles across pools are kept, i.e. biallelic loci have 2 columns, triallelic have 3, and so on.
         let (n, _p) = self.intercept_and_allele_frequencies.dim();
-        let (n_, l) = self.coverages.dim();
         // Define sliding windows
         let (loci_idx, loci_chr, loci_pos) = self.count_loci().unwrap();
         let mut loci_chr_no_redundant_tail = loci_chr.to_owned();
@@ -29,16 +174,8 @@ impl GenotypesAndPhenotypes {
             min_loci_per_window,
         )
         .unwrap();
-        // println!("loci_idx={:?}", loci_idx);
-        // println!("idx_window_head={:?}", idx_window_head);
-        // println!("idx_window_tail={:?}", idx_window_tail);
-        // println!("loci_chr={:?}; loci_pos={:?}", loci_chr, loci_pos);
-        // println!("idx_window_head={:?}; idx_window_tail={:?}", idx_window_head, idx_window_tail);
         let w = idx_window_head.len();
         let w_ = idx_window_tail.len();
-        assert_eq!(n, n_);
-        assert_eq!(w, w_);
-
         // Parallel processing per window
         let mut vec_windows_freqs: Vec<Array2<f64>> = vec![Array2::from_elem((1, 1), f64::NAN); w];
         let idx_windows: Vec<usize> = (0..w).collect();
@@ -47,14 +184,9 @@ impl GenotypesAndPhenotypes {
             .par_for_each(|window_freqs, &a| {
                 // for a in 0..idx_windows.len() {
                 let idx_ini = loci_idx[idx_window_head[a]];
-                let idx_fin = loci_idx[idx_window_tail[a]+1]; // add one so that we include the last part of the window!
-                // for i in idx_ini..idx_fin {
-                //     println!("chr_{}:{}", self.chromosome[i], self.position[i]);
-                // }
+                let idx_fin = loci_idx[idx_window_tail[a] + 1]; // add one so that we include the last part of the window!
                 let p = idx_fin - idx_ini;
-                // println!("p={}", p);
                 *window_freqs = self
-                    // let mut window_freqs = self
                     .intercept_and_allele_frequencies
                     .slice(s![.., idx_ini..idx_fin])
                     .to_owned();
@@ -75,149 +207,40 @@ impl GenotypesAndPhenotypes {
                         };
                     }
                 }
-                // println!("corr:\n{:?}", corr);
                 for j in 0..p {
-                    // if (self.chromosome[idx_ini..idx_fin][j] == "Chromosome1") & (self.position[idx_ini..idx_fin][j] == 28043452) {
-                    //     println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                    //     println!("self.chromosome[idx_ini..idx_fin][j]={:?}", self.chromosome[idx_ini..idx_fin][j]);
-                    //     println!("self.position[idx_ini..idx_fin][j]={:?}", self.position[idx_ini..idx_fin][j]);
-                    //     println!("self.position[idx_ini..idx_fin][p-1]={:?}", self.position[idx_ini..idx_fin][p-1]);
-                    //     println!("idx_fin={}", idx_fin);
-                    //     println!("window_freqs={:?}", &window_freqs);
-                    //     println!("corr={:?}", &corr);
-                    // }
                     if window_freqs
                         .column(j)
                         .fold(0, |sum, &x| if x.is_nan() { sum + 1 } else { sum })
                         == 0
                     {
                         // No missing data on the locus
-                        // println!("window_freqs.column(j)={:?}", window_freqs.column(j));
                         continue;
                     } else {
-                        // // Find indexes of the current locus which can have multiple alleles
-                        // let locus_absolute_idx_ini = self.start_index_of_each_locus[idx_ini..idx_fin][j];
-                        // let locus_absolute_idx_fin = if j < (p-1) {
-                        //     self.start_index_of_each_locus[idx_ini..idx_fin][j + 1]
-                        // } else {
-                        //     self.start_index_of_each_locus.len() as u64
-                        // };
-
-                        // Find the indexes of the linked (positively correlated) alleles to be used in calculating the distances between pools to find the nearest neighbours
-                        let idx_linked_alleles = corr
-                            .column(j)
-                            .iter()
-                            .enumerate()
-                            .filter(|&(_i, x)| !x.is_nan())
-                            .filter(|&(_i, x)| x >= min_correlation)
-                            .map(|(i, _x)| i)
-                            .collect::<Vec<usize>>();
-                        // Use all the alleles to estimate distances between pools to find the nearest neighbours
-                        let idx_linked_alleles = if idx_linked_alleles.len() < 2 {
-                            (0..p).collect()
-                        } else {
-                            idx_linked_alleles
-                        };
-                        // Calculate the Euclidean distances between pools using the most positively correlated alleles (or all the alleles if none passed the minimum correlation threshold or if there is less that 2 loci that are most correlated - these minimum 2 is the allele itself and another allele)
-                        let mut dist: Array2<f64> = Array2::from_elem((n, n), f64::NAN);
-                        let window_freqs_linked_alleles =
-                            window_freqs.select(Axis(1), &idx_linked_alleles);
-                        for i0 in 0..n {
-                            let pool0 = window_freqs_linked_alleles.row(i0);
-                            // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                            // println!("idx_linked_alleles:\n{:?}", &idx_linked_alleles);
-                            // println!("pool0:\n{:?}", &pool0);
-                            for i1 in i0..n {
-                                let pool1 = window_freqs_linked_alleles.row(i1).to_owned();
-                                // Keep only the loci present in both pools
-                                let (pool0, pool1): (Vec<f64>, Vec<f64>) = pool0
-                                    .iter()
-                                    .zip(pool1.iter())
-                                    .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
-                                    .unzip();
-                                if pool0.len() == 0 {
-                                    continue;
-                                } else {
-                                    let d = (&Array1::from_vec(pool0) - &Array1::from_vec(pool1))
-                                        .map(|&x| x.powf(2.0))
-                                        .sum()
-                                        .sqrt();
-                                    match d.is_nan() {
-                                        true => continue,
-                                        false => {
-                                            dist[(i0, i1)] = d;
-                                            dist[(i1, i0)] = d;
-                                        }
-                                    };
-                                }
-                            }
-                        }
-                        // println!("dist={:?}", dist);
+                        let dist = calculate_euclidean_distances(
+                            j,
+                            window_freqs.view(),
+                            corr.view(),
+                            min_correlation,
+                        )
+                        .unwrap();
                         // Now, let's find the pools needing imputation and impute them using the k-nearest neighbours
                         for i in 0..n {
                             let mut k = *k_neighbours as usize; // define the adaptive k for use later
                             if window_freqs[(i, j)].is_nan() == false {
-                                // println!("self.chromosome[idx_ini..idx_fin][j]={:?}", self.chromosome[idx_ini..idx_fin][j]);
-                                // println!("self.position[idx_ini..idx_fin][j]={:?}", self.position[idx_ini..idx_fin][j]);
-                                // println!("window_freqs[(i, j)]={:?}", window_freqs[(i, j)]);
                                 continue;
                             } else {
-                                // Find the k-nearest neighbours
-                                let mut idx_pools: Vec<usize> = (0..n).collect();
-                                idx_pools.sort_by(|&j0, &j1| {
-                                    let a = match dist[(i, j0)].is_nan() {
-                                        true => f64::INFINITY,
-                                        false => dist[(i, j0)],
-                                    };
-                                    let b = match dist[(i, j1)].is_nan() {
-                                        true => f64::INFINITY,
-                                        false => dist[(i, j1)],
-                                    };
-                                    a.partial_cmp(&b).unwrap()
-                                });
-                                // println!("dist.column(i):\n{:?}", dist.column(i));
-                                // println!("idx_pools:\n{:?}", idx_pools);
-                                let freqs_sorted_neighbours = window_freqs
-                                    .select(Axis(0), &idx_pools)
-                                    .column(j)
-                                    .to_owned();
-                                // println!("freqs_sorted_neighbours:\n{:?}", freqs_sorted_neighbours);
-                                // println!("freqs_unsorted_neighbours:\n{:?}", self.intercept_and_allele_frequencies.column(idx_ini + j));
-                                // Extract the allele frequencies and distances of the k-neighbours from sorted lists using idx_pools whose indexes are sorted
-                                let mut freqs_k_neighbours = freqs_sorted_neighbours
-                                    .select(Axis(0), &(0..k).collect::<Vec<usize>>());
-                                let mut dist_k_neighbours = dist
-                                    .column(i)
-                                    .select(Axis(0), &idx_pools)
-                                    .select(Axis(0), &(0..k).collect::<Vec<usize>>());
-                                // println!("freqs_k_neighbours:\n{:?}", freqs_k_neighbours);
-                                // println!("dist_k_neighbours:\n{:?}", dist_k_neighbours);
-                                while freqs_k_neighbours.fold(0, |sum, &x| {
-                                    if x.is_nan() {
-                                        sum + 1
-                                    } else {
-                                        sum
-                                    }
-                                }) == k
-                                {
-                                    k += 1;
-                                    if k > n {
-                                        break;
-                                    }
-                                    freqs_k_neighbours = freqs_sorted_neighbours
-                                        .select(Axis(0), &(0..k).collect::<Vec<usize>>());
-                                    dist_k_neighbours = dist
-                                        .column(i)
-                                        .select(Axis(0), &idx_pools)
-                                        .select(Axis(0), &(0..k).collect::<Vec<usize>>());
-                                }
-                                // Keep only non-missing frequencies and distances among the k-neighbours
-                                let (freqs_k_neighbours, dist_k_neighbours): (Vec<f64>, Vec<f64>) =
-                                    freqs_k_neighbours
-                                        .iter()
-                                        .zip(dist_k_neighbours.iter())
-                                        .filter(|&(&x, &y)| (!x.is_nan()) & (!y.is_nan()))
-                                        .unzip();
+                                let (
+                                    freqs_k_neighbours,
+                                    dist_k_neighbours,
+                                    freqs_sorted_neighbours,
+                                ) = find_k_nearest_neighbours(
+                                    j,
+                                    i,
+                                    &mut k,
+                                    window_freqs.view(),
+                                    dist.view(),
+                                )
+                                .unwrap();
                                 if freqs_k_neighbours.len() == 0 {
                                     // If the pool freqs and distances do not correspond to non-missing info then we simply use the mean across all non-missing pools
                                     window_freqs[(i, j)] = match freqs_sorted_neighbours
@@ -230,13 +253,11 @@ impl GenotypesAndPhenotypes {
                                         None => f64::NAN,
                                     };
                                 } else {
-                                    // println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                                    // println!("freqs_k_neighbours:\n{:?}", freqs_k_neighbours);
-                                    // println!("dist_k_neighbours:\n{:?}", dist_k_neighbours);
                                     // Impute the missing data using the weighted allele frequencies from the k-nearest neighbours
                                     let dist_sum =
-                                        dist_k_neighbours.iter().fold(0.0, |sum, &x| sum + x) + f64::EPSILON; // Add a very small value so that we don;t get undefined values when all distances are zero
-                                    // println!("dist_sum:\n{:?}", dist_sum);
+                                        dist_k_neighbours.iter().fold(0.0, |sum, &x| sum + x)
+                                            + f64::EPSILON; // Add a very small value so that we don;t get undefined values when all distances are zero
+                                                            // println!("dist_sum:\n{:?}", dist_sum);
                                     let weights = dist_k_neighbours
                                         .iter()
                                         .map(|&x| 1.0 - (x / dist_sum) + f64::EPSILON)
@@ -256,75 +277,33 @@ impl GenotypesAndPhenotypes {
                                         println!("values:\n{:?}", values);
                                     }
                                     window_freqs[(i, j)] = (&values * &weights).sum();
-                                    // if (self.chromosome[idx_ini..idx_fin][j] == "Chromosome1") & (self.position[idx_ini..idx_fin][j] == 48525060) {
-                                    //     println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                                    //     println!("j={:?}", j);
-                                    //     println!("i={:?}", i);
-                                    //     println!("self.chromosome[idx_ini..idx_fin][j]={:?}", self.chromosome[idx_ini..idx_fin][j]);
-                                    //     println!("self.position[idx_ini..idx_fin][j]={:?}", self.position[idx_ini..idx_fin][j]);
-                                    //     println!("window_freqs={:?}", &window_freqs);
-                                    //     println!("dist={:?}", &dist);
-                                    //     println!("corr={:?}", &corr);
-                                    //     println!("weights_sum={:?}", &weights_sum);
-                                    //     println!("weights={:?}", &weights);
-                                    //     println!("values={:?}", &values);
-                                    //     println!("window_freqs[(i, j)]={:?}", window_freqs[(i, j)]);
-                                    // }
                                 }
                             }
                             // Need to correct for when the imputed allele frequencies do not add up to one!
                             if j > 0 {
-                                // Include the start of the next window, i.e. the marker for the end of the last locus in the current window
-                                let loci_start_indexes_within_the_current_window = &loci_idx[idx_window_head[a]..(idx_window_tail[a]+2)];
-                                // if (self.chromosome[idx_ini..idx_fin][j] == "Chromosome1") & (self.position[idx_ini..idx_fin][j] == 28043452) {
-                                //     println!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                                //     println!("i={:?}", i);
-                                //     println!("j={:?}", j);
-                                //     println!("self.chromosome[idx_ini..idx_fin][j]={:?}", self.chromosome[idx_ini..idx_fin][j]);
-                                //     println!("self.position[idx_ini..idx_fin][j]={:?}", self.position[idx_ini..idx_fin][j]);
-                                //     println!("loci_start_indexes_within_the_current_window={:?}", loci_start_indexes_within_the_current_window);
-                                //     println!("window_freqs={:?}", window_freqs);
-                                // }
-                                for j_ in 1..loci_start_indexes_within_the_current_window.len() {
-                                    // Are we at the last allele of the locus?
-                                    if (loci_start_indexes_within_the_current_window[j_] - 1) == (idx_ini + j) {
-                                        // If we are then we find the start of this locus, i.e. its local index
-                                        let j_ini = loci_start_indexes_within_the_current_window[j_-1] - idx_ini;
-                                        let freqs_sum = window_freqs.slice(s![i, j_ini..(j+1)]).fold(0.0 ,|sum, &x| if !x.is_nan() {sum + x} else {sum}) + f64::EPSILON;
-                                        // if (self.chromosome[idx_ini..idx_fin][j] == "Chromosome1") & (self.position[idx_ini..idx_fin][j] == 28043452) {
-                                        //     println!("----------------------------------------------------------------");
-                                        //     println!("i={:?}", i);
-                                        //     println!("j={:?}", j);
-                                        //     println!("j_ini={:?}", j_ini);
-                                        //     println!("self.chromosome[idx_ini..idx_fin][j]={:?}", self.chromosome[idx_ini..idx_fin][j]);
-                                        //     println!("self.position[idx_ini..idx_fin][j]={:?}", self.position[idx_ini..idx_fin][j]);
-                                        //     println!("loci_start_indexes_within_the_current_window={:?}", loci_start_indexes_within_the_current_window);
-                                        //     println!("window_freqs={:?}", window_freqs);
-                                        //     println!("window_freqs.slice(s![i, j_ini..(j+1)])={:?}", window_freqs.slice(s![i, j_ini..(j+1)]));
-                                        //     println!("freqs_sum={:?}", freqs_sum);
-                                        // }
-                                        if freqs_sum != 1.0 {
-                                            for j_ in j_ini..(j+1) {
-                                                window_freqs[(i, j_)] = window_freqs[(i, j_)] / freqs_sum;
-                                            }
-                                        }
-                                        break;
-                                    }
-                                }
+                                correct_allele_frequencies_per_locus(
+                                    a,
+                                    i,
+                                    j,
+                                    idx_ini,
+                                    window_freqs,
+                                    &idx_window_head,
+                                    &idx_window_tail,
+                                    &loci_idx,
+                                )
+                                .unwrap();
                             }
-                        }
-                    }
-                }
-                // println!("*window_freqs:\n{:?}", *window_freqs);
-                // println!("*window_freqs:\n{:?}", window_freqs);
-            });
+                        } // Impute across pools with missing data
+                    } // Impute if we have missing data
+                } // Iterate across alleles across loci within the window
+            }); // Parallel processing across windows
         // }
         // println!("vec_windows_freqs[0]:\n{:?}", vec_windows_freqs[0]);
         // Write-out the imputed data
         for a in 0..w {
             // Use the indexes of each locus
             let idx_ini = loci_idx[idx_window_head[a]];
-            let idx_fin = loci_idx[idx_window_tail[a] + 1];  // add one so that we include the last part of the window!
+            let idx_fin = loci_idx[idx_window_tail[a] + 1]; // add one so that we include the last part of the window!
             let p = idx_fin - idx_ini;
             for i in 0..n {
                 for j in 0..p {
@@ -342,6 +321,8 @@ pub fn impute_aLDkNN(
     file_sync_phen: &FileSyncPhen,
     filter_stats: &FilterStats,
     min_depth_set_to_missing: &f64,
+    frac_top_missing_pools: &f64,
+    frac_top_missing_loci: &f64,
     window_size_bp: &u64,
     window_slide_size_bp: &u64,
     min_loci_per_window: &u64,
@@ -359,12 +340,10 @@ pub fn impute_aLDkNN(
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(
-        "Parsing the sync into allele frequncies: {} seconds",
+        "Parsed the sync file into allele frequncies: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
         duration.as_secs()
-    );
-    println!(
-        "genotypes_and_phenotypes.intercept_and_allele_frequencies:\n{:?}",
-        genotypes_and_phenotypes.intercept_and_allele_frequencies
     );
     let start = std::time::SystemTime::now();
     genotypes_and_phenotypes
@@ -373,12 +352,34 @@ pub fn impute_aLDkNN(
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(
-        "Set missing loci below the minimum depth: {} seconds",
+        "Set missing loci below the minimum depth: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
         duration.as_secs()
     );
+    let start = std::time::SystemTime::now();
+    genotypes_and_phenotypes
+        .filter_out_top_missing_pools(frac_top_missing_pools)
+        .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
     println!(
-        "genotypes_and_phenotypes.intercept_and_allele_frequencies:\n{:?}",
-        genotypes_and_phenotypes.intercept_and_allele_frequencies
+        "Filtered out sparsest pools: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    let start = std::time::SystemTime::now();
+    genotypes_and_phenotypes
+        .filter_out_top_missing_loci(frac_top_missing_loci)
+        .unwrap();
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!(
+        "Filtered out sparsest loci: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
     );
     let start = std::time::SystemTime::now();
     genotypes_and_phenotypes
@@ -392,7 +393,27 @@ pub fn impute_aLDkNN(
         .unwrap();
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
-    println!("Imputation: {} seconds", duration.as_secs());
+    println!(
+        "Adaptive LD-kNN imputation: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    // Removing missing data, i.e. loci that cannot be imputed
+    // First remove missing data
+    let start = std::time::SystemTime::now();
+    genotypes_and_phenotypes
+        .filter_out_top_missing_loci(&1.00)
+        .unwrap(); // Remove 100% of the loci with missing data
+    let end = std::time::SystemTime::now();
+    let duration = end.duration_since(start).unwrap();
+    println!(
+        "Missing data removed, i.e. loci which cannot be imputed because of extreme sparsity: {} pools x {} loci | Duration: {} seconds",
+        genotypes_and_phenotypes.coverages.nrows(),
+        genotypes_and_phenotypes.coverages.ncols(),
+        duration.as_secs()
+    );
+    // Output
     let out = genotypes_and_phenotypes
         .write_csv(filter_stats, keep_p_minus_1, out, n_threads)
         .unwrap();
@@ -423,7 +444,7 @@ mod tests {
             min_quality: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.005,
-            min_missingness_rate: 0.0,
+            max_missingness_rate: 0.0,
             pool_sizes: vec![20., 20., 20., 20., 20.],
         };
         let n_threads = 2;
@@ -446,6 +467,8 @@ mod tests {
             "Before imputation:\n{:?}",
             frequencies_and_phenotypes.intercept_and_allele_frequencies
         );
+        let frac_top_missing_pools = 0.0;
+        let frac_top_missing_loci = 0.2;
         let window_size_bp = 1e6 as u64;
         let window_slide_size_bp = window_size_bp;
         let min_loci_per_window = 1;
@@ -469,6 +492,8 @@ mod tests {
             &file_sync_phen,
             &filter_stats,
             &min_depth_set_to_missing,
+            &frac_top_missing_pools,
+            &frac_top_missing_loci,
             &window_size_bp,
             &window_slide_size_bp,
             &min_loci_per_window,
@@ -480,23 +505,38 @@ mod tests {
         .unwrap();
         assert_eq!(outname, "test-impute_aLDkNN.csv".to_owned()); // Do better!!! Load data - thus working on improving load_table()
 
-        // NOTE: ADD TESTS TO MAKE SURE FREQUENCIES IN EACH LOCUS ADDS UP TO ONE
-
+        println!("frequencies_and_phenotypes.intercept_and_allele_frequencies.slice(s![0..5, 39..42])={:?}", frequencies_and_phenotypes.intercept_and_allele_frequencies.slice(s![0..5, 39..42]));
         assert_eq!(
-            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 1)],
-            0.20596581159779487
+            frequencies_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![0..5, 1..3])
+                .sum_axis(Axis(1))
+                .map(|x| sensible_round(*x, 2)),
+            Array1::from_elem(5, 1.0)
         );
         assert_eq!(
-            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 2)],
-            0.7940341884022049
+            frequencies_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![0..5, 39..42])
+                .sum_axis(Axis(1))
+                .map(|x| sensible_round(*x, 2)),
+            Array1::from_elem(5, 1.0)
         );
         assert_eq!(
-            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 13923)],
-            0.02710654974164676
+            frequencies_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![0..5, 119..121])
+                .sum_axis(Axis(1))
+                .map(|x| sensible_round(*x, 2)),
+            Array1::from_elem(5, 1.0)
         );
         assert_eq!(
-            frequencies_and_phenotypes.intercept_and_allele_frequencies[(0, 13924)],
-            0.972893450258353
+            frequencies_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![0..5, 400..402])
+                .sum_axis(Axis(1))
+                .map(|x| sensible_round(*x, 2)),
+            Array1::from_elem(5, 1.0)
         );
         // assert_eq!(0, 1);
     }
