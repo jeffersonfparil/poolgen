@@ -44,7 +44,7 @@ struct Args {
     /// Minimum allele frequency (per locus, alleles which fail to pass this threshold will be omitted allowing control over multiallelic loci)
     #[clap(long, default_value_t = 0.001)]
     min_allele_frequency: f64,
-    /// Maximum missingness rate, i.e. the maximum fraction of pools missing in each locus
+    /// Maximum missingness rate (loci with missing data beyond this threshold will be omitted)
     #[clap(long, default_value_t = 0.0)]
     max_missingness_rate: f64,
     /// Keep ambiguous reads during SNP filtering, i.e. keep them coded as Ns
