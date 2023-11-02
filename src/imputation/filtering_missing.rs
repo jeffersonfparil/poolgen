@@ -9,9 +9,10 @@ impl GenotypesAndPhenotypes {
         min_depth_set_to_missing: &f64,
     ) -> io::Result<&mut Self> {
         self.check().unwrap();
-        let (n, _p) = self.intercept_and_allele_frequencies.dim();
+        let (n, p) = self.intercept_and_allele_frequencies.dim();
         let (_n, l) = self.coverages.dim();
         let (loci_idx, _loci_chr, _loci_pos) = self.count_loci().unwrap();
+        let mut n_missing = 0;
         for i in 0..n {
             for j in 0..l {
                 if self.coverages[(i, j)] < *min_depth_set_to_missing {
@@ -25,10 +26,12 @@ impl GenotypesAndPhenotypes {
                     };
                     for k in idx_ini..idx_fin {
                         self.intercept_and_allele_frequencies[(i, k)] = f64::NAN;
+                        n_missing += 1;
                     }
                 }
             }
         }
+        println!("Number of data points missing: {} out of {} ({}%)", n_missing, n*(p-1), n_missing as f64 * 100.0 / (n*(p-1)) as f64);
         self.check().unwrap();
         Ok(self)
     }
