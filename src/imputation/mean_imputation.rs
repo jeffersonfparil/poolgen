@@ -63,9 +63,10 @@ pub fn impute_mean(
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(
-        "Parsed the sync file into allele frequncies: {} pools x {} loci | Duration: {} seconds",
+        "Parsed the sync file into allele frequncies: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
+        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -75,9 +76,10 @@ pub fn impute_mean(
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(
-        "Set missing loci below the minimum depth: {} pools x {} loci | Duration: {} seconds",
+        "Set missing loci below the minimum depth: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
+        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -87,9 +89,10 @@ pub fn impute_mean(
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(
-        "Filtered out sparsest pools: {} pools x {} loci | Duration: {} seconds",
+        "Filtered out sparsest pools: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
+        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -99,9 +102,10 @@ pub fn impute_mean(
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(
-        "Filtered out sparsest loci: {} pools x {} loci | Duration: {} seconds",
+        "Filtered out sparsest loci: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
+        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -109,9 +113,10 @@ pub fn impute_mean(
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(
-        "Mean value imputation: {} pools x {} loci | Duration: {} seconds",
+        "Mean value imputation: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
+        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
         duration.as_secs()
     );
     // Remove 100% of the loci with missing data
@@ -122,9 +127,10 @@ pub fn impute_mean(
     let end = std::time::SystemTime::now();
     let duration = end.duration_since(start).unwrap();
     println!(
-        "Missing data removed, i.e. loci which cannot be imputed because of extreme sparsity: {} pools x {} loci | Duration: {} seconds",
+        "Missing data removed, i.e. loci which cannot be imputed because of extreme sparsity: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
+        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
         duration.as_secs()
     );
     // Output
@@ -220,6 +226,6 @@ mod tests {
                 .mean()
                 .unwrap()
         );
-        assert_eq!(0, 1);
+        // assert_eq!(0, 1);
     }
 }

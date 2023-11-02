@@ -4,6 +4,12 @@ use std::io::{self, Error, ErrorKind};
 use crate::base::*;
 
 impl GenotypesAndPhenotypes {
+    pub fn missing_rate(&mut self) -> io::Result<f64> {
+        let (n, l) = self.coverages.dim();
+        let sum = self.coverages.fold(0,|sum, &x| if x.is_nan(){sum + 1}else{sum});
+        Ok(sensible_round(sum as f64 / ((n*l) as f64), 2))
+    }
+
     pub fn set_missing_by_depth(
         &mut self,
         min_depth_set_to_missing: &f64,
@@ -31,7 +37,6 @@ impl GenotypesAndPhenotypes {
                 }
             }
         }
-        println!("Number of data points missing: {} out of {} ({}%)", n_missing, n*(p-1), n_missing as f64 * 100.0 / (n*(p-1)) as f64);
         self.check().unwrap();
         Ok(self)
     }
