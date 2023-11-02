@@ -29,7 +29,6 @@ impl GenotypesAndPhenotypes {
             } else {
                 mean_freqs
             };
-            // println!("mean_freqs={:?}", mean_freqs);
             for k in 0..freqs.ncols() {
                 for i in 0..n {
                     if self.intercept_and_allele_frequencies[(i, idx_ini + k)].is_nan() {
@@ -38,6 +37,14 @@ impl GenotypesAndPhenotypes {
                         continue;
                     };
                 }
+            }
+        }
+        // Set missing coverages to infinity to mark imputed data
+        for i in 0..self.coverages.nrows() {
+            for j in 0..self.coverages.ncols() {
+                if self.coverages[(i, j)].is_nan() {
+                    self.coverages[(i, j)] = f64::INFINITY
+                };
             }
         }
         Ok(self)
@@ -66,7 +73,7 @@ pub fn impute_mean(
         "Parsed the sync file into allele frequncies: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -79,7 +86,7 @@ pub fn impute_mean(
         "Set missing loci below the minimum depth: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -92,7 +99,7 @@ pub fn impute_mean(
         "Filtered out sparsest pools: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -105,7 +112,7 @@ pub fn impute_mean(
         "Filtered out sparsest loci: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -116,9 +123,12 @@ pub fn impute_mean(
         "Mean value imputation: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
+
+    // println!("genotypes_and_phenotypes={:?}", genotypes_and_phenotypes);
+
     // Remove 100% of the loci with missing data
     let start = std::time::SystemTime::now();
     genotypes_and_phenotypes
@@ -130,7 +140,7 @@ pub fn impute_mean(
         "Missing data removed, i.e. loci which cannot be imputed because of extreme sparsity: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     // Output
@@ -229,3 +239,28 @@ mod tests {
         // assert_eq!(0, 1);
     }
 }
+
+// SYNC=/home/jeff/poolgen/tests/test_REMOVE_ME_BEFORE_PUSHING.sync
+// PHEN=/home/jeff/poolgen/tests/test_REMOVE_ME_BEFORE_PUSHING.csv
+// NCORES=7
+// OUT=/home/jeff/poolgen/tests/test-MEAN_IMPUTE-REMOVE_ME_BEFORE_PUSHING.csv
+// time cargo run -- impute \
+//     --imputation-method "mean" \
+//     -f ${SYNC} \
+//     -p ${PHEN} \
+//     --phen-delim , \
+//     --phen-name-col 0 \
+//     --phen-pool-size-col 1 \
+//     --phen-value-col 2 \
+//     --min-allele-frequency 0.0001 \
+//     --min-coverage 0 \
+//     --min-quality 0.01 \
+//     --max-missingness-rate 0.75 \
+//     --min-depth-set-to-missing 5 \
+//     --window-size-bp 1000000 \
+//     --window-slide-size-bp 1000000 \
+//     --min-loci-per-window 1 \
+//     --min-correlation 0.5 \
+//     --k-neighbours 5 \
+//     --n-threads ${NCORES} \
+//     -o ${OUT}

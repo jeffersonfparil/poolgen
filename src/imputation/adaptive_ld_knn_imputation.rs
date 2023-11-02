@@ -311,6 +311,14 @@ impl GenotypesAndPhenotypes {
                 }
             }
         }
+        // Set missing coverages to infinity to mark imputed data
+        for i in 0..self.coverages.nrows() {
+            for j in 0..self.coverages.ncols() {
+                if self.coverages[(i, j)].is_nan() {
+                    self.coverages[(i, j)] = f64::INFINITY
+                };
+            }
+        }
         Ok(self)
     }
 }
@@ -342,7 +350,7 @@ pub fn impute_aLDkNN(
         "Parsed the sync file into allele frequncies: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -355,7 +363,7 @@ pub fn impute_aLDkNN(
         "Set missing loci below the minimum depth: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -368,7 +376,7 @@ pub fn impute_aLDkNN(
         "Filtered out sparsest pools: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -381,7 +389,7 @@ pub fn impute_aLDkNN(
         "Filtered out sparsest loci: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     let start = std::time::SystemTime::now();
@@ -400,7 +408,7 @@ pub fn impute_aLDkNN(
         "Adaptive LD-kNN imputation: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     // Remove 100% of the loci with missing data
@@ -414,7 +422,7 @@ pub fn impute_aLDkNN(
         "Missing data removed, i.e. loci which cannot be imputed because of extreme sparsity: {} pools x {} loci | Missingness: {}% | Duration: {} seconds",
         genotypes_and_phenotypes.coverages.nrows(),
         genotypes_and_phenotypes.coverages.ncols(),
-        genotypes_and_phenotypes.missing_rate().unwrap() * 100.0,
+        genotypes_and_phenotypes.missing_rate().unwrap(),
         duration.as_secs()
     );
     // Output
