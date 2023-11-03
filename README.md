@@ -93,7 +93,7 @@ samtools mpileup \
 
 ### vcf2sync
 
-Convert the most widely used genotype data format, [variant call format (`*.vcf`)](https://samtools.github.io/hts-specs/VCFv4.3.pdf) into a [synchronised pileup format](#Sync), making use of allele depths to estimate allele frequencies and omitting genotype classes information including genotype likelihoods. This is so simply the allele frequency information we want from pools, populations and even polyploids, where genotype classes can be difficult if not impossible to extract. This utility should be compatible with vcf versions 4.2 and 4.3.
+Convert the most widely used genotype data format, [variant call format (`*.vcf`)](https://samtools.github.io/hts-specs/VCFv4.3.pdf) into a [synchronised pileup format](#Sync), making use of allele depths to estimate allele frequencies and omitting genotype classes information including genotype likelihoods. This utility should be compatible with vcf versions 4.2 and 4.3.
 
 ### sync2csv
 
