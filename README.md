@@ -101,7 +101,7 @@ Convert [synchronised pileup format](#Sync) into a matrix ($n$ pools x $p$ allel
 
 ### impute
 
-Impute allele frequencies set to missing accoriding to another minimum depth parameter, i.e. `--min-depth-set-to-missing`. Two imputation algorithms are currently available (a third one is in the works):
+Impute allele frequencies set to missing according to another minimum depth parameter, i.e. `--min-depth-set-to-missing`. Two imputation algorithms are currently available (a third one is in the works):
 
 1. computationally efficient mean value imputation, and
 2. adaptive linkage disequilibrium-based k-nearest neighbour imputation (an extension of [LD-kNNi](https://doi.org/10.1534/g3.115.021667)).
