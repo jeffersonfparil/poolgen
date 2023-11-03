@@ -99,6 +99,13 @@ Convert the most widely used genotype data format, [variant call format (`*.vcf`
 
 Convert [synchronised pileup format](#Sync) into a matrix ($n$ pools x $p$ alleles across loci) and write into a comma-delimited (csv) file.
 
+### impute
+
+Impute allele frequencies set to missing accoriding to another minimum depth parameter, i.e. `--min-depth-set-to-missing`. Two imputation algorithms are currently available (a third one is in the works):
+
+1. computationally efficient mean value imputation, and
+2. adaptive linkage disequilibrium-based k-nearest neighbour imputation (an extension of [LD-kNNi](https://doi.org/10.1534/g3.115.021667)).
+
 ### fisher_exact_test
 
 Perform Fisher's exact test per locus.
@@ -159,9 +166,6 @@ Computes [Tajima's D](https://en.wikipedia.org/wiki/Tajima%27s_D) per sliding (o
 
 Genomewide unbiased determination of the modes of convergent evolution. Per population, significant troughs (selective sweeps) and peaks (balancing selection) are detected and the widths of which are measured. Per population pair, significant deviations from mean genomewide Fst within the identified significant Tajima's D peaks and troughs are also identified. Narrow Tajima's D troughs/peaks imply *de novo* mutation as the source of the genomic segment under selection, while wider ones imply standing genetic variation as the source. Pairwise Fst which are significantly higher than genomewide Fst imply migration of causal variants between populations, significantly lower implies independent evolution within each population, and non-significantly deviated pairwise Fst implies a shared source of the variants under selection.
 
-### impute
-
-Impute allele frequencies set to missing accoriding to another minimum depth parameter, i.e. `--min-depth-set-to-missing`. YOu may use the computationally efficient mean value imputation, or adaptive linkage disequilibrium-based k-nearest neighbour imputation (an extension of [LD-kNNi](https://doi.org/10.1534/g3.115.021667)).
 
 ## Details
 
@@ -211,6 +215,7 @@ I have attempted to create a penalisation algorithm similar to elastic-net or gl
 - [X] Canonical variant call format (vcf) file to sync file conversion
 - [ ] Simulation of genotype and phenotype data
 - [ ] Improve genomic prediction cross-validation's use of PredictionPerformance fields, i.e. output the predictions and predictor distributions
+- [ ] Additional imputation algorithm. See details below:
 
 Performs OLS or elastic-net regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
 
