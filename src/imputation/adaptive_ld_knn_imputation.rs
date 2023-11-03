@@ -314,7 +314,13 @@ impl GenotypesAndPhenotypes {
         // Set missing coverages to infinity to mark imputed data
         for j in 0..self.coverages.ncols() {
             // Mark only the imputed loci, i.e. loci which were not completely missing across all pools
-            let n_non_missing = self.coverages.select(Axis(1), &[j]).fold(0, |sum, &x| if x.is_nan()==false{sum + 1}else{sum});
+            let n_non_missing = self.coverages.select(Axis(1), &[j]).fold(0, |sum, &x| {
+                if x.is_nan() == false {
+                    sum + 1
+                } else {
+                    sum
+                }
+            });
             if n_non_missing > 0 {
                 for i in 0..self.coverages.nrows() {
                     if self.coverages[(i, j)].is_nan() {

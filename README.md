@@ -48,6 +48,9 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 - *Column 6*:       base qualities encoded as the `10 ^ -((ascii value of the character - 33) / 10)`
 - *Columns 7 - 3n*: coverages, reads, and base qualities of *n* pools (3 columns per pool).
 
+### Variant call format (vcf)
+
+Canonical variant calling or genotype data format for individual samples. The [`vcf2sync`](#vcf2sync) utility is expected to work with vcf versions 4.2 and 4.3. See [VCFv4.2](https://samtools.github.io/hts-specs/VCFv4.2.pdf) and [VCFv4.3](https://samtools.github.io/hts-specs/VCFv4.3.pdf) for details in the format specifications.
 ### Sync
 
 An extension of [popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format, which includes a header line prepended by '#' showing the names of each column including the names of each pool. Additional header line/s and comments prepended with '#' may be added anywhere within the file.
@@ -87,6 +90,10 @@ samtools mpileup \
     -f /reference/genome.fna \
     -o /output/file.pileup
 ```
+
+### vcf2sync
+
+Convert the most widely used genotype data format, [variant call format (`*.vcf`)](https://samtools.github.io/hts-specs/VCFv4.3.pdf) into a [synchronised pileup format](#Sync), making use of allele depths to estimate allele frequencies and omitting genotype classes information including genotype likelihoods. This is so simply the allele frequency information we want from pools, populations and even polyploids, where genotype classes can be difficult if not impossible to extract. This utility should be compatible with vcf versions 4.2 and 4.3.
 
 ### sync2csv
 
@@ -152,10 +159,9 @@ Computes [Tajima's D](https://en.wikipedia.org/wiki/Tajima%27s_D) per sliding (o
 
 Genomewide unbiased determination of the modes of convergent evolution. Per population, significant troughs (selective sweeps) and peaks (balancing selection) are detected and the widths of which are measured. Per population pair, significant deviations from mean genomewide Fst within the identified significant Tajima's D peaks and troughs are also identified. Narrow Tajima's D troughs/peaks imply *de novo* mutation as the source of the genomic segment under selection, while wider ones imply standing genetic variation as the source. Pairwise Fst which are significantly higher than genomewide Fst imply migration of causal variants between populations, significantly lower implies independent evolution within each population, and non-significantly deviated pairwise Fst implies a shared source of the variants under selection.
 
-### In the works
+### impute
 
-- **imputation**: imputation of missing loci
-- **vcf2sync**: converting the most widely used genotype format `vcf` into the succint `sync` format.
+Impute allele frequencies set to missing accoriding to another minimum depth parameter, i.e. `--min-depth-set-to-missing`. YOu may use the computationally efficient mean value imputation, or adaptive linkage disequilibrium-based k-nearest neighbour imputation (an extension of [LD-kNNi](https://doi.org/10.1534/g3.115.021667)).
 
 ## Details
 
@@ -200,13 +206,11 @@ I have attempted to create a penalisation algorithm similar to elastic-net or gl
 
 ### TODO
 
-[ ] Fst and Tajima's D estimation
-
-[ ] Improve genomic prediction cross-validation's use of PredictionPerformance fields, i.e. output the predictions and predictor distributions
-
-[ ] Simulation of genotype and phenotype data
-
-[ ] Imputation
+- [X] Fst and Tajima's D estimation
+- [X] Imputation
+- [X] Canonical variant call format (vcf) file to sync file conversion
+- [ ] Simulation of genotype and phenotype data
+- [ ] Improve genomic prediction cross-validation's use of PredictionPerformance fields, i.e. output the predictions and predictor distributions
 
 Performs OLS or elastic-net regression to predict missing allele counts per window for each pool with at least one locus with missing data. This imputation method requires at least one pool without missing data across the window. It follows that to maximise the number of loci we can impute, we need to impose a maximum window size equal to the length of the sequencing read used to generate the data, e.g. 100 bp to 150 bp for Illumina reads.
 

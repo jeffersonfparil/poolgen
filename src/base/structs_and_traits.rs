@@ -12,6 +12,14 @@ pub struct FilePileup {
     pub pool_names: Vec<String>,
 }
 
+/// The alternative entry point genotype file struct, i.e. describing the genotype data in vcf format
+/// Note: Make sure that the annotate the vcf file with allele depths, e.g. `bcftools mpileup -a AD ...`
+/// - `filename` - filename of the vcf file (`*.vcf` or `*.vcf.gz`)
+#[derive(Debug, Clone)]
+pub struct FileVcf {
+    pub filename: String,
+}
+
 /// The main genotype file struct used for most of the analyses
 /// - `filename` - filename of the synchronised pileup file (`*.sync`)
 /// - `test` - name of statistical test, i.e. "sync2csv", "fisher_exact_test", "chisq_test", "fst", "heterozygosity, "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "genomic_prediction_cross_validation""
@@ -76,6 +84,18 @@ pub struct PileupLine {
     pub coverages: Vec<u64>,          // number of times the locus was covered
     pub read_codes: Vec<Vec<u8>>, // utf8 read codes corresponding to 'A', 'T', 'C', or 'G' (252 other alleles can be accommodated)
     pub read_qualities: Vec<Vec<u8>>, // utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
+}
+
+/// A line of a vcf file corresponding to a single locus across all the pools
+/// We are interested in extracting allele counts.
+/// We are not interested in the genotype calls and their corresponding likelihoods.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VcfLine {
+    pub chromosome: String,             // chromosome or scaffold name
+    pub position: u64,                  // position in number of bases
+    pub reference_allele: char,         // reference allele
+    pub alternative_alleles: Vec<char>, // vector of alternative alleles
+    pub allele_depths: Vec<Vec<u64>>, // across samples average utf8 base quality codes which can be transformed into bases error rate as 10^(-(u8 - 33)/10)
 }
 
 /// Allele counts at a locus across pools

@@ -6,8 +6,10 @@ use crate::base::*;
 impl GenotypesAndPhenotypes {
     pub fn missing_rate(&mut self) -> io::Result<f64> {
         let (n, l) = self.coverages.dim();
-        let sum = self.coverages.fold(0,|sum, &x| if x.is_nan(){sum + 1}else{sum});
-        Ok(sensible_round(sum as f64 * 100.0 / ((n*l) as f64), 2))
+        let sum = self
+            .coverages
+            .fold(0, |sum, &x| if x.is_nan() { sum + 1 } else { sum });
+        Ok(sensible_round(sum as f64 * 100.0 / ((n * l) as f64), 2))
     }
 
     pub fn set_missing_by_depth(

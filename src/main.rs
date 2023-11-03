@@ -27,7 +27,7 @@ use popgen::*;
     long_about = "Quantitative and population genetics analyses using pool sequencing data: trying to continue the legacy of the now unmaintained popoolation2 package with the memory safety of Rust."
 )]
 struct Args {
-    /// Analysis to perform (i.e. "pileup2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity", "watterson_estimator", "tajima_d", "gudmc", "impute")
+    /// Analysis to perform (i.e. "pileup2sync", "vcf2sync", "sync2csv", "fisher_exact_test", "chisq_test", "pearson_corr", "ols_iter", "ols_iter_with_kinship", "mle_iter", "mle_iter_with_kinship", "gwalpha", "ridge_iter", "genomic_prediction_cross_validation", "fst", "heterozygosity", "watterson_estimator", "tajima_d", "gudmc", "impute")
     analysis: String,
     /// Filename of the input pileup or synchronised pileup file (i.e. *.pileup, *.sync, *.syncf, or *.syncx)
     #[clap(short, long)]
@@ -202,6 +202,19 @@ fn main() {
                 &args.output,
                 &args.n_threads,
                 base::pileup_to_sync,
+            )
+            .unwrap();
+    } else if args.analysis == String::from("vcf2sync") {
+        // VCF INPUT
+        let file_vcf = base::FileVcf {
+            filename: args.fname,
+        };
+        output = file_vcf
+            .read_analyse_write(
+                &filter_stats,
+                &args.output,
+                &args.n_threads,
+                base::vcf_to_sync,
             )
             .unwrap();
     } else {

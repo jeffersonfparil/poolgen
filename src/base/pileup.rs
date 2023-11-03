@@ -235,9 +235,8 @@ impl Filter for PileupLine {
     }
 
     /// Filter `PileupLine` by:
-    /// 1. removing nucleotide reads with counts less than `minimum coverage`, and read qualities less than `minimum quality`
-    /// 2. removing allele/s if the minor allele frequency is less than `min_allele_frequency`
-    /// 3. removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after previous filterings
+    /// - removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after filterings
+    /// Note that we are not removing alleles per locus if they fail the minimum allele frequency threshold, only if all alleles fail this threshold, i.e. when the locus is close to being fixed
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
         // First, make sure we have the correct the correct number of expected pools as the phenotype file
         // TODO: Make the error pop-out because it's currently being consumed as None in the only function calling it below.
