@@ -1,6 +1,6 @@
 # poolgen
 
-Quantitative and population genetics analyses using pool sequencing data
+Quantitative and population genetics analyses using pool sequencing data (i.e. SNP data  where each sample is a pool or group of individuals, a population or a single polyploid individual).
 
 |**Build Status**|**License**|
 |:---:|:---:|
@@ -59,7 +59,7 @@ An extension of [popoolation2's](https://academic.oup.com/bioinformatics/article
 - *Column 1*:       chromosome or scaffold name
 - *Column 2*:       locus position 
 - *Column 3*:       reference allele, e.g. A, T, C, G 
-- *Column 4 to n*:  colon-delimited allele counts: A:T:C:G:DEL:N, where "DEL" is deletion, and "N" is unclassified (one column per pool).
+- *Column/s 4 to n*:  colon-delimited allele counts: A:T:C:G:DEL:N, where "DEL" refers to insertion/deletion, and "N" is unclassified. A pool or population or polyploid individual is represented by a single column of this colon-delimited allele counts.
 
 ### Phenotypes
 
