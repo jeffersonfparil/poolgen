@@ -118,9 +118,9 @@ struct Args {
     /// Imputation parameter, i.e. imputation method, select from "mean" for simple imputation using mean allele frequencies across non-missing pools, or "aLD-kNNi" for adaptive linkage disequillibrium (estimated using correlations within a window) k-nearest neighbour weighted allele frequencies imputation
     #[clap(long, default_value = "aLD-kNNi")]
     imputation_method: String,
-    /// Imputation parameter, i.e. minimum Pearson's correlation value at with loci within the window are considered in linkage disequillibrium (LD) with the locus requiring imputation. The resulting loci will be used to calculate pairwise distances (adaptive if we have too much missing data in the window at which point we use all the loci within the window).
-    #[clap(long, default_value_t = 0.80)]
-    min_correlation: f64,
+    /// Imputation parameter, i.e. maximum number of top correlated loci within the window which are considered in linkage disequillibrium (LD) with the locus requiring imputation. The resulting loci will be used to calculate pairwise distances (adaptive if we have too much missing data in the window at which point we use all the loci within the window).
+    #[clap(long, default_value_t = 10)]
+    n_loci_to_estimate_distance: u64,
     /// Imputation parameter, i.e. number of nearest neighbours from which the imputed weighted (weights based on distance from the pool requiring imputation) mean allele frequencies will be calculated from (adaptive if all k neighbours are also requiring imputation at the locus, at which point we increase k until at least one pool in non-missing at the locus).
     #[clap(long, default_value_t = 5)]
     k_neighbours: u64,
@@ -340,7 +340,7 @@ fn main() {
                     &args.window_size_bp,
                     &args.window_slide_size_bp,
                     &args.min_loci_per_window,
-                    &args.min_correlation,
+                    &args.n_loci_to_estimate_distance,
                     &args.k_neighbours,
                     &args.n_threads,
                     &args.output,
