@@ -16,3 +16,13 @@ fn simulate_genotypes(n: u64, p: u64, n_chr: u64, max_bp: u64, r2_50_perc_bp: u6
     let mvn = MultivariateNormal::new(vec![0., 0.], vec![1., 0., 0., 1.]).unwrap();
     return(Array2::from_shape_elem((n, p), f64::NAN))
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_simulate_genotypes() {
+        assert_eq!(0, 1);
+    }
+}
