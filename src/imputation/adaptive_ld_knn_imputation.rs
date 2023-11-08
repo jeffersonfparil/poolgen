@@ -3,8 +3,8 @@ use crate::gwas::pearsons_correlation;
 use ndarray::{prelude::*, Zip};
 use std::io;
 
-// For benchmarking
-use std::time::Instant;
+// // For benchmarking
+// use std::time::Instant;
 
 fn calculate_euclidean_distances(
     window_freqs: ArrayView2<f64>,
@@ -319,7 +319,7 @@ impl GenotypesAndPhenotypes {
                             } // Impute across pools with missing data
                         } // Impute if we have missing data
                     } // Iterate across alleles across loci within the window
-                    println!("window_freqs:\n{:?}", &window_freqs);
+                    // println!("window_freqs:\n{:?}", &window_freqs);
                 }, // Parallel processing across windows
             );
         // }
