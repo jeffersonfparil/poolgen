@@ -66,6 +66,6 @@ mod tests {
         let max_bp = 2.2e9 as usize;
         let r2_50_perc_bp = 10e6 as usize;
         let q = simulate_genotypes(n, p, n_chr, max_bp, r2_50_perc_bp).unwrap();
-        assert_eq!(0, 1);
+        // assert_eq!(0, 1);
     }
 }

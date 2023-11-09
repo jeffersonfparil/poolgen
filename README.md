@@ -99,12 +99,12 @@ Convert the most widely used genotype data format, [variant call format (`*.vcf`
 
 Convert [synchronised pileup format](#Sync) into a matrix ($n$ pools x $p$ alleles across loci) and write into a comma-delimited (csv) file.
 
-### impute
+<!-- ### impute (redacted for now 2023-11-10)
 
 Impute allele frequencies set to missing according to another minimum depth parameter, i.e. `--min-depth-set-to-missing`. Two imputation algorithms are currently available (a third one is in the works):
 
 1. computationally efficient mean value imputation, and
-2. adaptive linkage disequilibrium-based k-nearest neighbour imputation (an extension of [LD-kNNi](https://doi.org/10.1534/g3.115.021667)).
+2. adaptive linkage disequilibrium-based k-nearest neighbour imputation (an extension of [LD-kNNi](https://doi.org/10.1534/g3.115.021667)). -->
 
 ### fisher_exact_test
 
