@@ -1,3 +1,3 @@
-pub use self::{simulate_genotypes::*};
+pub use self::simulate_genotypes::*;
 
 mod simulate_genotypes;

@@ -8,6 +8,7 @@ mod base;
 mod gp;
 mod gwas;
 mod imputation;
+mod simulation;
 mod popgen;
 mod tables;
 use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse, SaveCsv};
@@ -17,6 +18,7 @@ use gp::{
 };
 use gwas::*;
 use imputation::*;
+use simulation::*;
 use popgen::*;
 
 #[derive(Parser, Debug)]
