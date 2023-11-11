@@ -141,7 +141,8 @@ impl Filter for VcfLine {
         while j < m {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i];
+                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i]
+                    / filter_stats.pool_sizes.iter().sum::<f64>();
                 // We've made sure the pool_sizes sum up to one in phen.rs
             }
             if (q < filter_stats.min_allele_frequency)

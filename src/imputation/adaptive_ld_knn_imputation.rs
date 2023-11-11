@@ -319,7 +319,7 @@ impl GenotypesAndPhenotypes {
                             } // Impute across pools with missing data
                         } // Impute if we have missing data
                     } // Iterate across alleles across loci within the window
-                    // println!("window_freqs:\n{:?}", &window_freqs);
+                      // println!("window_freqs:\n{:?}", &window_freqs);
                 }, // Parallel processing across windows
             );
         // }
