@@ -548,7 +548,7 @@ mod tests {
         //         .unwrap();
         // let filter_stats = FilterStats {
         //     remove_ns: true,
-        //     min_quality: 0.005,
+        //     max_bases_error_rate: 0.005,
         //     min_coverage: 1,
         //     min_allele_frequency: 0.005,
         //     pool_sizes: vec![20.0, 20.0, 20.0, 20.0, 20.0],

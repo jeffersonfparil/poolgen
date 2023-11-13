@@ -255,7 +255,7 @@ mod tests {
         ////////////////////////////////////////////////////////////////////////////////////////////////////////
         let filter_stats = FilterStats {
             remove_ns: false,
-            min_quality: 1.0,
+            max_bases_error_rate: 1.0,
             min_coverage: 0,
             min_allele_frequency: 0.000001,
             max_missingness_rate: 0.0,

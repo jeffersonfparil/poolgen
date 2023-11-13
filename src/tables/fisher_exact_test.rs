@@ -148,7 +148,7 @@ mod tests {
             Array2::from_shape_vec((3, 2), vec![0, 3, 1, 5, 2, 6]).unwrap();
         let filter_stats = FilterStats {
             remove_ns: true,
-            min_quality: 0.005,
+            max_bases_error_rate: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.005,
             max_missingness_rate: 0.0,

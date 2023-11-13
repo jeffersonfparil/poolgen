@@ -68,7 +68,7 @@ pub struct FileSyncPhen {
 #[derive(Debug, Clone)]
 pub struct FilterStats {
     pub remove_ns: bool,
-    pub min_quality: f64,
+    pub max_bases_error_rate: f64,
     pub min_coverage: u64,
     pub min_allele_frequency: f64,
     pub max_missingness_rate: f64,

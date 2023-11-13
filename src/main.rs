@@ -37,9 +37,9 @@ struct Args {
     /// Output filename
     #[clap(short, long, default_value = "")]
     output: String,
-    /// Minimum base quality in terms of base calling error rate, i.e. lower values means higher quality
+    /// Maximum base sequencing error rate
     #[clap(long, default_value_t = 0.01)]
-    min_quality: f64,
+    max_bases_error_rate: f64,
     /// Minimum depth of coverage (loci with at least one pool below this threshold will be omitted)
     #[clap(long, default_value_t = 1)]
     min_coverage: u64,
@@ -186,7 +186,7 @@ fn main() {
     let phen = file_phen.lparse().unwrap();
     let filter_stats = base::FilterStats {
         remove_ns: !args.keep_ns,
-        min_quality: args.min_quality,
+        max_bases_error_rate: args.max_bases_error_rate,
         min_coverage: args.min_coverage,
         min_allele_frequency: args.min_allele_frequency,
         max_missingness_rate: args.max_missingness_rate,
