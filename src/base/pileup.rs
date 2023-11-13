@@ -252,7 +252,7 @@ impl Filter for PileupLine {
                     return Err(Error::new(ErrorKind::Other, "Phred score out of bounds."));
                 } else {
                     let q = f64::powf(10.0, -(self.read_qualities[i][j] as f64 - 33.0) / 10.0);
-                    if q > filter_stats.max_bases_error_rate {
+                    if q > filter_stats.max_base_error_rate {
                         self.read_codes[i][j] = 78; // convert to N
                     }
                     if filter_stats.remove_ns & (self.read_codes[i][j] == 78) {
@@ -538,7 +538,7 @@ mod tests {
         let frequencies = *(pileup_line.to_frequencies().unwrap());
         let filter_stats = FilterStats {
             remove_ns: true,
-            max_bases_error_rate: 0.005,
+            max_base_error_rate: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.0,
             max_missingness_rate: 0.0,

@@ -509,7 +509,7 @@ mod tests {
         );
         let filter_stats_1 = FilterStats {
             remove_ns: true,
-            max_bases_error_rate: 0.005,
+            max_base_error_rate: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.0,
             max_missingness_rate: 0.0,
@@ -517,7 +517,7 @@ mod tests {
         };
         let filter_stats_2 = FilterStats {
             remove_ns: true,
-            max_bases_error_rate: 0.005,
+            max_base_error_rate: 0.005,
             min_coverage: 10,
             min_allele_frequency: 0.0,
             max_missingness_rate: 0.0,

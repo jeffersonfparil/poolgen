@@ -42,9 +42,9 @@ jobs:
       - name: Build | Compile | Test on test data
         run: | 
           cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv
-          cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv --n-threads 2 --min-quality 0.0001
-          cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv --n-threads 2 --min-quality 0.0001 --min-coverage 10
-          cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv --n-threads 2 --min-quality 0.0001 --min-coverage 10 --min-allele-frequency 0.01
+          cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv --n-threads 2 --max-base-error-rate 0.0001
+          cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv --n-threads 2 --max-base-error-rate 0.0001 --min-coverage 10
+          cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv --n-threads 2 --max-base-error-rate 0.0001 --min-coverage 10 --min-allele-frequency 0.01
           cargo run -- fisher_exact_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 2
           cargo run -- fisher_exact_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 2 --min-coverage 10 --min-allele-frequency 0.01
           cargo run -- chisq_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 2

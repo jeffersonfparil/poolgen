@@ -497,7 +497,7 @@ mod tests {
         let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
         let filter_stats = FilterStats {
             remove_ns: true,
-            max_bases_error_rate: 0.005,
+            max_base_error_rate: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.005,
             max_missingness_rate: 0.0,

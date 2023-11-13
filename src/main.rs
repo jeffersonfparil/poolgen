@@ -39,7 +39,7 @@ struct Args {
     output: String,
     /// Maximum base sequencing error rate
     #[clap(long, default_value_t = 0.01)]
-    max_bases_error_rate: f64,
+    max_base_error_rate: f64,
     /// Minimum depth of coverage (loci with at least one pool below this threshold will be omitted)
     #[clap(long, default_value_t = 1)]
     min_coverage: u64,
@@ -186,7 +186,7 @@ fn main() {
     let phen = file_phen.lparse().unwrap();
     let filter_stats = base::FilterStats {
         remove_ns: !args.keep_ns,
-        max_bases_error_rate: args.max_bases_error_rate,
+        max_base_error_rate: args.max_base_error_rate,
         min_coverage: args.min_coverage,
         min_allele_frequency: args.min_allele_frequency,
         max_missingness_rate: args.max_missingness_rate,
