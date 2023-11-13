@@ -50,7 +50,8 @@ Summarised or piled up base calls of aligned reads to a reference genome.
 
 ### Variant call format (vcf)
 
-Canonical variant calling or genotype data format for individual samples. The [`vcf2sync`](#vcf2sync) utility is expected to work with vcf versions 4.2 and 4.3. See [VCFv4.2](https://samtools.github.io/hts-specs/VCFv4.2.pdf) and [VCFv4.3](https://samtools.github.io/hts-specs/VCFv4.3.pdf) for details in the format specifications.
+Canonical variant calling or genotype data format for individual samples. This should include the `AD` field (allele depth), and genotype calls are not required since allele frequencies from allele depth will be used. The input vcf file can be generated with bcftools mpileup like: `bcftools mpileup -a AD...`. The [`vcf2sync`](#vcf2sync) utility is expected to work with vcf versions 4.2 and 4.3. See [VCFv4.2](https://samtools.github.io/hts-specs/VCFv4.2.pdf) and [VCFv4.3](https://samtools.github.io/hts-specs/VCFv4.3.pdf) for details in the format specifications.
+
 ### Sync
 
 An extension of [popoolation2's](https://academic.oup.com/bioinformatics/article/27/24/3435/306737) sync or synchronised pileup file format, which includes a header line prepended by '#' showing the names of each column including the names of each pool. Additional header line/s and comments prepended with '#' may be added anywhere within the file.
