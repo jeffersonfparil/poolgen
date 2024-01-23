@@ -136,7 +136,7 @@ impl Regression for UnivariateOrdinaryLeastSquares {
         if n != n_ {
             return Err(Error::new(ErrorKind::Other, "The number of samples in the dependent and independent variables are not the same size."));
         }
-        let d = StudentsT::new(0.0, 1.0, p as f64 - 1.0).unwrap();
+        let d = StudentsT::new(0.0, 1.0, n as f64 - 1.0).unwrap();
         self.t = Array1::from_elem(p, f64::NAN);
         self.pval = Array1::from_elem(p, f64::NAN);
         for i in 0..p {
