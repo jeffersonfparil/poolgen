@@ -108,11 +108,15 @@ impl Parse<PileupLine> for String {
                     //                                  'C'/'c' == 67/99,
                     //                                  'G'/'g' == 71/103, and
                     //                                  '*' == 42 codes for deletion on the current locus which is different from the \-[0-9]+[ACGTNacgtn]+ which encodes for indels in the next position/s)
-                    let a: u8 = if (code == 44) | (code == 46) {
+                    let base: u8 = if (code == 44) | (code == 46) {
                         // whatever the reference allele is
                         reference_allele.to_string().as_bytes()[0]
                     } else {
-                        match code {
+                        // alternative allele or D/N
+                        code
+                    };
+                        
+                    let a: u8 = match base {
                             65 => 65,  // A
                             97 => 65,  // a -> A
                             84 => 84,  // T
@@ -123,8 +127,7 @@ impl Parse<PileupLine> for String {
                             103 => 71, // g -> G
                             42 => 68,  // * -> D
                             _ => 78,   // N
-                        }
-                    };
+                        };
                     alleles.push(a);
                 }
                 read_codes.push(alleles);
