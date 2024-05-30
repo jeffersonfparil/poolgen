@@ -269,10 +269,26 @@ impl Filter for PileupLine {
                 }
             }
         }
-        // All the pools needs be have been covered at least min_coverage times
-        for c in &self.coverages {
-            if c < &filter_stats.min_coverage {
+
+        if filter_stats.keep_if_any_meets_coverage {
+            // At least 1 pool needs to have been covered min_coverage times
+            let mut met_coverage_requirement = false;
+            for c in &self.coverages {
+                if c >= &filter_stats.min_coverage {
+                    met_coverage_requirement = true;
+                    break;
+                }
+            }
+            if !met_coverage_requirement{
                 return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            }
+
+        } else {
+            // All the pools need to have been covered at least min_coverage times
+            for c in &self.coverages {
+                if c < &filter_stats.min_coverage {
+                    return Err(Error::new(ErrorKind::Other, "Filtered out."));
+                }
             }
         }
 
@@ -287,6 +303,9 @@ impl Filter for PileupLine {
             }
 
             if covered_alleles.len() < 2{
+                return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            }
+        }
         // Filter by minimum allele frequency,
         //// First convert the counts per pool into frequencies
         let allele_frequencies = match self.to_frequencies() {
