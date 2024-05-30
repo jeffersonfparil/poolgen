@@ -2,6 +2,7 @@
 
 use crate::base::*;
 use ndarray::prelude::*;
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::{self, prelude::*, BufReader, BufWriter, Error, ErrorKind, SeekFrom};
 use std::str;
@@ -274,6 +275,18 @@ impl Filter for PileupLine {
                 return Err(Error::new(ErrorKind::Other, "Filtered out."));
             }
         }
+
+        // Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
+        if filter_stats.remove_monoallelic {
+            let mut covered_alleles = HashSet::new();
+
+            for pool in &self.read_codes{
+                for read in pool{
+                    covered_alleles.insert(read);
+                }
+            }
+
+            if covered_alleles.len() < 2{
         // Filter by minimum allele frequency,
         //// First convert the counts per pool into frequencies
         let allele_frequencies = match self.to_frequencies() {
