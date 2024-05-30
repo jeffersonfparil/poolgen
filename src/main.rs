@@ -52,6 +52,9 @@ struct Args {
     /// Keep ambiguous reads during SNP filtering, i.e. keep them coded as Ns
     #[clap(long, action)]
     keep_ns: bool,
+    /// Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
+    #[clap(long, action)]
+    remove_monoallelic: bool,
     /// Input phenotype file: csv or tsv or any delimited file
     #[clap(short, long)]
     phen_fname: String,
@@ -186,6 +189,7 @@ fn main() {
     let phen = file_phen.lparse().unwrap();
     let filter_stats = base::FilterStats {
         remove_ns: !args.keep_ns,
+        remove_monoallelic: args.remove_monoallelic,
         max_base_error_rate: args.max_base_error_rate,
         min_coverage: args.min_coverage,
         min_allele_frequency: args.min_allele_frequency,
