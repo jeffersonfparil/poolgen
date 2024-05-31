@@ -49,6 +49,9 @@ struct Args {
     /// Maximum missingness rate (loci with missing data beyond this threshold will be omitted)
     #[clap(long, default_value_t = 0.0)]
     max_missingness_rate: f64,
+    /// Categorize lowercase reference reads in pileup as unclassified ('N')
+    #[clap(long, action)]
+    keep_lowercase_reference: bool,
     /// Keep ambiguous reads during SNP filtering, i.e. keep them coded as Ns
     #[clap(long, action)]
     keep_ns: bool,
@@ -194,6 +197,7 @@ fn main() {
         remove_ns: !args.keep_ns,
         remove_monoallelic: args.remove_monoallelic,
         keep_if_any_meets_coverage: args.keep_if_any_meets_coverage,
+        keep_lowercase_reference: args.keep_lowercase_reference,
         max_base_error_rate: args.max_base_error_rate,
         min_coverage: args.min_coverage,
         min_allele_frequency: args.min_allele_frequency,

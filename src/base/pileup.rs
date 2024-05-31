@@ -109,15 +109,11 @@ impl Parse<PileupLine> for String {
                     //                                  'C'/'c' == 67/99,
                     //                                  'G'/'g' == 71/103, and
                     //                                  '*' == 42 codes for deletion on the current locus which is different from the \-[0-9]+[ACGTNacgtn]+ which encodes for indels in the next position/s)
-                    let base: u8 = if (code == 44) | (code == 46) {
+                    let a: u8 = if (code == 44) | (code == 46) {
                         // whatever the reference allele is
                         reference_allele.to_string().as_bytes()[0]
                     } else {
-                        // alternative allele or D/N
-                        code
-                    };
-                        
-                    let a: u8 = match base {
+                        match code {
                             65 => 65,  // A
                             97 => 65,  // a -> A
                             84 => 84,  // T
@@ -128,7 +124,8 @@ impl Parse<PileupLine> for String {
                             103 => 71, // g -> G
                             42 => 68,  // * -> D
                             _ => 78,   // N
-                        };
+                        }
+                    };
                     alleles.push(a);
                 }
                 read_codes.push(alleles);
@@ -306,6 +303,26 @@ impl Filter for PileupLine {
                 return Err(Error::new(ErrorKind::Other, "Filtered out."));
             }
         }
+
+        if filter_stats.keep_lowercase_reference {
+            for pool in &mut self.read_codes {
+                for read in pool.iter_mut() {
+                    *read = match *read {
+                        65 => 65,   // A
+                        97 => 65,   // a -> A
+                        84 => 84,   // T
+                        116 => 84,  // t -> T
+                        67 => 67,   // C
+                        99 => 67,   // c -> C
+                        71 => 71,   // G
+                        103 => 71,  // g -> G
+                        42 => 68,   // * -> D
+                        _ => 78,    // N
+                    };
+                }
+            }
+        }
+
         // Filter by minimum allele frequency,
         //// First convert the counts per pool into frequencies
         let allele_frequencies = match self.to_frequencies() {
@@ -573,6 +590,9 @@ mod tests {
         let frequencies = *(pileup_line.to_frequencies().unwrap());
         let filter_stats = FilterStats {
             remove_ns: true,
+            remove_monoallelic: false,
+            keep_if_any_meets_coverage: false,
+            keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage: 1,
             min_allele_frequency: 0.0,
