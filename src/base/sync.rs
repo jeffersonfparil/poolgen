@@ -224,12 +224,12 @@ impl Filter for LocusCounts {
             sum_coverage
                 .iter()
                 .fold(sum_coverage[0], |min, &x| if x < min { x } else { min });
-        if min_sum_coverage < filter_stats.min_coverage as f64 {
+        if min_sum_coverage < filter_stats.min_coverage_depth as f64 {
             return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
         // // TODO: convert loci failing the minimum coverage threshold into missing instead of omitting the entire locus
         // for i in 0..self.matrix.nrows() {
-        //     if sum_coverage[i] < filter_stats.min_coverage as f64 {
+        //     if sum_coverage[i] < filter_stats.min_coverage_depth as f64 {
         //         for j in 0..self.matrix.ncols() {
         //             self.matrix[(i, j)] = f64::NAN as u64;
         //         }
@@ -1569,8 +1569,11 @@ mod tests {
         let frequencies = *(counts.to_frequencies().unwrap());
         let filter_stats = FilterStats {
             remove_ns: true,
+            remove_monoallelic: false,
+            keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
-            min_coverage: 1,
+            min_coverage_depth: 1,
+            min_coverage_breadth: 1.0, 
             min_allele_frequency: 0.005,
             max_missingness_rate: 0.0,
             pool_sizes: vec![20., 20., 20., 20., 20.],
@@ -1675,8 +1678,11 @@ mod tests {
         // let phen = file_phen.lparse().unwrap();
         // let filter_stats = FilterStats {
         //     remove_ns: true,
+        //     remove_monoallelic: false,
+        //     keep_lowercase_reference: false,
         //     max_base_error_rate: 0.005,
-        //     min_coverage: 0,
+        //     min_coverage_depth: 0,
+        //     min_coverage_breadth: 1.0,
         //     min_allele_frequency: 0.0001,
         //     max_missingness_rate: 0.2,
         //     pool_sizes: phen.pool_sizes,
