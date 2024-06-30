@@ -193,7 +193,7 @@ fn main() {
         format: phen_format,
     };
     let phen = file_phen.lparse().unwrap();
-    let filter_stats = base::FilterStats {
+    let file_filter_stats = base::FilterStats {
         remove_ns: !args.keep_ns,
         remove_monoallelic: args.remove_monoallelic,
         keep_lowercase_reference: args.keep_lowercase_reference,
@@ -204,6 +204,7 @@ fn main() {
         max_missingness_rate: args.max_missingness_rate,
         pool_sizes: phen.pool_sizes.clone(),
     };
+    let filter_stats = file_filter_stats.lparse().unwrap();
     if args.analysis == String::from("pileup2sync") {
         // PILEUP INPUT
         let file_pileup = base::FilePileup {
