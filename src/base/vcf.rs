@@ -115,13 +115,29 @@ impl Filter for VcfLine {
     /// - removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after filterings
     /// Note that we are not removing alleles per locus if they fail the minimum allele frequency threshold, only if all alleles fail this threshold, i.e. when the locus is close to being fixed
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
-        // All the pools needs be have been covered at least min_coverage times
+        // Coverage depth and breadth requirement
+        let min_coverage_breadth = (filter_stats.min_coverage_breadth * filter_stats.pool_sizes.len() as f64).ceil() as u32;
+        let mut pools_covered = 0;
         for i in 0..self.allele_depths.len() {
             let c = &self.allele_depths[i].iter().fold(0, |sum, x| sum + x);
-            if c < &filter_stats.min_coverage {
+            if c >= &filter_stats.min_coverage_depth {
+                pools_covered += 1;
+            }
+            if pools_covered == min_coverage_breadth {
+                break;
+            }
+        }
+        if pools_covered != min_coverage_breadth {
+            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+        }
+
+        // Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
+        if filter_stats.remove_monoallelic {
+            if self.alternative_alleles.len() == 0 {
                 return Err(Error::new(ErrorKind::Other, "Filtered out."));
             }
         }
+
         // Filter by minimum allele frequency,
         //// First convert the counts per pool into frequencies
         let allele_frequencies = match self.to_frequencies() {
@@ -509,16 +525,22 @@ mod tests {
         );
         let filter_stats_1 = FilterStats {
             remove_ns: true,
+            remove_monoallelic: false,
+            keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
-            min_coverage: 1,
+            min_coverage_depth: 1,
+            min_coverage_breadth: 1.0,
             min_allele_frequency: 0.0,
             max_missingness_rate: 0.0,
             pool_sizes: vec![0.2; 10],
         };
         let filter_stats_2 = FilterStats {
             remove_ns: true,
+            remove_monoallelic: false,
+            keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
-            min_coverage: 10,
+            min_coverage_depth: 10,
+            min_coverage_breadth: 1.0,
             min_allele_frequency: 0.0,
             max_missingness_rate: 0.0,
             pool_sizes: vec![0.2; 10],

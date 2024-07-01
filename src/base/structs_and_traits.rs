@@ -69,10 +69,10 @@ pub struct FileSyncPhen {
 pub struct FilterStats {
     pub remove_ns: bool,
     pub remove_monoallelic: bool,
-    pub keep_if_any_meets_coverage: bool,
     pub keep_lowercase_reference: bool,
     pub max_base_error_rate: f64,
-    pub min_coverage: u64,
+    pub min_coverage_depth: u64,
+    pub min_coverage_breadth: f64,
     pub min_allele_frequency: f64,
     pub max_missingness_rate: f64,
     pub pool_sizes: Vec<f64>,

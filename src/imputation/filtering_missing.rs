@@ -255,8 +255,11 @@ mod tests {
         ////////////////////////////////////////////////////////////////////////////////////////////////////////
         let filter_stats = FilterStats {
             remove_ns: false,
+            remove_monoallelic: false,
+            keep_lowercase_reference: false,
             max_base_error_rate: 1.0,
-            min_coverage: 0,
+            min_coverage_depth: 0,
+            min_coverage_breadth: 1.0,
             min_allele_frequency: 0.000001,
             max_missingness_rate: 0.0,
             pool_sizes: vec![20., 20., 20., 20., 20.],

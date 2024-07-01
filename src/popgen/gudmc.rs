@@ -484,8 +484,11 @@ mod tests {
         let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
         let filter_stats = FilterStats {
             remove_ns: false,
+            remove_monoallelic: false,
+            keep_lowercase_reference: false,
             max_base_error_rate: 0.01,
-            min_coverage: 1,
+            min_coverage_depth: 1,
+            min_coverage_breadth: 1.0,
             min_allele_frequency: 0.001,
             max_missingness_rate: 0.0,
             pool_sizes: vec![42.0, 42.0, 42.0, 42.0, 42.0],

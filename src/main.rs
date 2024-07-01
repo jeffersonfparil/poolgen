@@ -40,9 +40,12 @@ struct Args {
     /// Maximum base sequencing error rate
     #[clap(long, default_value_t = 0.01)]
     max_base_error_rate: f64,
-    /// Minimum depth of coverage (loci with at least one pool below this threshold will be omitted)
+    /// Minimum breadth of coverage (loci with less than this proportion of pools below min_coverage_depth will be omitted)
+    #[clap(long, default_value_t = 1.0)]
+    min_coverage_breadth: f64,
+    /// Minimum depth of coverage (loci with less than min_coverage_breadth pools below this threshold will be omitted)
     #[clap(long, default_value_t = 1)]
-    min_coverage: u64,
+    min_coverage_depth: u64,
     /// Minimum allele frequency (per locus, alleles which fail to pass this threshold will be omitted allowing control over multiallelic loci)
     #[clap(long, default_value_t = 0.001)]
     min_allele_frequency: f64,
@@ -55,9 +58,6 @@ struct Args {
     /// Keep ambiguous reads during SNP filtering, i.e. keep them coded as Ns
     #[clap(long, action)]
     keep_ns: bool,
-    /// Keep loci if any population meets min_coverage, verses only keeping if ALL loci meet coverage (default)
-    #[clap(long, action)]
-    keep_if_any_meets_coverage: bool,
     /// Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
     #[clap(long, action)]
     remove_monoallelic: bool,
@@ -157,13 +157,13 @@ struct Args {
 /// ## Examples
 /// ```shell
 /// cargo run -- pileup2sync -f ./tests/test.pileup -p ./tests/test.csv
-/// cargo run -- fisher_exact_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
-/// cargo run -- chisq_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
-/// cargo run -- pearson_corr -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
+/// cargo run -- fisher_exact_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 32 --min-coverage-depth 10 --min-allele-frequency 0.01
+/// cargo run -- chisq_test -f ./tests/test.sync -p ./tests/test.csv --n-threads 32 --min-coverage-depth 10 --min-allele-frequency 0.01
+/// cargo run -- pearson_corr -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage-depth 10 --min-allele-frequency 0.01
 /// cargo run -- fst -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32
 /// cargo run -- heterozygosity -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32
-/// cargo run -- ols_iter -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
-/// cargo run -- mle_iter -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage 10 --min-allele-frequency 0.01
+/// cargo run -- ols_iter -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage-depth 10 --min-allele-frequency 0.01
+/// cargo run -- mle_iter -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --min-coverage-depth 10 --min-allele-frequency 0.01
 /// cargo run -- gwalpha  -f ./tests/test.sync -p ./tests/test.py --n-threads 32 --gwalpha-method ML
 /// cargo run -- sync2csv -f ./tests/test.sync -p ./tests/test.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32 --keep-p-minus-1
 /// # cargo run -- genomic_prediction_cross_validation -f ./tests/test_MORE_POOLS.sync -p ./tests/test_MORE_POOLS.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32
@@ -196,10 +196,10 @@ fn main() {
     let filter_stats = base::FilterStats {
         remove_ns: !args.keep_ns,
         remove_monoallelic: args.remove_monoallelic,
-        keep_if_any_meets_coverage: args.keep_if_any_meets_coverage,
         keep_lowercase_reference: args.keep_lowercase_reference,
         max_base_error_rate: args.max_base_error_rate,
-        min_coverage: args.min_coverage,
+        min_coverage_breadth: args.min_coverage_breadth,
+        min_coverage_depth: args.min_coverage_depth,
         min_allele_frequency: args.min_allele_frequency,
         max_missingness_rate: args.max_missingness_rate,
         pool_sizes: phen.pool_sizes.clone(),

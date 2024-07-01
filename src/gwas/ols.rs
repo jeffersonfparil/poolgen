@@ -549,7 +549,7 @@ mod tests {
         // let filter_stats = FilterStats {
         //     remove_ns: true,
         //     max_base_error_rate: 0.005,
-        //     min_coverage: 1,
+        //     min_coverage_depth: 1,
         //     min_allele_frequency: 0.005,
         //     pool_sizes: vec![20.0, 20.0, 20.0, 20.0, 20.0],
         // };
