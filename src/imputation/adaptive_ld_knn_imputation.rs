@@ -613,7 +613,7 @@ mod tests {
 //     --phen-pool-size-col 1 \
 //     --phen-value-col 2 \
 //     --min-allele-frequency 0.0001 \
-//     --min-coverage 0 \
+//     --min-coverage-depth 0 \
 //     --min-quality 0.01 \
 //     --max-missingness-rate 0.2 \
 //     --min-depth-set-to-missing 5 \
