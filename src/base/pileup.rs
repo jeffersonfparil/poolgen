@@ -2,7 +2,6 @@
 
 use crate::base::*;
 use ndarray::prelude::*;
-use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::{self, prelude::*, BufReader, BufWriter, Error, ErrorKind, SeekFrom};
 use std::str;
@@ -267,39 +266,32 @@ impl Filter for PileupLine {
             }
         }
 
-        if filter_stats.keep_if_any_meets_coverage {
-            // At least 1 pool needs to have been covered min_coverage times
-            let mut met_coverage_requirement = false;
-            for c in &self.coverages {
-                if c >= &filter_stats.min_coverage {
-                    met_coverage_requirement = true;
-                    break;
-                }
-            }
-            if !met_coverage_requirement{
-                return Err(Error::new(ErrorKind::Other, "Filtered out."));
-            }
+        // Coverage depth and breadth requirement
+        let min_coverage_breadth = (filter_stats.min_coverage_breadth * filter_stats.pool_sizes.len() as f64).ceil() as u32;
+        let pools_covered = self.coverages.iter()
+            .filter(|&&c| c >= filter_stats.min_coverage_depth)
+            .take(min_coverage_breadth as usize)
+            .count();
 
-        } else {
-            // All the pools need to have been covered at least min_coverage times
-            for c in &self.coverages {
-                if c < &filter_stats.min_coverage {
-                    return Err(Error::new(ErrorKind::Other, "Filtered out."));
-                }
-            }
+        if pools_covered != min_coverage_breadth as usize {
+            return Err(Error::new(ErrorKind::Other, "Filtered out."));
         }
 
         // Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
         if filter_stats.remove_monoallelic {
-            let mut covered_alleles = HashSet::new();
+            let mut unique_alleles = Vec::new();
 
-            for pool in &self.read_codes{
-                for read in pool{
-                    covered_alleles.insert(read);
+            'outer: for pool in &self.read_codes {
+                for &read in pool {
+                    if !unique_alleles.contains(&read) {
+                        unique_alleles.push(read);
+                        if unique_alleles.len() == 2 {
+                            break 'outer;
+                        }
+                    }
                 }
             }
-
-            if covered_alleles.len() < 2{
+            if unique_alleles.len() < 2 {
                 return Err(Error::new(ErrorKind::Other, "Filtered out."));
             }
         }
@@ -591,10 +583,10 @@ mod tests {
         let filter_stats = FilterStats {
             remove_ns: true,
             remove_monoallelic: false,
-            keep_if_any_meets_coverage: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
-            min_coverage: 1,
+            min_coverage_depth: 1,
+            min_coverage_breadth: 1.0,
             min_allele_frequency: 0.0,
             max_missingness_rate: 0.0,
             pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],

@@ -182,8 +182,11 @@ mod tests {
         let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
         let filter_stats = FilterStats {
             remove_ns: true,
+            remove_monoallelic: false,
+            keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
-            min_coverage: 1,
+            min_coverage_depth: 1,
+            min_coverage_breadth: 1.0,
             min_allele_frequency: 0.005,
             max_missingness_rate: 0.0,
             pool_sizes: vec![20., 20., 20., 20., 20.],
@@ -263,7 +266,7 @@ mod tests {
 //     --phen-pool-size-col 1 \
 //     --phen-value-col 2 \
 //     --min-allele-frequency 0.0001 \
-//     --min-coverage 0 \
+//     --min-coverage-depth 0 \
 //     --min-quality 0.01 \
 //     --max-missingness-rate 0.75 \
 //     --min-depth-set-to-missing 5 \
