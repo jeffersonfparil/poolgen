@@ -4,8 +4,8 @@ use statrs::distribution::{ChiSquared, ContinuousCDF};
 
 pub fn chisq(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Option<String> {
     let locus_counts = match locus_counts.filter(filter_stats) {
-        Ok(x) => x,
-        Err(_) => return None,
+        Ok(Some(x)) => x,
+        _ => return None,
     };
     let locus_frequencies = match locus_counts.to_frequencies() {
         Ok(x) => x,

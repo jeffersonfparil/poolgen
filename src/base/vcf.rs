@@ -114,7 +114,7 @@ impl Filter for VcfLine {
     /// Filter `VcfLine` by:
     /// - removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after filterings
     /// Note that we are not removing alleles per locus if they fail the minimum allele frequency threshold, only if all alleles fail this threshold, i.e. when the locus is close to being fixed
-    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
+    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<Option<&mut Self>> {
         // Coverage depth and breadth requirement
         let min_coverage_breadth = (filter_stats.min_coverage_breadth * filter_stats.pool_sizes.len() as f64).ceil() as u32;
         let mut pools_covered = 0;
@@ -128,13 +128,13 @@ impl Filter for VcfLine {
             }
         }
         if pools_covered != min_coverage_breadth {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
 
         // Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
         if filter_stats.remove_monoallelic {
             if self.alternative_alleles.len() == 0 {
-                return Err(Error::new(ErrorKind::Other, "Filtered out."));
+                return Ok(None)
             }
         }
 
@@ -179,9 +179,9 @@ impl Filter for VcfLine {
         }
         // Filter the whole locus depending on whether or not we have retained at least 2 alleles
         if m < 2 {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
-        Ok(self)
+        Ok(Some(self))
     }
 }
 

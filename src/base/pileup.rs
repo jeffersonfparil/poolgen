@@ -237,7 +237,7 @@ impl Filter for PileupLine {
     /// Filter `PileupLine` by:
     /// - removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after filterings
     /// Note that we are not removing alleles per locus if they fail the minimum allele frequency threshold, only if all alleles fail this threshold, i.e. when the locus is close to being fixed
-    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
+    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<Option<&mut Self>> {
         // First, make sure we have the correct the correct number of expected pools as the phenotype file
         // TODO: Make the error pop-out because it's currently being consumed as None in the only function calling it below.
         if self.coverages.len() != filter_stats.pool_sizes.len() {
@@ -274,7 +274,7 @@ impl Filter for PileupLine {
             .count();
 
         if pools_covered != min_coverage_breadth as usize {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
 
         // Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
@@ -292,7 +292,7 @@ impl Filter for PileupLine {
                 }
             }
             if unique_alleles.len() < 2 {
-                return Err(Error::new(ErrorKind::Other, "Filtered out."));
+                return Ok(None)
             }
         }
 
@@ -357,9 +357,9 @@ impl Filter for PileupLine {
         }
         // Filter the whole locus depending on whether or not we have retained at least 2 alleles
         if m < 2 {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
-        Ok(self)
+        Ok(Some(self))
     }
 }
 
@@ -368,8 +368,8 @@ pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) 
     // let mut pileup_line: Box<PileupLine> = line.lparse().unwrap();
     // Filter
     match pileup_line.filter(filter_stats) {
-        Ok(x) => x,
-        Err(_) => return None,
+        Ok(Some(x)) => x,
+        _ => return None,
     };
     // Convert to counts
     let locus_counts = match pileup_line.to_counts() {

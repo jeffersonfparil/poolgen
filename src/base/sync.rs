@@ -192,7 +192,7 @@ impl Filter for LocusCounts {
     }
 
     // Filter PileupLine by minimum coverage, minimum quality
-    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
+    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<Option<&mut Self>> {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
         // Preliminary check of the structure format
         self.check().unwrap();
@@ -225,7 +225,7 @@ impl Filter for LocusCounts {
                 .iter()
                 .fold(sum_coverage[0], |min, &x| if x < min { x } else { min });
         if min_sum_coverage < filter_stats.min_coverage_depth as f64 {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
         // // TODO: convert loci failing the minimum coverage threshold into missing instead of omitting the entire locus
         // for i in 0..self.matrix.nrows() {
@@ -282,7 +282,7 @@ impl Filter for LocusCounts {
         }
         // Check if all alleles have failed the minimum allele frequency, i.e. the locus has been filtered out
         if p < 2 {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
         // Filter out if the locus is missing across all pools using the first allele where if the locus is missing then all
         let (n, _p) = allele_frequencies.matrix.dim();
@@ -291,15 +291,15 @@ impl Filter for LocusCounts {
             .slice(s![.., 0])
             .fold(0, |sum, &x| if (x as f64).is_nan() { sum + 1 } else { sum });
         if n_missing_across_pools == n {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
         // Filter-out the locus if the rate of missingness, i.e. the fraction of the pools missing coverage of the current locus is below the minimum threshold
         if (n_missing_across_pools as f64 / n as f64) > filter_stats.max_missingness_rate {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
         // Return the locus if it passed all the filtering steps
         self.matrix = matrix;
-        Ok(self)
+        Ok(Some(self))
     }
 }
 
@@ -376,7 +376,7 @@ impl Filter for LocusFrequencies {
     }
 
     // Filter PileupLine by minimum coverage, minimum quality
-    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self> {
+    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<Option<&mut Self>> {
         // Cannot filter by base qualities as this information is lost and we are assuming this has been performed during pileup to sync conversion
         // Also, cannot filter by minimum coverage as that data is lost from counts to frequencies conversion
         // Preliminary check of the structure format
@@ -453,7 +453,7 @@ impl Filter for LocusFrequencies {
         }
         // Check if all alleles have failed the minimum allele frequency, i.e. the locus has been filtered out
         if p < 2 {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
         // Filter out if the locus is missing across all pools using the first allele where if the locus is missing then all
         let (n, _p) = allele_frequencies.matrix.dim();
@@ -462,15 +462,15 @@ impl Filter for LocusFrequencies {
             .slice(s![.., 0])
             .fold(0, |sum, &x| if (x as f64).is_nan() { sum + 1 } else { sum });
         if n_missing_across_pools == n {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
         // Filter-out the locus if the rate of missingness, i.e. the fraction of the pools missing coverage of the current locus is below the minimum threshold
         if (n_missing_across_pools as f64 / n as f64) > filter_stats.max_missingness_rate {
-            return Err(Error::new(ErrorKind::Other, "Filtered out."));
+            return Ok(None)
         }
         // Return the locus if it passed all the filtering steps
         self.matrix = matrix;
-        Ok(self)
+        Ok(Some(self))
     }
 }
 
@@ -1583,6 +1583,7 @@ mod tests {
         let filtered_frequencies = *(frequencies
             .clone()
             .filter(&filter_stats)
+            .unwrap()
             .unwrap()
             .to_frequencies()
             .unwrap());
