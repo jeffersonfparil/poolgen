@@ -169,6 +169,7 @@ struct Args {
 /// # cargo run -- genomic_prediction_cross_validation -f ./tests/test_MORE_POOLS.sync -p ./tests/test_MORE_POOLS.csv --phen-delim , --phen-name-col 0 --phen-value-col 2,3  --n-threads 32
 /// ```
 fn main() {
+    env::set_var("RUST_BACKTRACE", "1");
     let args = Args::parse();
     let mut output: String = String::from("");
     // Prepare the mandatory inputs
