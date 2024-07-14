@@ -1020,8 +1020,8 @@ impl LoadAll for FileSyncPhen {
                 },
             };
             match locus_counts.filter(filter_stats) {
-                Ok(x) => x,
-                Err(_) => continue,
+                Ok(Some(x)) => x,
+                _ => continue,
             };
             let mut locus_frequencies = match locus_counts.to_frequencies() {
                 Ok(x) => *x,

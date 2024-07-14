@@ -189,8 +189,8 @@ impl Filter for VcfLine {
 pub fn vcf_to_sync(vcf_line: &mut VcfLine, filter_stats: &FilterStats) -> Option<String> {
     // Filter
     match vcf_line.filter(filter_stats) {
-        Ok(x) => x,
-        Err(_) => return None,
+        Ok(Some(x)) => x,
+        _ => return None,
     };
     // Convert to counts
     let locus_counts = match vcf_line.to_counts() {
@@ -557,8 +557,8 @@ mod tests {
         );
         filtered_vcf_1.filter(&filter_stats_1).unwrap();
         let err = match filtered_vcf_2.filter(&filter_stats_2) {
-            Ok(_) => 0,
-            Err(_) => 1,
+            Ok(Some(_)) => 0,
+            _ => 1,
         };
         assert_eq!(filtered_vcf_1, vcf_line);
         assert_eq!(err, 1);
