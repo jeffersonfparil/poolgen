@@ -6,3 +6,4 @@ mod pileup;
 mod structs_and_traits;
 mod sync;
 mod vcf;
+mod filter_stats;
