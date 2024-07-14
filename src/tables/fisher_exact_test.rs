@@ -31,8 +31,8 @@ fn hypergeom_ratio(counts: &Array2<f64>, log_prod_fac_marginal_sums: &f64) -> io
 
 pub fn fisher(locus_counts: &mut LocusCounts, filter_stats: &FilterStats) -> Option<String> {
     let locus_counts = match locus_counts.filter(filter_stats) {
-        Ok(x) => x,
-        Err(_) => return None,
+        Ok(Some(x)) => x,
+        _ => return None,
     };
     // Restrict so that the sum is less than or equal to 34, i.e. at n>34 : n! > f64::MAX
     let n = locus_counts.matrix.nrows();

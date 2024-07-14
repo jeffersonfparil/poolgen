@@ -232,7 +232,7 @@ pub trait Parse<T> {
 pub trait Filter {
     fn to_counts(&self) -> io::Result<Box<LocusCounts>>;
     fn to_frequencies(&self) -> io::Result<Box<LocusFrequencies>>;
-    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<&mut Self>;
+    fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<Option<&mut Self>>;
 }
 
 pub trait Sort {

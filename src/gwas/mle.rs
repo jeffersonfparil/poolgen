@@ -240,8 +240,8 @@ pub fn mle_iterate(
         .locus_counts
         .filter(filter_stats)
     {
-        Ok(x) => x,
-        Err(_) => return None,
+        Ok(Some(x)) => x,
+        _ => return None,
     };
     let mut locus_frequencies = match locus_counts.to_frequencies() {
         Ok(x) => x,
