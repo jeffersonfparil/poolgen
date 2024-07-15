@@ -1,6 +1,7 @@
 //! **poolgen**: quantitative and population genetics on pool sequencing (Pool-seq) data
 
 use clap::Parser;
+use std::env;
 use ndarray::prelude::*;
 #[allow(warnings)]
 use std::io;
