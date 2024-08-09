@@ -20,119 +20,74 @@ pub fn fst(
     let (loci_idx, loci_chr, loci_pos) = genotypes_and_phenotypes.count_loci().unwrap();
     let l = loci_idx.len() - 1; // number of loci is loci_idx.len() - 1, i.e. less the last index - index of the last allele of the last locus
     let mut fst: Array3<f64> = Array3::from_elem((l, n, n), f64::NAN);
-
-
-    // Temporary fix to parallel error when window size, slide size and minimum loci per window are all equal to 1.
-    for i in 0..l {
-        for j in 0..n {
-            for k in 0..n {
-                let idx_start = loci_idx[i];
-                let idx_end = loci_idx[i + 1];
-                let g = genotypes_and_phenotypes
-                    .intercept_and_allele_frequencies
-                    .slice(s![.., idx_start..idx_end]);
-                // Make sure that allele frequencies per locus sums up to one
-                assert!(g.sum_axis(Axis(1)).sum() as usize == n);
-                let nj = genotypes_and_phenotypes.coverages[(j, i)];
-                let nk = genotypes_and_phenotypes.coverages[(k, i)];
-                let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                    * (nj / (nj - 1.00 + f64::EPSILON)))
-                    + (1.00 - (nj / (nj - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-                let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-                    * (nk / (nk - 1.00 + f64::EPSILON)))
-                    + (1.00 - (nk / (nk - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-                let q2_jk = g
-                    .slice(s![j, ..])
-                    .iter()
-                    .zip(&g.slice(s![k, ..]))
-                    .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-                let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
-                fst[(i, j, k)] = if f_unbiased < 0.0 {
-                    // fst[(i, j, k)] = if f_unbiased < 0.0 {
-                    0.0
-                } else if f_unbiased > 1.0 {
-                    1.0
-                } else {
-                    f_unbiased
-                };
-                // fst[(i, j, k)] = fst[(i, k, j)];
-                // println!("fst[(i, j, k)]={:?}", fst[(i, j, k)]);
-                // println!("fst[(i, k, j)]={:?}", fst[(i, k, j)]);
-            }
-        }
-    }
-
-
-    // let loci: Array3<usize> = Array3::from_shape_vec(
-    //     (l, n, n),
-    //     (0..(l))
-    //         .flat_map(|x| std::iter::repeat(x).take(n * n))
-    //         .collect(),
-    // )
-    // .unwrap();
-    // let pop1: Array3<usize> = Array3::from_shape_vec(
-    //     (l, n, n),
-    //     std::iter::repeat(
-    //         (0..n)
-    //             .flat_map(|x| std::iter::repeat(x).take(n))
-    //             .collect::<Vec<usize>>(),
-    //     )
-    //     .take(l)
-    //     .flat_map(|x| x)
-    //     .collect::<Vec<usize>>(),
-    // )
-    // .unwrap();
-    // let pop2: Array3<usize> = Array3::from_shape_vec(
-    //     (l, n, n),
-    //     std::iter::repeat(
-    //         std::iter::repeat((0..n).collect::<Vec<usize>>())
-    //             .take(n)
-    //             .flat_map(|x| x)
-    //             .collect::<Vec<usize>>(),
-    //     )
-    //     .take(l)
-    //     .flat_map(|x| x)
-    //     .collect::<Vec<usize>>(),
-    // )
-    // .unwrap();
-    // // Parallel computations (NOTE: Not efficient yet. Compute only the upper or lower triangular in the future.)
-    // Zip::from(&mut fst)
-    //     .and(&loci)
-    //     .and(&pop1)
-    //     .and(&pop2)
-    //     .par_for_each(|f, &i, &j, &k| {
-    //         let idx_start = loci_idx[i];
-    //         let idx_end = loci_idx[i + 1];
-    //         let g = genotypes_and_phenotypes
-    //             .intercept_and_allele_frequencies
-    //             .slice(s![.., idx_start..idx_end]);
-    //         // Make sure that allele frequencies per locus sums up to one
-    //         assert!(g.sum_axis(Axis(1)).sum() as usize == n);
-    //         let nj = genotypes_and_phenotypes.coverages[(j, i)];
-    //         let nk = genotypes_and_phenotypes.coverages[(k, i)];
-    //         let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-    //             * (nj / (nj - 1.00 + f64::EPSILON)))
-    //             + (1.00 - (nj / (nj - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-    //         let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
-    //             * (nk / (nk - 1.00 + f64::EPSILON)))
-    //             + (1.00 - (nk / (nk - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
-    //         let q2_jk = g
-    //             .slice(s![j, ..])
-    //             .iter()
-    //             .zip(&g.slice(s![k, ..]))
-    //             .fold(0.0, |sum, (&x, &y)| sum + (x * y));
-    //         let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
-    //         *f = if f_unbiased < 0.0 {
-    //             // fst[(i, j, k)] = if f_unbiased < 0.0 {
-    //             0.0
-    //         } else if f_unbiased > 1.0 {
-    //             1.0
-    //         } else {
-    //             f_unbiased
-    //         };
-    //     });
-    // println!("fst={:?}", fst);
-
+    let loci: Array3<usize> = Array3::from_shape_vec(
+        (l, n, n),
+        (0..(l))
+            .flat_map(|x| std::iter::repeat(x).take(n * n))
+            .collect(),
+    )
+    .unwrap();
+    let pop1: Array3<usize> = Array3::from_shape_vec(
+        (l, n, n),
+        std::iter::repeat(
+            (0..n)
+                .flat_map(|x| std::iter::repeat(x).take(n))
+                .collect::<Vec<usize>>(),
+        )
+        .take(l)
+        .flat_map(|x| x)
+        .collect::<Vec<usize>>(),
+    )
+    .unwrap();
+    let pop2: Array3<usize> = Array3::from_shape_vec(
+        (l, n, n),
+        std::iter::repeat(
+            std::iter::repeat((0..n).collect::<Vec<usize>>())
+                .take(n)
+                .flat_map(|x| x)
+                .collect::<Vec<usize>>(),
+        )
+        .take(l)
+        .flat_map(|x| x)
+        .collect::<Vec<usize>>(),
+    )
+    .unwrap();
+    // Parallel computations (NOTE: Not efficient yet. Compute only the upper or lower triangular in the future.)
+    Zip::from(&mut fst)
+        .and(&loci)
+        .and(&pop1)
+        .and(&pop2)
+        .par_for_each(|f, &i, &j, &k| {
+            let idx_start = loci_idx[i];
+            let idx_end = loci_idx[i + 1];
+            let g = genotypes_and_phenotypes
+                .intercept_and_allele_frequencies
+                .slice(s![.., idx_start..idx_end]);
+            // Make sure that allele frequencies per locus sums up to one
+            assert!((g.sum_axis(Axis(1)).sum() - n as f64).abs() <= f64::EPSILON);
+            let nj = genotypes_and_phenotypes.coverages[(j, i)];
+            let nk = genotypes_and_phenotypes.coverages[(k, i)];
+            let q1_j = (g.slice(s![j, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                * (nj / (nj - 1.00 + f64::EPSILON)))
+                + (1.00 - (nj / (nj - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+            let q1_k = (g.slice(s![k, ..]).fold(0.0, |sum, &x| sum + x.powf(2.0))
+                * (nk / (nk - 1.00 + f64::EPSILON)))
+                + (1.00 - (nk / (nk - 1.00 + f64::EPSILON))); // with a n/(n-1) factor on the heteroygosity to make it unbiased
+            let q2_jk = g
+                .slice(s![j, ..])
+                .iter()
+                .zip(&g.slice(s![k, ..]))
+                .fold(0.0, |sum, (&x, &y)| sum + (x * y));
+            let f_unbiased = (0.5 * (q1_j + q1_k) - q2_jk) / (1.00 - q2_jk + f64::EPSILON); // The reason why we're getting NaN is that q2_jk==1.0 because the 2 populations are both fixed at the locus, i.e. the same allele is at 1.00.
+            *f = if f_unbiased < 0.0 {
+                // fst[(i, j, k)] = if f_unbiased < 0.0 {
+                0.0
+            } else if f_unbiased > 1.0 {
+                1.0
+            } else {
+                f_unbiased
+            };
+        });
     // Write output (Fst averaged across all loci)
     let mut fname_output = fname_output.to_owned();
     let mut fname_output_per_window = fname_output
@@ -219,8 +174,8 @@ pub fn fst(
     .unwrap();
     // println!("fst={:?}", fst);
     // println!("l={:?}", l);
-    // println!("windows_idx_head={:?}", windows_idx_head);
-    // println!("windows_idx_tail={:?}", windows_idx_tail);
+     println!("windows_idx_head={:?}", windows_idx_head);
+     println!("windows_idx_tail={:?}", windows_idx_tail);
     // Take the means per window
     let n_windows = windows_idx_head.len();
     assert!(n_windows > 0, "There were no windows defined. Please check the sync file, the window size, slide size, and the minimum number of loci per window.");

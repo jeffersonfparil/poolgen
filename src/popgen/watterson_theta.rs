@@ -252,7 +252,7 @@ pub fn watterson_estimator(
         .open(&fname_output)
         .expect(&error_writing_file);
     // Header
-    let mut line: Vec<String> = vec!["Pool".to_owned()];
+    let mut line: Vec<String> = vec!["Pool".to_owned(), "Mean_across_windows".to_owned()];
     for i in 0..n_windows {
         let idx_ini = windows_idx_head[i];
         let idx_fin = windows_idx_tail[i];
