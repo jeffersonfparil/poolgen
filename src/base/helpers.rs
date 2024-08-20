@@ -46,6 +46,15 @@ pub fn find_file_splits(fname: &String, n_threads: &usize) -> io::Result<Vec<u64
     return Ok(out);
 }
 
+pub fn parse_valid_freq(value: &str) -> Result<f64, String> {
+    let parsed: f64 = value.parse().map_err(|_| format!("`{}` isn't a valid number", value))?;
+    if parsed < 0.0 || parsed > 1.0 {
+        Err(format!("Value must be between 0.0 and 1.0, got `{}`", parsed))
+    } else {
+        Ok(parsed)
+    }
+}
+
 /// Round-up an `f64` to `n_digits` decimal points
 pub fn sensible_round(x: f64, n_digits: usize) -> f64 {
     let factor = ("1e".to_owned() + &n_digits.to_string())

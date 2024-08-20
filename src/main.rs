@@ -12,7 +12,7 @@ mod imputation;
 mod popgen;
 mod simulation;
 mod tables;
-use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse, SaveCsv};
+use base::{ChunkyReadAnalyseWrite, CrossValidation, LoadAll, Parse, SaveCsv, helpers::parse_valid_freq};
 use gp::{
     ols, penalise_glmnet, penalise_lasso_like, penalise_lasso_like_with_iterative_proxy_norms,
     penalise_ridge_like, penalise_ridge_like_with_iterative_proxy_norms,
@@ -21,6 +21,7 @@ use gwas::*;
 use imputation::*;
 use popgen::*;
 use simulation::*;
+
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -39,19 +40,19 @@ struct Args {
     #[clap(short, long, default_value = "")]
     output: String,
     /// Maximum base sequencing error rate
-    #[clap(long, default_value_t = 0.01)]
+    #[clap(long, default_value_t = 0.01, value_parser = parse_valid_freq)]
     max_base_error_rate: f64,
     /// Minimum breadth of coverage (loci with less than this proportion of pools below min_coverage_depth will be omitted)
-    #[clap(long, default_value_t = 1.0)]
+    #[clap(long, default_value_t = 1.0, value_parser = parse_valid_freq)]
     min_coverage_breadth: f64,
     /// Minimum depth of coverage (loci with less than min_coverage_breadth pools below this threshold will be omitted)
     #[clap(long, default_value_t = 1)]
     min_coverage_depth: u64,
     /// Minimum allele frequency (per locus, alleles which fail to pass this threshold will be omitted allowing control over multiallelic loci)
-    #[clap(long, default_value_t = 0.001)]
+    #[clap(long, default_value_t = 0.001, value_parser = parse_valid_freq)]
     min_allele_frequency: f64,
     /// Maximum missingness rate (loci with missing data beyond this threshold will be omitted)
-    #[clap(long, default_value_t = 0.0)]
+    #[clap(long, default_value_t = 0.0, value_parser = parse_valid_freq)]
     max_missingness_rate: f64,
     /// Categorize lowercase reference reads in pileup as unclassified ('N')
     #[clap(long, action)]
@@ -89,7 +90,7 @@ struct Args {
     ////// Additional parameters
     //////////////////////////////////////////////////////
     /// GWAS iterative OLS using some of the kinship matrix's PCs as covariate
-    #[clap(short, long, default_value_t = 0.75)]
+    #[clap(short, long, default_value_t = 0.75, value_parser = parse_valid_freq)]
     xxt_eigen_variance_explained: f64,
     /// GWAlpha inference method to use: "LS" for least squares or "ML" for maximum likelihood estimation
     #[clap(long, default_value = "ML")]
@@ -116,16 +117,16 @@ struct Args {
     #[clap(long, default_value_t = 2.0)]
     sigma_threshold: f64,
     /// Genomewide unbiased determination of modes of convergent evolution (gudmc), i.e. recombination rate in centiMorgan per megabase (default from cM/Mb estimate in maize from https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7)
-    #[clap(long, default_value_t = 0.73)]
+    #[clap(long, default_value_t = 0.73, value_parser = parse_valid_freq)]
     recombination_rate_cm_per_mb: f64,
     // /// Imputation parameter, i.e. minimum depth to set to missing data for imputation
     // #[clap(long, default_value_t = 5.00)]
     // min_depth_set_to_missing: f64,
     // /// Imputation parameter, i.e. fraction of the pools with missing data to be ommited after sorting by rate of missingness
-    // #[clap(long, default_value_t = 0.10)]
+    // #[clap(long, default_value_t = 0.10, value_parser = parse_valid_freq)]
     // frac_top_missing_pools: f64,
     // /// Imputation parameter, i.e. fraction of the loci with missing data to be ommited after sorting by rate of missingness
-    // #[clap(long, default_value_t = 0.10)]
+    // #[clap(long, default_value_t = 0.10, value_parser = parse_valid_freq)]
     // frac_top_missing_loci: f64,
     // /// Imputation parameter, i.e. imputation method, select from "mean" for simple imputation using mean allele frequencies across non-missing pools, or "aLD-kNNi" for adaptive linkage disequillibrium (estimated using correlations within a window) k-nearest neighbour weighted allele frequencies imputation
     // #[clap(long, default_value = "aLD-kNNi")]
@@ -195,7 +196,7 @@ fn main() {
         format: phen_format,
     };
     let phen = file_phen.lparse().unwrap();
-    let file_filter_stats = base::FilterStats {
+    let filter_stats = base::FilterStats {
         remove_ns: !args.keep_ns,
         remove_monoallelic: args.remove_monoallelic,
         keep_lowercase_reference: args.keep_lowercase_reference,
@@ -206,7 +207,6 @@ fn main() {
         max_missingness_rate: args.max_missingness_rate,
         pool_sizes: phen.pool_sizes.clone(),
     };
-    let filter_stats = file_filter_stats.lparse().unwrap();
     if args.analysis == String::from("pileup2sync") {
         // PILEUP INPUT
         let file_pileup = base::FilePileup {
