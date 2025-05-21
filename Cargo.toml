@@ -7,8 +7,8 @@ edition = "2021"
 clap = { version="3.2.23", features=["derive"]}
 ndarray = { version = "0.15.6", features = ["rayon"]}
 # ndarray-linalg = "0.16.0"
-ndarray-linalg = { version = "0.16.0", features = ["openblas"] }
-# ndarray-linalg = { version = "0.16.0", features = ["intel-mkl-static"] }
+# ndarray-linalg = { version = "0.16.0", features = ["openblas"] }
+ndarray-linalg = { version = "0.16.0", features = ["intel-mkl-static"] }
 # ndarray-linalg = { version = "0.16.0", features = ["netlib-static"] }
 statrs = "0.16.0"
 argmin = "0.8.1"
