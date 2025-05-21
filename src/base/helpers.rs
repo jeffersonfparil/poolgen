@@ -5,10 +5,10 @@ use argmin::solver::neldermead::NelderMead;
 use ndarray::{prelude::*, Zip};
 use ndarray_linalg::svd::*;
 
-use std;
-use std::fs::File;
-use std::io::{self, prelude::*, BufReader, SeekFrom};
-use std::io::{Error, ErrorKind};
+use std::fs::{self, File};
+use std::io::{self, prelude::*, BufReader, SeekFrom, Error, ErrorKind};
+use std::path::PathBuf;
+use std::process::Command;
 
 /// Find the start position of the next line given the current position,`pos`.
 /// Positions are coded as the nth UTF8 character count in the file counting the newline characters at the end of each line.
@@ -24,6 +24,30 @@ fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
         out = reader.seek(SeekFrom::Current(0)).unwrap();
     }
     return out;
+}
+
+/// Run python plotting scripts and append output file names to output string
+pub fn run_plotters(output: &str, script_names: &[&str]) -> String {
+    let abs_output = fs::canonicalize(output).expect("Failed to canonicalize output path");
+
+    let scripts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/python_plotters");
+
+    let outputs: Vec<String> = std::iter::once(output.to_string())
+    .chain(script_names.iter().map(|script_name| {
+        let abs_script = fs::canonicalize(scripts_dir.join(script_name))
+            .unwrap_or_else(|_| panic!("Failed to find script {}", script_name));
+
+        let out = Command::new("python3")
+            .arg(&abs_script)
+            .arg(&abs_output)
+            .output()
+            .unwrap_or_else(|_| panic!("Failed to run {}", script_name));
+
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }))
+    .collect();
+
+    outputs.join("\n")
 }
 
 /// Detect the cursor positions across the input file corresponding to the splits for parallel computation

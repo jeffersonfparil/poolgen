@@ -268,6 +268,7 @@ fn main() {
                     gwas::ols_iterate,
                 )
                 .unwrap();
+            output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
         } else if args.analysis == String::from("ols_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             let mut genotypes_and_phenotypes = file_sync_phen
@@ -280,6 +281,7 @@ fn main() {
                 &args.output,
             )
             .unwrap();
+            output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
         } else if args.analysis == String::from("mle_iter") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = file_sync_phen
@@ -290,6 +292,7 @@ fn main() {
                     gwas::mle_iterate,
                 )
                 .unwrap();
+            output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
         } else if args.analysis == String::from("mle_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             let genotypes_and_phenotypes = file_sync_phen
@@ -302,6 +305,7 @@ fn main() {
                 &args.output,
             )
             .unwrap();
+            output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
         } else if args.analysis == String::from("gwalpha") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             if args.gwalpha_method == "LS".to_owned() {
@@ -471,8 +475,7 @@ fn main() {
             )
             .unwrap();
         } else {
-            let output = 0;
-            println!("TEST={:?}", output);
+             panic!("Invalid analysis utility - please select another utility");
         }
     }
     println!("{}", output);
