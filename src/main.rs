@@ -54,6 +54,9 @@ struct Args {
     /// Maximum missingness rate (loci with missing data beyond this threshold will be omitted)
     #[clap(long, default_value_t = 0.0, value_parser = parse_valid_freq)]
     max_missingness_rate: f64,
+    /// Generate plots (relevant to analysis tool)
+    #[clap(long, action)]
+    generate_plots: bool,
     /// Categorize lowercase reference reads in pileup as unclassified ('N')
     #[clap(long, action)]
     keep_lowercase_reference: bool,
@@ -268,7 +271,9 @@ fn main() {
                     gwas::ols_iterate,
                 )
                 .unwrap();
-            output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+            if args.generate_plots {
+                output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+            }
         } else if args.analysis == String::from("ols_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             let mut genotypes_and_phenotypes = file_sync_phen
@@ -281,7 +286,9 @@ fn main() {
                 &args.output,
             )
             .unwrap();
-            output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+            if args.generate_plots {
+                output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+            }
         } else if args.analysis == String::from("mle_iter") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             output = file_sync_phen
@@ -292,7 +299,9 @@ fn main() {
                     gwas::mle_iterate,
                 )
                 .unwrap();
-            output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+            if args.generate_plots {
+                output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+            }
         } else if args.analysis == String::from("mle_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             let genotypes_and_phenotypes = file_sync_phen
@@ -305,7 +314,9 @@ fn main() {
                 &args.output,
             )
             .unwrap();
-            output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+            if args.generate_plots {
+                output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+            }
         } else if args.analysis == String::from("gwalpha") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
             if args.gwalpha_method == "LS".to_owned() {
