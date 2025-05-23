@@ -66,6 +66,9 @@ struct Args {
     /// Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
     #[clap(long, action)]
     remove_monoallelic: bool,
+    /// For GWAS tools, retain only SNPs that have significant p-value (less than 0.05 bonferonni corrected)
+    #[clap(long, action)]
+    output_sig_snps_only: bool,
     /// Input phenotype file: csv or tsv or any delimited file
     #[clap(short, long)]
     phen_fname: String,
@@ -271,8 +274,12 @@ fn main() {
                     gwas::ols_iterate,
                 )
                 .unwrap();
+            let original_output = output.clone();
             if args.generate_plots {
-                output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+                output = base::run_python_and_append(&original_output, &["plot_manhattan.py", "plot_qq.py"])
+            }
+            if args.output_sig_snps_only {
+                base::run_python(&original_output, &["remove_insig_snps.py"])
             }
         } else if args.analysis == String::from("ols_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
@@ -286,8 +293,12 @@ fn main() {
                 &args.output,
             )
             .unwrap();
+            let original_output = output.clone();
             if args.generate_plots {
-                output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+                output = base::run_python_and_append(&original_output, &["plot_manhattan.py", "plot_qq.py"])
+            }
+            if args.output_sig_snps_only {
+                base::run_python(&original_output, &["remove_insig_snps.py"])
             }
         } else if args.analysis == String::from("mle_iter") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
@@ -299,8 +310,12 @@ fn main() {
                     gwas::mle_iterate,
                 )
                 .unwrap();
+            let original_output = output.clone();
             if args.generate_plots {
-                output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+                output = base::run_python_and_append(&original_output, &["plot_manhattan.py", "plot_qq.py"])
+            }
+            if args.output_sig_snps_only {
+                base::run_python(&original_output, &["remove_insig_snps.py"])
             }
         } else if args.analysis == String::from("mle_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
@@ -314,8 +329,12 @@ fn main() {
                 &args.output,
             )
             .unwrap();
+            let original_output = output.clone();
             if args.generate_plots {
-                output = base::run_plotters(&output, &["plot_manhattan.py", "plot_qq.py"])
+                output = base::run_python_and_append(&original_output, &["plot_manhattan.py", "plot_qq.py"])
+            }
+            if args.output_sig_snps_only {
+                base::run_python(&original_output, &["remove_insig_snps.py"])
             }
         } else if args.analysis == String::from("gwalpha") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();

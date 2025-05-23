@@ -26,28 +26,48 @@ fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
     return out;
 }
 
-/// Run python plotting scripts and append output file names to output string
-pub fn run_plotters(output: &str, script_names: &[&str]) -> String {
+/// Run python scripts and append output file names to output string
+pub fn run_python_and_append(output: &str, script_names: &[&str]) -> String {
     let abs_output = fs::canonicalize(output).expect("Failed to canonicalize output path");
-
-    let scripts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/python_plotters");
+    let scripts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/python");
 
     let outputs: Vec<String> = std::iter::once(output.to_string())
-    .chain(script_names.iter().map(|script_name| {
+        .chain(script_names.iter().map(|script_name| {
+            let abs_script = fs::canonicalize(scripts_dir.join(script_name))
+                .unwrap_or_else(|_| panic!("Failed to find script {}", script_name));
+
+            let output = Command::new("python3")
+                .arg(&abs_script)
+                .arg(&abs_output)
+                .output()
+                .unwrap_or_else(|_| panic!("Failed to run {}", script_name));
+
+            if !output.status.success() { panic!( "{} failed:\n{}", script_name, String::from_utf8_lossy(&output.stderr)) }
+
+            String::from_utf8_lossy(&output.stdout).to_string()
+        }))
+        .collect();
+
+    outputs.join("\n")
+}
+
+/// Run general python script
+pub fn run_python(output: &str, script_names: &[&str]) {
+    let abs_output = fs::canonicalize(output).expect("Failed to canonicalize output path");
+    let scripts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/python");
+
+    for script_name in script_names {
         let abs_script = fs::canonicalize(scripts_dir.join(script_name))
             .unwrap_or_else(|_| panic!("Failed to find script {}", script_name));
 
-        let out = Command::new("python3")
+        let output = Command::new("python3")
             .arg(&abs_script)
             .arg(&abs_output)
             .output()
             .unwrap_or_else(|_| panic!("Failed to run {}", script_name));
 
-        String::from_utf8_lossy(&out.stdout).to_string()
-    }))
-    .collect();
-
-    outputs.join("\n")
+        if !output.status.success() { panic!( "{} failed:\n{}", script_name, String::from_utf8_lossy(&output.stderr)) }
+    }
 }
 
 /// Detect the cursor positions across the input file corresponding to the splits for parallel computation
