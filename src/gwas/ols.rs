@@ -281,6 +281,8 @@ pub fn ols_with_covariate(
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
+    // Check that a output file can be created, but don't create it.
+    let _ = std::fs::OpenOptions::new().write(true).create_new(true).open(&fname_output).map(|_| std::fs::remove_file(&fname_output)).expect("Cannot write to output file");
     // Remove pools with missing phenotype information
     genotypes_and_phenotypes.remove_missing().unwrap();
     // Check struct
