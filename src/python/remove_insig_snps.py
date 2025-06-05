@@ -1,14 +1,12 @@
 import pandas as pd
-import argparse
 import warnings
 from pathlib import Path 
+import sys
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(prog="SNP siever")
-parser.add_argument("filename")
-args = parser.parse_args()
 
-gwas = pd.read_csv(args.filename, index_col=0)
+filename = sys.argv[1]
+gwas = pd.read_csv(filename, index_col=0)
 num_phenotypes = gwas['phenotype'].nunique()
 
 gwas["chromosome"] = gwas.index
@@ -19,5 +17,5 @@ sig_threshold = 0.05/(len(gwas)/num_phenotypes) # bonferonni correction
 
 gwas = gwas[gwas["pvalue"] < sig_threshold]
 
-output_path = Path(args.filename)
+output_path = Path(filename)
 gwas.to_csv(output_path)

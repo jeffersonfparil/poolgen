@@ -1,17 +1,15 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-import argparse
 import warnings
-from pathlib import Path 
+from pathlib import Path
+import sys
 warnings.filterwarnings("ignore")
+plt.style.use('ggplot')
 
-parser = argparse.ArgumentParser(prog="Manhattan plotter")
-parser.add_argument("filename")
-args = parser.parse_args()
+filename = sys.argv[1]
 
-gwas = pd.read_csv(args.filename, index_col=0)
+gwas = pd.read_csv(filename, index_col=0)
 gwas_phenotypes = {name: group for name, group in gwas.groupby('phenotype')}
 
 output_paths = ""
@@ -37,8 +35,10 @@ for gwas_key in gwas_phenotypes:
     for i, chrom in enumerate(chromosomes):
         chrom_data = gwas[gwas["chromosome"] == chrom].copy()
         chrom_data["x"] = chrom_data["position"] + current_position
-        sns.scatterplot(x=chrom_data["x"], y=chrom_data["log_pvalue"], 
-                    color=colors[i], alpha=0.5, label=chrom, linewidth = 0)
+        
+        plt.scatter(chrom_data["x"], chrom_data["log_pvalue"], 
+                    color=colors[i], alpha=0.7, label=chrom, s=12)
+        
         mid_position = chrom_data["x"].median()
         x_ticks.append(mid_position)
         x_labels.append(chrom)
@@ -49,14 +49,15 @@ for gwas_key in gwas_phenotypes:
 
     plt.xlabel("Chromosome")
     plt.ylabel("$-\\log_{10}$(p-value)")
-    plt.title("Manhattan plot (" + Path(args.filename).stem + "," + gwas_key + ")")
+    plt.title("Manhattan plot (" + Path(filename).stem + "," + gwas_key + ")")
     plt.xticks(x_ticks, x_labels, rotation=90)
     plt.legend(title="Chromosome", bbox_to_anchor=(1.05, 1), loc="upper left")
 
     plt.tight_layout()
-    output_path = Path(args.filename).stem + "_" + gwas_key + "_manhattan.png"
+    output_path = Path(filename).stem + "_" + gwas_key + "_manhattan.png"
     output_paths += output_path + "\n"
-    plt.savefig(output_path, dpi=300)
+    plt.tight_layout()
+    plt.savefig(output_path, bbox_inches='tight', dpi=300)
 
-output_paths = output_paths.removesuffix("\n")
+output_paths = output_paths[:-1]
 print(output_paths, end="")
