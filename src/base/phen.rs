@@ -246,7 +246,7 @@ mod tests {
                     .into_iter()
                     .map(|x| x.to_owned())
                     .collect::<Vec<String>>(),
-                pool_sizes: vec![20.0, 20.0, 20.0, 20.0, 20.0],
+                pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
                 phen_matrix: Array2::from_shape_vec(
                     (2, 5),
                     vec![0.1, 0.3, 0.5, 0.7, 0.9, 83.2, 75.3, 49.8, 23.9, 12.0],
