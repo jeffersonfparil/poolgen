@@ -9,12 +9,13 @@ parser.add_argument("filename")
 args = parser.parse_args()
 
 gwas = pd.read_csv(args.filename, index_col=0)
+num_phenotypes = gwas['phenotype'].nunique()
 
 gwas["chromosome"] = gwas.index
 gwas = gwas[gwas["chromosome"] != "intercept"]
 gwas["position"] = gwas["pos"]
 
-sig_threshold = 0.05/len(gwas) # bonferonni correction
+sig_threshold = 0.05/(len(gwas)/num_phenotypes) # bonferonni correction
 
 gwas = gwas[gwas["pvalue"] < sig_threshold]
 

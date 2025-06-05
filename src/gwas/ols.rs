@@ -422,7 +422,7 @@ pub fn ols_with_covariate(
                 genotypes_and_phenotypes.chromosome[i].to_string(),
                 genotypes_and_phenotypes.position[i].to_string(),
                 genotypes_and_phenotypes.allele[i].clone(),
-                j.to_string(),
+                format!("Pheno_{}", j),
                 beta_,
                 pval_,
             ]

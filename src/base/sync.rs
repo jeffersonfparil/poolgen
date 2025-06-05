@@ -947,7 +947,7 @@ impl
             .expect(&error_writing_file);
         // Write out
         file_out
-            .write_all(("#chr,pos,alleles,freq,pheno,statistic,pvalue\n").as_bytes())
+            .write_all(("#chr,pos,alleles,freq,phenotype,statistic,pvalue\n").as_bytes())
             .unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();

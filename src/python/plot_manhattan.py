@@ -12,43 +12,51 @@ parser.add_argument("filename")
 args = parser.parse_args()
 
 gwas = pd.read_csv(args.filename, index_col=0)
+gwas_phenotypes = {name: group for name, group in gwas.groupby('phenotype')}
 
-gwas["chromosome"] = gwas.index
-gwas = gwas[gwas["chromosome"] != "intercept"]
-gwas["position"] = gwas["pos"]
-gwas["log_pvalue"] = -np.log10(gwas["pvalue"])
+output_paths = ""
 
-chromosomes = sorted(gwas["chromosome"].unique())
-colors = plt.cm.tab10(np.linspace(0, 1, len(chromosomes)))
+for gwas_key in gwas_phenotypes:
+    gwas = gwas_phenotypes[gwas_key]
+    gwas["chromosome"] = gwas.index
+    gwas = gwas[gwas["chromosome"] != "intercept"]
+    gwas["position"] = gwas["pos"]
+    gwas["log_pvalue"] = -np.log10(gwas["pvalue"])
 
-gwas = gwas.reset_index(drop=False)
+    chromosomes = sorted(gwas["chromosome"].unique())
+    colors = plt.cm.tab10(np.linspace(0, 1, len(chromosomes)))
 
-x_ticks = []
-x_labels = []
-current_position = 0
+    gwas = gwas.reset_index(drop=False)
 
-plt.figure(figsize=(10, 3))
+    x_ticks = []
+    x_labels = []
+    current_position = 0
 
-for i, chrom in enumerate(chromosomes):
-    chrom_data = gwas[gwas["chromosome"] == chrom].copy()
-    chrom_data["x"] = chrom_data["position"] + current_position
-    sns.scatterplot(x=chrom_data["x"], y=chrom_data["log_pvalue"], 
-                color=colors[i], alpha=0.5, label=chrom, linewidth = 0)
-    mid_position = chrom_data["x"].median()
-    x_ticks.append(mid_position)
-    x_labels.append(chrom)
-    current_position = chrom_data["x"].max() + 1e6
+    plt.figure(figsize=(10, 3))
 
-sig_threshold = 0.05/len(gwas) # bonferonni correction
-plt.axhline(y=-np.log10(sig_threshold), color="red", linestyle="--")
+    for i, chrom in enumerate(chromosomes):
+        chrom_data = gwas[gwas["chromosome"] == chrom].copy()
+        chrom_data["x"] = chrom_data["position"] + current_position
+        sns.scatterplot(x=chrom_data["x"], y=chrom_data["log_pvalue"], 
+                    color=colors[i], alpha=0.5, label=chrom, linewidth = 0)
+        mid_position = chrom_data["x"].median()
+        x_ticks.append(mid_position)
+        x_labels.append(chrom)
+        current_position = chrom_data["x"].max() + 1e6
 
-plt.xlabel("Chromosome")
-plt.ylabel("$-\\log_{10}$(p-value)")
-plt.title("GWAS Manhattan plot (" + Path(args.filename).stem + ")")
-plt.xticks(x_ticks, x_labels, rotation=90)
-plt.legend(title="Chromosome", bbox_to_anchor=(1.05, 1), loc="upper left")
+    sig_threshold = 0.05/len(gwas) # bonferonni correction
+    plt.axhline(y=-np.log10(sig_threshold), color="red", linestyle="--")
 
-plt.tight_layout()
-output_path = Path(args.filename).stem + "_manhattan.png"
-plt.savefig(output_path, dpi=300)
-print(output_path, end = "")
+    plt.xlabel("Chromosome")
+    plt.ylabel("$-\\log_{10}$(p-value)")
+    plt.title("Manhattan plot (" + Path(args.filename).stem + "," + gwas_key + ")")
+    plt.xticks(x_ticks, x_labels, rotation=90)
+    plt.legend(title="Chromosome", bbox_to_anchor=(1.05, 1), loc="upper left")
+
+    plt.tight_layout()
+    output_path = Path(args.filename).stem + "_" + gwas_key + "_manhattan.png"
+    output_paths += output_path + "\n"
+    plt.savefig(output_path, dpi=300)
+
+output_paths = output_paths.removesuffix("\n")
+print(output_paths, end="")

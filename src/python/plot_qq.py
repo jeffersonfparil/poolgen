@@ -14,28 +14,37 @@ args = parser.parse_args()
 
 gwas = pd.read_csv(args.filename, index_col=0)
 gwas = gwas.reset_index(drop=True)
+gwas_phenotypes = {name: group for name, group in gwas.groupby('phenotype')}
 
-pvalues = gwas["pvalue"].sort_values().values
-n = len(pvalues)
-expected = -np.log10(np.linspace(1/n, 1, n))
-observed = -np.log10(pvalues)
+output_paths = ""
 
-ks_stat, ks_pvalue = kstest(pvalues, 'uniform')
-ks_text = f"Kolmogorov-Smirnov statistic: {ks_stat:.4f}"
+for gwas_key in gwas_phenotypes:
+    gwas = gwas_phenotypes[gwas_key]
 
-df_qq = pd.DataFrame({"expected": expected, "observed": observed})
+    pvalues = gwas["pvalue"].sort_values().values
+    n = len(pvalues)
+    expected = -np.log10(np.linspace(1/n, 1, n))
+    observed = -np.log10(pvalues)
 
-plt.figure(figsize=(6, 6))
-sns.scatterplot(data=df_qq, x="expected", y="observed", alpha=0.5, edgecolor=None)
-plt.plot([0, max(expected)], [0, max(expected)], color="red", linestyle="--")
-plt.xlabel("Expected $-\\log_{10}p$")
-plt.ylabel("Observed $-\\log_{10}p$")
-plt.title("Q-Q Plot of GWAS p-values uniformity (" + Path(args.filename).stem + ")")
-plt.text(0.05, 0.95, ks_text, transform=plt.gca().transAxes,
-         fontsize=9, verticalalignment='top',
-         bbox=dict(boxstyle="round", facecolor="white", alpha=0.6))
-plt.grid(True)
-plt.tight_layout()
-output_path = Path(args.filename).stem + "_qq.png"
-plt.savefig(output_path, dpi=300)
-print(output_path, end = "")
+    ks_stat, ks_pvalue = kstest(pvalues, 'uniform')
+    ks_text = f"Kolmogorov-Smirnov statistic: {ks_stat:.4f}"
+
+    df_qq = pd.DataFrame({"expected": expected, "observed": observed})
+
+    plt.figure(figsize=(6, 6))
+    sns.scatterplot(data=df_qq, x="expected", y="observed", alpha=0.5, edgecolor=None)
+    plt.plot([0, max(expected)], [0, max(expected)], color="red", linestyle="--")
+    plt.xlabel("Expected $-\\log_{10}p$")
+    plt.ylabel("Observed $-\\log_{10}p$")
+    plt.title("Q-Q Plot of GWAS p-values uniformity (" + Path(args.filename).stem + "," + gwas_key + ")")
+    plt.text(0.05, 0.95, ks_text, transform=plt.gca().transAxes,
+             fontsize=9, verticalalignment='top',
+             bbox=dict(boxstyle="round", facecolor="white", alpha=0.6))
+    plt.grid(True)
+    plt.tight_layout()
+    output_path = Path(args.filename).stem + "_" + gwas_key + "_qq.png"
+    output_paths += output_path + "\n"
+    plt.savefig(output_path, dpi=300)
+
+output_paths = output_paths.removesuffix("\n")
+print(output_paths, end="")
