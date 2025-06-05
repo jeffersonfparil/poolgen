@@ -131,13 +131,6 @@ impl Filter for VcfLine {
             return Ok(None)
         }
 
-        // Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
-        if filter_stats.remove_monoallelic {
-            if self.alternative_alleles.len() == 0 {
-                return Ok(None)
-            }
-        }
-
         // Filter by minimum allele frequency,
         //// First convert the counts per pool into frequencies
         let allele_frequencies = match self.to_frequencies() {
@@ -528,7 +521,6 @@ mod tests {
         );
         let filter_stats_1 = FilterStats {
             remove_ns: true,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage_depth: 1,
@@ -539,7 +531,6 @@ mod tests {
         };
         let filter_stats_2 = FilterStats {
             remove_ns: true,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage_depth: 10,

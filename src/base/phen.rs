@@ -79,6 +79,10 @@ impl Parse<Phen> for FilePhen {
                     };
                 }
             }
+            // Normalize pool sizes
+            let total_pool_size: f64 = pool_sizes.iter().sum();
+            pool_sizes.iter_mut().for_each(|x| *x /= total_pool_size);
+            
             // Reshape the vector of phenotypes into an nxk matrix
             let n = phen_vec.len() / k;
             let mut phen_matrix: Array2<f64> = Array2::from_elem((n, k), 0.0);
@@ -221,7 +225,7 @@ mod tests {
                     .into_iter()
                     .map(|x| x.to_owned())
                     .collect::<Vec<String>>(),
-                pool_sizes: vec![20.0, 20.0, 20.0, 20.0, 20.0],
+                pool_sizes: vec![0.2, 0.2, 0.2, 0.2, 0.2],
                 phen_matrix: Array2::from_shape_vec(
                     (2, 5),
                     vec![0.1, 0.3, 0.5, 0.7, 0.9, 83.2, 75.3, 49.8, 23.9, 12.0],

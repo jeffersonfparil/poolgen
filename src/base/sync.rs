@@ -1573,7 +1573,6 @@ mod tests {
         let frequencies = *(counts.to_frequencies().unwrap());
         let filter_stats = FilterStats {
             remove_ns: true,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage_depth: 1,
@@ -1683,7 +1682,6 @@ mod tests {
         // let phen = file_phen.lparse().unwrap();
         // let filter_stats = FilterStats {
         //     remove_ns: true,
-        //     remove_monoallelic: false,
         //     keep_lowercase_reference: false,
         //     max_base_error_rate: 0.005,
         //     min_coverage_depth: 0,

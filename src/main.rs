@@ -63,9 +63,6 @@ struct Args {
     /// Keep ambiguous reads during SNP filtering, i.e. keep them coded as Ns
     #[clap(long, action)]
     keep_ns: bool,
-    /// Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
-    #[clap(long, action)]
-    remove_monoallelic: bool,
     /// For GWAS tools, retain only SNPs that have significant p-value (less than 0.05 bonferonni corrected)
     #[clap(long, action)]
     output_sig_snps_only: bool,
@@ -204,7 +201,6 @@ fn main() {
     let phen = file_phen.lparse().unwrap();
     let filter_stats = base::FilterStats {
         remove_ns: !args.keep_ns,
-        remove_monoallelic: args.remove_monoallelic,
         keep_lowercase_reference: args.keep_lowercase_reference,
         max_base_error_rate: args.max_base_error_rate,
         min_coverage_breadth: args.min_coverage_breadth,

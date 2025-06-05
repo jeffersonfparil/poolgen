@@ -148,7 +148,6 @@ mod tests {
             Array2::from_shape_vec((3, 2), vec![0, 3, 1, 5, 2, 6]).unwrap();
         let filter_stats = FilterStats {
             remove_ns: true,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage_depth: 1,
