@@ -332,7 +332,7 @@ impl Filter for PileupLine {
 /// Convert `PileupLine` into a string representing a line or locus in a `sync` file.
 pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) -> Option<String> {
     // First, make sure we have the correct number of expected pools as the phenotype file
-    assert!(pileup_line.coverages.len() != filter_stats.pool_sizes.len(), "The number of pools in the pileup file does not correspond to the number of pools in the phenotype file.");
+    assert!(pileup_line.coverages.len() == filter_stats.pool_sizes.len(), "The number of pools in the pileup file does not correspond to the number of pools in the phenotype file.");
     // Filter
     match pileup_line.filter(filter_stats) {
         Ok(Some(x)) => x,
