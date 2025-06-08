@@ -4,7 +4,7 @@ Quantitative and population genetics analyses using pool sequencing data (i.e. S
 
 |**Build Status**|**License**|**Documentation**|
 |:---:|:---:|:---:|
-| <a href="https://github.com/jeffersonfparil/poolgen/actions"><img src="https://github.com/jeffersonfparil/poolgen/actions/workflows/rust.yml/badge.svg"></a> | [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) | [Dev Docs](https://jeffersonfparil.github.io/poolgen/poolgen/) |
+| <a href="https://github.com/jeffersonfparil/poolgen/actions"><img src="https://github.com/jeffersonfparil/poolgen/actions/workflows/rust.yml/badge.svg"></a> | [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) | [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://jeffersonfparil.github.io/poolgen/poolgen/) |
 
 ## Quickstart
 
