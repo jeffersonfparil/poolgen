@@ -5,10 +5,10 @@ use argmin::solver::neldermead::NelderMead;
 use ndarray::{prelude::*, Zip};
 use ndarray_linalg::svd::*;
 
-use std;
-use std::fs::File;
-use std::io::{self, prelude::*, BufReader, SeekFrom};
-use std::io::{Error, ErrorKind};
+use std::fs::{self, File};
+use std::io::{self, prelude::*, BufReader, SeekFrom, Error, ErrorKind};
+use std::path::PathBuf;
+use std::process::Command;
 
 /// Find the start position of the next line given the current position,`pos`.
 /// Positions are coded as the nth UTF8 character count in the file counting the newline characters at the end of each line.
@@ -24,6 +24,50 @@ fn find_start_of_next_line(fname: &String, pos: u64) -> u64 {
         out = reader.seek(SeekFrom::Current(0)).unwrap();
     }
     return out;
+}
+
+/// Run python scripts and append output file names to output string
+pub fn run_python_and_append(output: &str, script_names: &[&str]) -> String {
+    let abs_output = fs::canonicalize(output).expect("Failed to canonicalize output path");
+    let scripts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/python");
+
+    let outputs: Vec<String> = std::iter::once(output.to_string())
+        .chain(script_names.iter().map(|script_name| {
+            let abs_script = fs::canonicalize(scripts_dir.join(script_name))
+                .unwrap_or_else(|_| panic!("Failed to find script {}", script_name));
+
+            let output = Command::new("python3")
+                .arg(&abs_script)
+                .arg(&abs_output)
+                .output()
+                .unwrap_or_else(|_| panic!("Failed to run {}", script_name));
+
+            if !output.status.success() { panic!( "{} failed:\n{}", script_name, String::from_utf8_lossy(&output.stderr)) }
+
+            String::from_utf8_lossy(&output.stdout).to_string()
+        }))
+        .collect();
+
+    outputs.join("\n")
+}
+
+/// Run general python script
+pub fn run_python(output: &str, script_names: &[&str]) {
+    let abs_output = fs::canonicalize(output).expect("Failed to canonicalize output path");
+    let scripts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/python");
+
+    for script_name in script_names {
+        let abs_script = fs::canonicalize(scripts_dir.join(script_name))
+            .unwrap_or_else(|_| panic!("Failed to find script {}", script_name));
+
+        let output = Command::new("python3")
+            .arg(&abs_script)
+            .arg(&abs_output)
+            .output()
+            .unwrap_or_else(|_| panic!("Failed to run {}", script_name));
+
+        if !output.status.success() { panic!( "{} failed:\n{}", script_name, String::from_utf8_lossy(&output.stderr)) }
+    }
 }
 
 /// Detect the cursor positions across the input file corresponding to the splits for parallel computation
@@ -44,6 +88,15 @@ pub fn find_file_splits(fname: &String, n_threads: &usize) -> io::Result<Vec<u64
     }
     out.dedup();
     return Ok(out);
+}
+
+pub fn parse_valid_freq(value: &str) -> Result<f64, String> {
+    let parsed: f64 = value.parse().map_err(|_| format!("`{}` isn't a valid number", value))?;
+    if parsed < 0.0 || parsed > 1.0 {
+        Err(format!("Value must be between 0.0 and 1.0, got `{}`", parsed))
+    } else {
+        Ok(parsed)
+    }
 }
 
 /// Round-up an `f64` to `n_digits` decimal points

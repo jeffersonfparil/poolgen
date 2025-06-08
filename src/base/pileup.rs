@@ -238,7 +238,7 @@ impl Filter for PileupLine {
     /// - removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after filterings
     /// Note that we are not removing alleles per locus if they fail the minimum allele frequency threshold, only if all alleles fail this threshold, i.e. when the locus is close to being fixed
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<Option<&mut Self>> {
-        // First, make sure we have the correct the correct number of expected pools as the phenotype file
+        // First, make sure we have the correct number of expected pools as the phenotype file
         // TODO: Make the error pop-out because it's currently being consumed as None in the only function calling it below.
         if self.coverages.len() != filter_stats.pool_sizes.len() {
             return Err(Error::new(ErrorKind::Other, "The number of pools in the pileup file does not correspond to the number of pools in the phenotype file."));
@@ -277,25 +277,6 @@ impl Filter for PileupLine {
             return Ok(None)
         }
 
-        // Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
-        if filter_stats.remove_monoallelic {
-            let mut unique_alleles = Vec::new();
-
-            'outer: for pool in &self.read_codes {
-                for &read in pool {
-                    if !unique_alleles.contains(&read) {
-                        unique_alleles.push(read);
-                        if unique_alleles.len() == 2 {
-                            break 'outer;
-                        }
-                    }
-                }
-            }
-            if unique_alleles.len() < 2 {
-                return Ok(None)
-            }
-        }
-
         if filter_stats.keep_lowercase_reference {
             for pool in &mut self.read_codes {
                 for read in pool.iter_mut() {
@@ -326,13 +307,11 @@ impl Filter for PileupLine {
                 ))
             }
         };
-        //// Next account for pool sizes to get the proper minmum allele frequency across all pools
+        //// Next account for pool sizes to get the proper minimum allele frequency across all pools
         let n = allele_frequencies.matrix.nrows();
         let mut m = allele_frequencies.matrix.ncols();
         let mut q: f64;
         let mut j: usize = 1;
-        // let mut matrix_new: Array2<f64>;
-        // let mut alleles_vector_new: Vec<String>;
         while j < m {
             q = 0.0;
             for i in 0..n {
@@ -342,16 +321,8 @@ impl Filter for PileupLine {
             if (q < filter_stats.min_allele_frequency)
                 | (q > (1.00 - filter_stats.min_allele_frequency))
             {
-                // allele_frequencies.matrix = allele_frequencies.matrix.remove_column(j);
                 m -= 1;
             } else {
-                // if matrix_new.len() == 0 {
-                //     matrix_new = allele_frequencies.matrix.slice(s![..,j..j]).to_owned();
-                //     alleles_vector_new = vec![allele_frequencies.alleles_vector[j]];
-                // } else {
-                //     matrix_new = concatenate![Axis(0),  matrix_new, allele_frequencies.matrix.slice(s![..,j..j]).to_owned()];
-                //     alleles_vector_new.push(allele_frequencies.alleles_vector[j]);
-                // }
                 j += 1;
             }
         }
@@ -502,15 +473,8 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
                 .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + ".sync";
         }
-        // Instatiate output file
-        let error_writing_file = "Unable to create file: ".to_owned() + &out;
-        // let mut file_out = File::create(&out).expect(&error_writing_file);
-        let mut file_out = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .append(false)
-            .open(&out)
-            .expect(&error_writing_file);
+        // Check that a output file can be created, but don't create it.
+        let _ = std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map(|_| std::fs::remove_file(&out)).expect("Cannot write to output file");
         // Pool names
         let names = self.pool_names.join("\t");
         // // Find the positions whereto split the file into n_threads pieces
@@ -546,6 +510,16 @@ impl ChunkyReadAnalyseWrite<PileupLine, fn(&mut PileupLine, &FilterStats) -> Opt
         for thread in thread_objects {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
+        // Instatiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        // let mut file_out = File::create(&out).expect(&error_writing_file);
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
+        // Write out
         file_out
             .write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes())
             .unwrap();
@@ -582,7 +556,6 @@ mod tests {
         let frequencies = *(pileup_line.to_frequencies().unwrap());
         let filter_stats = FilterStats {
             remove_ns: true,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage_depth: 1,

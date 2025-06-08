@@ -131,13 +131,6 @@ impl Filter for VcfLine {
             return Ok(None)
         }
 
-        // Remove monoallelic loci (each loci must have coverage of at least 2 alleles)
-        if filter_stats.remove_monoallelic {
-            if self.alternative_alleles.len() == 0 {
-                return Ok(None)
-            }
-        }
-
         // Filter by minimum allele frequency,
         //// First convert the counts per pool into frequencies
         let allele_frequencies = match self.to_frequencies() {
@@ -342,15 +335,8 @@ impl ChunkyReadAnalyseWrite<VcfLine, fn(&mut VcfLine, &FilterStats) -> Option<St
                 .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + ".sync";
         }
-        // Instatiate output file
-        let error_writing_file = "Unable to create file: ".to_owned() + &out;
-        // let mut file_out = File::create(&out).expect(&error_writing_file);
-        let mut file_out = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .append(false)
-            .open(&out)
-            .expect(&error_writing_file);
+        // Check that a output file can be created, but don't create it.
+        let _ = std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map(|_| std::fs::remove_file(&out)).expect("Cannot write to output file");
         // Find the pool names from the last header line of the vcf file
         let file = File::open(fname.clone()).unwrap();
         let reader = BufReader::new(file);
@@ -405,6 +391,16 @@ impl ChunkyReadAnalyseWrite<VcfLine, fn(&mut VcfLine, &FilterStats) -> Option<St
         for thread in thread_objects {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
+        // Instatiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        // let mut file_out = File::create(&out).expect(&error_writing_file);
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
+        // Write out
         file_out
             .write_all(("#chr\tpos\tref\t".to_owned() + &names + "\n").as_bytes())
             .unwrap();
@@ -525,7 +521,6 @@ mod tests {
         );
         let filter_stats_1 = FilterStats {
             remove_ns: true,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage_depth: 1,
@@ -536,7 +531,6 @@ mod tests {
         };
         let filter_stats_2 = FilterStats {
             remove_ns: true,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage_depth: 10,

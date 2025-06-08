@@ -255,7 +255,6 @@ mod tests {
         ////////////////////////////////////////////////////////////////////////////////////////////////////////
         let filter_stats = FilterStats {
             remove_ns: false,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 1.0,
             min_coverage_depth: 0,

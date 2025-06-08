@@ -712,15 +712,8 @@ impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> O
                 .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + "-" + &test + ".csv";
         }
-        // Instantiate output file
-        let error_writing_file = "Unable to create file: ".to_owned() + &out;
-        // let mut file_out = File::create(&out).expect(&error_writing_file);
-        let mut file_out = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .append(false)
-            .open(&out)
-            .expect(&error_writing_file);
+        // Check that a output file can be created, but don't create it.
+        let _ = std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map(|_| std::fs::remove_file(&out)).expect("Cannot write to output file");
         // // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
         let n_chunks = chunks.len();
@@ -760,6 +753,14 @@ impl ChunkyReadAnalyseWrite<LocusCounts, fn(&mut LocusCounts, &FilterStats) -> O
         for thread in thread_objects {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
+        // Instantiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
         // Write out
         file_out
             .write_all(("#chr,pos,alleles,statistic,pvalue\n").as_bytes())
@@ -901,15 +902,8 @@ impl
                 .join(".");
             out = bname.to_owned() + "-" + &time.to_string() + "-" + &test + ".csv";
         }
-        // Instantiate output file
-        let error_writing_file = "Unable to create file: ".to_owned() + &out;
-        // let mut file_out = File::create(&out).expect(&error_writing_file);
-        let mut file_out = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .append(false)
-            .open(&out)
-            .expect(&error_writing_file);
+        // Check that a output file can be created, but don't create it.
+        let _ = std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map(|_| std::fs::remove_file(&out)).expect("Cannot write to output file");
         // // Find the positions whereto split the file into n_threads pieces
         let chunks = find_file_splits(&fname, n_threads).unwrap();
         let outname_ndigits = chunks[*n_threads].to_string().len();
@@ -943,9 +937,17 @@ impl
         for thread in thread_objects {
             let _ = thread.join().expect("Unknown thread error occured.");
         }
+        // Instantiate output file (only after threads succeed)
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
         // Write out
         file_out
-            .write_all(("#chr,pos,alleles,freq,pheno,statistic,pvalue\n").as_bytes())
+            .write_all(("#chr,pos,alleles,freq,phenotype,statistic,pvalue\n").as_bytes())
             .unwrap();
         // Extract output filenames from each thread into a vector and sort them
         let mut fnames_out: Vec<String> = Vec::new();
@@ -1210,14 +1212,8 @@ impl SaveCsv for FileSyncPhen {
         } else {
             out.clone()
         };
-        // Instantiate output file
-        let error_writing_file = "Unable to create file: ".to_owned() + &out;
-        let mut file_out = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .append(false)
-            .open(&out)
-            .expect(&error_writing_file);
+        // Check that a output file can be created, but don't create it.
+        let _ = std::fs::OpenOptions::new().write(true).create_new(true).open(&out).map(|_| std::fs::remove_file(&out)).expect("Cannot write to output file");
         // Load the full sync file in parallel and sort
         let (freqs, _cnts) = self.load(filter_stats, keep_p_minus_1, n_threads).unwrap();
         // Make sure that we have the same number of pools in the genotype and phenotype files
@@ -1226,6 +1222,14 @@ impl SaveCsv for FileSyncPhen {
             freqs[0].matrix.nrows() == (&self.pool_names).len(),
             "Please check that the pools are consistent across the genotype and phenotype files."
         );
+        // Instantiate output file
+        let error_writing_file = "Unable to create file: ".to_owned() + &out;
+        let mut file_out = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .append(false)
+            .open(&out)
+            .expect(&error_writing_file);
         // Write the header
         file_out
             .write_all(
@@ -1569,7 +1573,6 @@ mod tests {
         let frequencies = *(counts.to_frequencies().unwrap());
         let filter_stats = FilterStats {
             remove_ns: true,
-            remove_monoallelic: false,
             keep_lowercase_reference: false,
             max_base_error_rate: 0.005,
             min_coverage_depth: 1,
@@ -1679,7 +1682,6 @@ mod tests {
         // let phen = file_phen.lparse().unwrap();
         // let filter_stats = FilterStats {
         //     remove_ns: true,
-        //     remove_monoallelic: false,
         //     keep_lowercase_reference: false,
         //     max_base_error_rate: 0.005,
         //     min_coverage_depth: 0,

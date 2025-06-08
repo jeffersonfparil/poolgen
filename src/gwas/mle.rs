@@ -310,6 +310,8 @@ pub fn mle_with_covariate(
     fname_input: &String,
     fname_output: &String,
 ) -> io::Result<String> {
+    // Check that a output file can be created, but don't create it.
+    let _ = std::fs::OpenOptions::new().write(true).create_new(true).open(&fname_output).map(|_| std::fs::remove_file(&fname_output)).expect("Cannot write to output file");
     // Check struct
     genotypes_and_phenotypes.check().unwrap();
     // Generate the covariate
@@ -447,7 +449,7 @@ pub fn mle_with_covariate(
                 genotypes_and_phenotypes.chromosome[i].to_string(),
                 genotypes_and_phenotypes.position[i].to_string(),
                 genotypes_and_phenotypes.allele[i].clone(),
-                j.to_string(),
+                format!("Pheno_{}", j),
                 beta[(i, j)].to_string(),
                 pval[(i, j)].to_string(),
             ]
