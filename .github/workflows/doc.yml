@@ -33,7 +33,7 @@ jobs:
       - name: Run cargo doc
         run: RUSTDOCFLAGS="-D warnings --cfg docsrs" cargo doc --workspace --no-deps --all-features
       - name: glue in an index
-        run: echo "<meta http-equiv=\"refresh\" content=\"0; url=rsdd\">" > target/doc/index.html
+        run: echo "<meta http-equiv=\"refresh\" content=\"0; url=poolgen\">" > target/doc/index.html
       - name: Force correct file permissions
         run: |
           chmod -c +rX "target/doc/.lock" &
