@@ -501,7 +501,7 @@ mod tests {
             &genotypes_and_phenotypes,
             &vec![42.0, 42.0, 42.0, 42.0, 42.0],
             &2.0,
-            &0.73, // cM/Mb estimate in maize from https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7
+            &0.73, // cM/Mb estimate in maize from [here](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7)
             &100,
             &50,
             &20,

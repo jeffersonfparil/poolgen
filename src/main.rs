@@ -119,7 +119,7 @@ struct Args {
     /// Genomewide unbiased determination of modes of convergent evolution (gudmc), i.e. the minimum deviation from the genomewide Tajima's D to be considered as interesting troughs (selective sweeps) and peaks (sites under balancing selection)
     #[clap(long, default_value_t = 2.0)]
     sigma_threshold: f64,
-    /// Genomewide unbiased determination of modes of convergent evolution (gudmc), i.e. recombination rate in centiMorgan per megabase (default from cM/Mb estimate in maize from https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7)
+    /// Genomewide unbiased determination of modes of convergent evolution (gudmc), i.e. recombination rate in centiMorgan per megabase (default from cM/Mb estimate in maize from [here](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2013-14-9-r103#Sec7))
     #[clap(long, default_value_t = 0.73, value_parser = parse_valid_freq)]
     recombination_rate_cm_per_mb: f64,
     // /// Imputation parameter, i.e. minimum depth to set to missing data for imputation
