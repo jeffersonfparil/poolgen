@@ -19,3 +19,4 @@ gwas = gwas[gwas["pvalue"] < sig_threshold]
 
 output_path = Path(filename)
 gwas.to_csv(output_path)
+print("DONE: Insignificant SNPs removed from " + output_path.name + "", end="")

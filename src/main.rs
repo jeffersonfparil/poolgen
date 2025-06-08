@@ -270,12 +270,12 @@ fn main() {
                     gwas::ols_iterate,
                 )
                 .unwrap();
-            let original_output = output.clone();
-            if args.generate_plots {
-                output = base::run_python_and_append(&original_output, &["plot_manhattan.py", "plot_qq.py"])
-            }
-            if args.output_sig_snps_only {
-                base::run_python(&original_output, &["remove_insig_snps.py"])
+            let python_scripts: Vec<&str> = [
+                args.generate_plots.then_some(["plot_manhattan.py", "plot_qq.py"].as_slice()).unwrap_or(&[]),
+                args.output_sig_snps_only.then_some(["remove_insig_snps.py"].as_slice()).unwrap_or(&[])
+            ].concat();
+            if !python_scripts.is_empty() {
+                output = base::run_python_and_append(&output.clone(), &python_scripts);
             }
         } else if args.analysis == String::from("ols_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
@@ -289,12 +289,12 @@ fn main() {
                 &args.output,
             )
             .unwrap();
-            let original_output = output.clone();
-            if args.generate_plots {
-                output = base::run_python_and_append(&original_output, &["plot_manhattan.py", "plot_qq.py"])
-            }
-            if args.output_sig_snps_only {
-                base::run_python(&original_output, &["remove_insig_snps.py"])
+            let python_scripts: Vec<&str> = [
+                args.generate_plots.then_some(["plot_manhattan.py", "plot_qq.py"].as_slice()).unwrap_or(&[]),
+                args.output_sig_snps_only.then_some(["remove_insig_snps.py"].as_slice()).unwrap_or(&[])
+            ].concat();
+            if !python_scripts.is_empty() {
+                output = base::run_python_and_append(&output.clone(), &python_scripts);
             }
         } else if args.analysis == String::from("mle_iter") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
@@ -306,12 +306,12 @@ fn main() {
                     gwas::mle_iterate,
                 )
                 .unwrap();
-            let original_output = output.clone();
-            if args.generate_plots {
-                output = base::run_python_and_append(&original_output, &["plot_manhattan.py", "plot_qq.py"])
-            }
-            if args.output_sig_snps_only {
-                base::run_python(&original_output, &["remove_insig_snps.py"])
+            let python_scripts: Vec<&str> = [
+                args.generate_plots.then_some(["plot_manhattan.py", "plot_qq.py"].as_slice()).unwrap_or(&[]),
+                args.output_sig_snps_only.then_some(["remove_insig_snps.py"].as_slice()).unwrap_or(&[])
+            ].concat();
+            if !python_scripts.is_empty() {
+                output = base::run_python_and_append(&output.clone(), &python_scripts);
             }
         } else if args.analysis == String::from("mle_iter_with_kinship") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
@@ -325,12 +325,12 @@ fn main() {
                 &args.output,
             )
             .unwrap();
-            let original_output = output.clone();
-            if args.generate_plots {
-                output = base::run_python_and_append(&original_output, &["plot_manhattan.py", "plot_qq.py"])
-            }
-            if args.output_sig_snps_only {
-                base::run_python(&original_output, &["remove_insig_snps.py"])
+            let python_scripts: Vec<&str> = [
+                args.generate_plots.then_some(["plot_manhattan.py", "plot_qq.py"].as_slice()).unwrap_or(&[]),
+                args.output_sig_snps_only.then_some(["remove_insig_snps.py"].as_slice()).unwrap_or(&[])
+            ].concat();
+            if !python_scripts.is_empty() {
+                output = base::run_python_and_append(&output.clone(), &python_scripts);
             }
         } else if args.analysis == String::from("gwalpha") {
             let file_sync_phen = *(file_sync, file_phen).lparse().unwrap();
@@ -506,3 +506,4 @@ fn main() {
     }
     println!("{}", output);
 }
+
