@@ -238,11 +238,6 @@ impl Filter for PileupLine {
     /// - removing the entire locus if the locus is fixed, i.e. only 1 allele was found or retained after filterings
     /// Note that we are not removing alleles per locus if they fail the minimum allele frequency threshold, only if all alleles fail this threshold, i.e. when the locus is close to being fixed
     fn filter(&mut self, filter_stats: &FilterStats) -> io::Result<Option<&mut Self>> {
-        // First, make sure we have the correct number of expected pools as the phenotype file
-        // TODO: Make the error pop-out because it's currently being consumed as None in the only function calling it below.
-        if self.coverages.len() != filter_stats.pool_sizes.len() {
-            return Err(Error::new(ErrorKind::Other, "The number of pools in the pileup file does not correspond to the number of pools in the phenotype file."));
-        }
         // Convert low quality bases into Ns
         let n = self.read_qualities.len();
         for i in 0..n {
@@ -336,7 +331,8 @@ impl Filter for PileupLine {
 
 /// Convert `PileupLine` into a string representing a line or locus in a `sync` file.
 pub fn pileup_to_sync(pileup_line: &mut PileupLine, filter_stats: &FilterStats) -> Option<String> {
-    // let mut pileup_line: Box<PileupLine> = line.lparse().unwrap();
+    // First, make sure we have the correct number of expected pools as the phenotype file
+    assert!(pileup_line.coverages.len() != filter_stats.pool_sizes.len(), "The number of pools in the pileup file does not correspond to the number of pools in the phenotype file.");
     // Filter
     match pileup_line.filter(filter_stats) {
         Ok(Some(x)) => x,
@@ -659,3 +655,4 @@ mod tests {
         );
     }
 }
+
