@@ -302,6 +302,14 @@ impl Filter for PileupLine {
                 ))
             }
         };
+
+        // Normalize pool sizes
+        let total_pool_size: f64 = filter_stats.pool_sizes.iter().sum();
+        let normalized_pool_sizes: Vec<f64> = filter_stats.pool_sizes
+            .iter()
+            .map(|&x| x / total_pool_size)
+            .collect();
+
         //// Next account for pool sizes to get the proper minimum allele frequency across all pools
         let n = allele_frequencies.matrix.nrows();
         let mut m = allele_frequencies.matrix.ncols();
@@ -310,7 +318,7 @@ impl Filter for PileupLine {
         while j < m {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i];
+                q += allele_frequencies.matrix[(i, j)] * normalized_pool_sizes[i];
                 // We've made sure the pool_sizes sum up to one in phen.rs
             }
             if (q < filter_stats.min_allele_frequency)

@@ -6,16 +6,18 @@ edition = "2021"
 [dependencies]
 clap = { version="3.2.23", features=["derive"]}
 ndarray = { version = "0.15.6", features = ["rayon"]}
-# ndarray-linalg = "0.16.0"
-# ndarray-linalg = { version = "0.16.0", features = ["openblas"] }
-ndarray-linalg = { version = "0.16.0", features = ["intel-mkl-static"] }
-# ndarray-linalg = { version = "0.16.0", features = ["netlib-static"] }
 statrs = "0.16.0"
 argmin = "0.8.1"
 argmin-math = "0.3.0"
 rand = "0.8.5"
 function_name = "0.3.0"
 rayon = "1.7.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+ndarray-linalg = { version = "0.16.0", features = ["openblas"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+ndarray-linalg = { version = "0.16.0", features = ["intel-mkl-static"] }
 
 [profile.dev]
 opt-level = 3

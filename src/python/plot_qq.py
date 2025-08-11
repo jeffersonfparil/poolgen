@@ -8,6 +8,16 @@ import sys
 warnings.filterwarnings("ignore")
 plt.style.use('ggplot')
 
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.titlesize": 10,
+    "axes.labelsize": 9,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "legend.fontsize": 7,
+    "figure.titlesize": 10,
+})
+
 filename = sys.argv[1]
 
 gwas = pd.read_csv(filename, index_col=0)
@@ -44,4 +54,4 @@ for gwas_key in gwas_phenotypes:
     plt.savefig(output_path, dpi=300)
 
 output_paths = output_paths[:-1]
-print("FILE CREATED: " + output_paths, end="")
+print("File created: " + output_paths, end="")
