@@ -7,6 +7,16 @@ import sys
 warnings.filterwarnings("ignore")
 plt.style.use('ggplot')
 
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.titlesize": 10,
+    "axes.labelsize": 9,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "legend.fontsize": 7,
+    "figure.titlesize": 10,
+})
+
 filename = sys.argv[1]
 
 gwas = pd.read_csv(filename, index_col=0)
@@ -22,7 +32,8 @@ for gwas_key in gwas_phenotypes:
     gwas["log_pvalue"] = -np.log10(gwas["pvalue"])
 
     chromosomes = sorted(gwas["chromosome"].unique())
-    colors = plt.cm.tab10(np.linspace(0, 1, len(chromosomes)))
+    color_map = {chrom: plt.cm.tab10.colors[i] if i < 10 else "gray"
+        for i, chrom in enumerate(chromosomes)}
 
     gwas = gwas.reset_index(drop=False)
 
@@ -37,7 +48,7 @@ for gwas_key in gwas_phenotypes:
         chrom_data["x"] = chrom_data["position"] + current_position
         
         plt.scatter(chrom_data["x"], chrom_data["log_pvalue"], 
-                    color=colors[i], alpha=0.7, label=chrom, s=12)
+            color=color_map[chrom], alpha=0.7, label=chrom, s=12)
         
         mid_position = chrom_data["x"].median()
         x_ticks.append(mid_position)
@@ -51,7 +62,18 @@ for gwas_key in gwas_phenotypes:
     plt.ylabel("$-\\log_{10}$(p-value)")
     plt.title("Manhattan plot (" + Path(filename).stem + "," + gwas_key + ")")
     plt.xticks(x_ticks, x_labels, rotation=90)
-    plt.legend(title="Chromosome", bbox_to_anchor=(1.05, 1), loc="upper left")
+    max_legend_items = 10
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+
+    if len(labels) > max_legend_items:
+        from matplotlib.lines import Line2D
+        handles = handles[:max_legend_items - 1]
+        labels = labels[:max_legend_items - 1]
+        handles.append(Line2D([0], [0], color='gray', linestyle='dotted'))
+        labels.append(f"... {len(chromosomes) - (max_legend_items - 1)} more")
+
+    plt.legend(handles, labels, title="Chromosome", bbox_to_anchor=(1.05, 1), loc="upper left")
 
     plt.tight_layout()
     output_path = Path(filename).stem + "_" + gwas_key + "_manhattan.png"
@@ -60,4 +82,4 @@ for gwas_key in gwas_phenotypes:
     plt.savefig(output_path, bbox_inches='tight', dpi=300)
 
 output_paths = output_paths[:-1]
-print("FILE CREATED: " + output_paths, end="")
+print("File created: " + output_paths, end="")
