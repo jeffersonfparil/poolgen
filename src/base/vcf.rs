@@ -142,6 +142,14 @@ impl Filter for VcfLine {
                 ))
             }
         };
+
+        // Normalize pool sizes
+        let total_pool_size: f64 = filter_stats.pool_sizes.iter().sum();
+        let normalized_pool_sizes: Vec<f64> = filter_stats.pool_sizes
+            .iter()
+            .map(|&x| x / total_pool_size)
+            .collect();
+
         //// Next account for pool sizes to get the proper minmum allele frequency across all pools
         let n = allele_frequencies.matrix.nrows();
         let mut m = allele_frequencies.matrix.ncols();
@@ -150,23 +158,13 @@ impl Filter for VcfLine {
         while j < m {
             q = 0.0;
             for i in 0..n {
-                q += allele_frequencies.matrix[(i, j)] * filter_stats.pool_sizes[i]
-                    / filter_stats.pool_sizes.iter().sum::<f64>();
-                // We've made sure the pool_sizes sum up to one in phen.rs
+                q += allele_frequencies.matrix[(i, j)] * normalized_pool_sizes[i]
             }
             if (q < filter_stats.min_allele_frequency)
                 | (q > (1.00 - filter_stats.min_allele_frequency))
             {
-                // allele_frequencies.matrix = allele_frequencies.matrix.remove_column(j);
                 m -= 1;
             } else {
-                // if matrix_new.len() == 0 {
-                //     matrix_new = allele_frequencies.matrix.slice(s![..,j..j]).to_owned();
-                //     alleles_vector_new = vec![allele_frequencies.alleles_vector[j]];
-                // } else {
-                //     matrix_new = concatenate![Axis(0),  matrix_new, allele_frequencies.matrix.slice(s![..,j..j]).to_owned()];
-                //     alleles_vector_new.push(allele_frequencies.alleles_vector[j]);
-                // }
                 j += 1;
             }
         }
